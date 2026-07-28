@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* CP Brand Colors - Bold, Visionary, Inclusive, Creative */
+  --color-cp-purple-50: #f5f0ff;
+  --color-cp-purple-100: #ede5ff;
+  --color-cp-purple-200: #ddd0ff;
+  --color-cp-purple-300: #c4abff;
+  --color-cp-purple-400: #a67aff;
+  --color-cp-purple-500: #8b46ff;
+  --color-cp-purple-600: #7c22ff;
+  --color-cp-purple-700: #6d10eb;
+  --color-cp-purple-800: #5b0ec5;
+  --color-cp-purple-900: #4a0d9f;
+  --color-cp-purple-950: #2d0066;
+
+  --color-cp-coral-50: #fff5f3;
+  --color-cp-coral-100: #ffe8e3;
+  --color-cp-coral-200: #ffd4cc;
+  --color-cp-coral-300: #ffb3a5;
+  --color-cp-coral-400: #ff8b73;
+  --color-cp-coral-500: #ff6b4a;
+  --color-cp-coral-600: #ed4a27;
+  --color-cp-coral-700: #c8371a;
+  --color-cp-coral-800: #a5301a;
+  --color-cp-coral-900: #882d1d;
+  --color-cp-coral-950: #4b1309;
+
+  --color-cp-mustard-50: #fffdf0;
+  --color-cp-mustard-100: #fff9d6;
+  --color-cp-mustard-200: #fff2a8;
+  --color-cp-mustard-300: #ffe770;
+  --color-cp-mustard-400: #ffd633;
+  --color-cp-mustard-500: #f5c200;
+  --color-cp-mustard-600: #d9a000;
+  --color-cp-mustard-700: #b37700;
+  --color-cp-mustard-800: #915d08;
+  --color-cp-mustard-900: #784b0e;
+  --color-cp-mustard-950: #462700;
+
+  --color-cp-teal-50: #f0fdfa;
+  --color-cp-teal-100: #ccfbef;
+  --color-cp-teal-200: #99f6df;
+  --color-cp-teal-300: #5eeace;
+  --color-cp-teal-400: #2dd4b8;
+  --color-cp-teal-500: #14b8a0;
+  --color-cp-teal-600: #0d9484;
+  --color-cp-teal-700: #0f766b;
+  --color-cp-teal-800: #115e57;
+  --color-cp-teal-900: #134e48;
+  --color-cp-teal-950: #042f2b;
+
+  /* Surface colors */
+  --color-surface: #fafafc;
+  --color-surface-elevated: #ffffff;
+  --color-surface-sunken: #f1f1f6;
+  --color-surface-overlay: rgba(0, 0, 0, 0.5);
+
+  /* Text colors */
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #6b6b80;
+  --color-text-muted: #9898ac;
+  --color-text-inverse: #ffffff;
+
+  /* Border */
+  --color-border-default: #e4e4ef;
+  --color-border-strong: #c8c8d8;
+
+  /* Status colors */
+  --color-status-todo: #9898ac;
+  --color-status-progress: #8b46ff;
+  --color-status-review: #ffd633;
+  --color-status-done: #14b8a0;
+  --color-status-blocked: #ff6b4a;
+
+  /* Priority colors */
+  --color-priority-low: #14b8a0;
+  --color-priority-medium: #ffd633;
+  --color-priority-high: #ff6b4a;
+  --color-priority-urgent: #dc2626;
+
+  /* Sidebar */
+  --color-sidebar-bg: #1a1a2e;
+  --color-sidebar-text: #c8c8e0;
+  --color-sidebar-text-active: #ffffff;
+  --color-sidebar-hover: rgba(139, 70, 255, 0.15);
+  --color-sidebar-active: rgba(139, 70, 255, 0.25);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+  --shadow-md: 0 4px 12px rgba(26, 26, 46, 0.08);
+  --shadow-lg: 0 8px 30px rgba(26, 26, 46, 0.12);
+  --shadow-xl: 0 20px 60px rgba(26, 26, 46, 0.15);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Font family */
+  --font-heading: "Sora", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-slide-down: slide-down 0.3s ease-out;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  --animate-shimmer: shimmer 2s infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Note: decorative background gradients (gradient-brand) are fine — the anti-pattern is gradient TEXT (background-clip: text) */
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-cp-purple-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-cp-purple-200);
+  color: var(--color-cp-purple-900);
+}
+
+/* Custom utility classes */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.heading {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.gradient-brand {
+  background: linear-gradient(135deg, var(--color-cp-purple-600) 0%, var(--color-cp-purple-500) 50%, var(--color-cp-coral-500) 100%);
+}
+
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Kanban column animation */
+.kanban-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kanban-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.kanban-card.dragging {
+  transform: rotate(2deg);
+  box-shadow: var(--shadow-xl);
+  opacity: 0.9;
+}
+
+/* Gantt chart styling */
+.gantt-bar {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.gantt-bar:hover {
+  filter: brightness(1.1);
+  transform: scaleY(1.1);
+}
+
+/* Notification badge pulse */
+.notification-pulse {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(255, 107, 74, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 107, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 107, 74, 0); }
+}
+
+/* Status indicator dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Print styles for reports */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
