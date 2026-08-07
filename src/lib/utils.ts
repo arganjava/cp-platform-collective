@@ -6,16 +6,42 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function generateId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
+const dateFormatter = new Intl.DateTimeFormat("en-SG", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+const currencyFormatter = new Intl.NumberFormat("en-SG", {
+  style: "currency",
+  currency: "SGD",
+  maximumFractionDigits: 0,
+});
+
+const compactCurrencyFormatter = new Intl.NumberFormat("en-SG", {
+  style: "currency",
+  currency: "SGD",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-SG", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return dateFormatter.format(d);
+}
+
+export function formatCurrency(amount: number): string {
+  return currencyFormatter.format(amount);
+}
+
+export function formatCompactCurrency(amount: number): string {
+  return compactCurrencyFormatter.format(amount);
 }
 
 export function getInitials(name: string): string {

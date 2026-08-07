@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# CP Platform — Orb setup
+# Next.js 15 + React 19 + Tailwind CSS v4 + npm
+# No database, no env files required.
+
+echo "=== CP Platform orb setup ==="
+
+# Ensure Node.js 22+ is available
+NODE_MAJOR=22
+if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | cut -d. -f1 | tr -d v)" -lt "$NODE_MAJOR" ]]; then
+  echo "Installing Node.js ${NODE_MAJOR}..."
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+  apt-get install -y nodejs
+fi
+echo "Node: $(node -v)"
+
+# Install dependencies from lockfile (idempotent)
+if [ ! -d node_modules ] || ! npm ls --depth=0 >/dev/null 2>&1; then
+  echo "Installing dependencies..."
+  npm ci
+else
+  echo "Dependencies already installed."
+fi
+
+echo "=== Setup complete ==="

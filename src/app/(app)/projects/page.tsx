@@ -4,9 +4,11 @@ import React, { useState } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -19,10 +21,10 @@ import {
 } from "lucide-react";
 
 const statusConfig = {
-  todo: { label: "To Do", color: "var(--color-status-todo)", bg: "bg-gray-100" },
-  in_progress: { label: "In Progress", color: "var(--color-status-progress)", bg: "bg-purple-100" },
-  review: { label: "Review", color: "var(--color-status-review)", bg: "bg-yellow-100" },
-  done: { label: "Done", color: "var(--color-status-done)", bg: "bg-teal-100" },
+  todo: { label: "To Do", color: "var(--color-status-todo)" },
+  in_progress: { label: "In Progress", color: "var(--color-status-progress)" },
+  review: { label: "Review", color: "var(--color-status-review)" },
+  done: { label: "Done", color: "var(--color-status-done)" },
 };
 
 export default function ProjectsPage() {
@@ -85,7 +87,7 @@ export default function ProjectsPage() {
       title: newProjectTitle,
       description: newProjectDesc,
       status: "active" as const,
-      color: ["#8b46ff", "#ff6b4a", "#14b8a0", "#ffd633"][Math.floor(Math.random() * 4)],
+      color: ["var(--primary)", "var(--brand)", "var(--muted-foreground)", "var(--destructive)"][Math.floor(Math.random() * 4)],
       ownerId: "user-1",
       memberIds: ["user-1"],
       startDate: new Date().toISOString().split("T")[0],
@@ -115,39 +117,29 @@ export default function ProjectsPage() {
     setDragOverColumn(null);
   }
 
-  const priorityVariant: Record<string, "teal" | "mustard" | "coral" | "danger"> = {
-    low: "teal",
-    medium: "mustard",
-    high: "coral",
+  const priorityVariant: Record<string, "neutral" | "warning" | "accent" | "danger"> = {
+    low: "neutral",
+    medium: "warning",
+    high: "accent",
     urgent: "danger",
   };
 
   return (
     <>
-      <div className="space-y-6 animate-fade-in">
+      <PageFrame>
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">Projects</h1>
-            <p className="text-sm text-text-secondary mt-0.5">Manage and track all projects across the team</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowNewProject(true)}>
-              <Plus className="w-4 h-4" /> New Project
-            </Button>
-            <Button size="sm" onClick={() => setShowNewTask(true)}>
-              <Plus className="w-4 h-4" /> New Task
-            </Button>
-          </div>
-        </div>
-
+        <PageHeader
+          title="Projects"
+          description="Manage and track all projects across the team"
+          actions={<><Button variant="outline" size="sm" onClick={() => setShowNewProject(true)}><Plus className="w-4 h-4" /> New Project</Button><Button size="sm" onClick={() => setShowNewTask(true)}><Plus className="w-4 h-4" /> New Task</Button></>}
+        />
         {/* Project chips + search */}
-        <div className="flex items-center gap-4 flex-wrap">
+        <Toolbar className="gap-3">
           <button
             onClick={() => setSelectedProject(null)}
             className={cn(
-              "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer",
-              !selectedProject ? "bg-cp-purple-600 text-white shadow-sm" : "bg-white border border-border-default text-text-secondary hover:border-border-strong"
+              "min-h-10 px-4 py-2 text-sm font-medium transition-all cursor-pointer",
+              !selectedProject ? "bg-primary text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
             )}
           >
             All Projects
@@ -157,19 +149,19 @@ export default function ProjectsPage() {
               key={p.id}
               onClick={() => setSelectedProject(p.id)}
               className={cn(
-                "px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer flex items-center gap-2",
-                selectedProject === p.id ? "text-white shadow-sm" : "bg-white border border-border-default text-text-secondary hover:border-border-strong"
+                "px-4 py-2 text-sm font-medium transition-all cursor-pointer flex items-center gap-2",
+                selectedProject === p.id ? "bg-primary text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
               )}
-              style={selectedProject === p.id ? { backgroundColor: p.color } : undefined}
             >
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+              <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
               {p.title}
             </button>
           ))}
           <div className="flex-1" />
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
             <Input
+              aria-label="Search tasks"
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -182,11 +174,12 @@ export default function ProjectsPage() {
               <TabsTrigger value="list"><List className="w-4 h-4 mr-1" />List</TabsTrigger>
             </TabsList>
           </Tabs>
-        </div>
+        </Toolbar>
 
         {/* Board view */}
         {view === "board" && (
-          <div className="grid grid-cols-4 gap-4">
+          <div className="overflow-x-auto pb-2" role="region" aria-label="Project task board" tabIndex={0}>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:min-w-[1080px] xl:grid-cols-4">
             {(Object.entries(statusConfig) as [string, typeof statusConfig.todo][]).map(([status, config]) => {
               const columnTasks = tasksByStatus[status as keyof typeof tasksByStatus];
               const isDragOver = dragOverColumn === status;
@@ -201,17 +194,17 @@ export default function ProjectsPage() {
                   {/* Column header */}
                   <div className="flex items-center justify-between mb-3 px-1">
                     <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: config.color }} />
+                      <div className="w-2.5 h-2.5" style={{ backgroundColor: config.color }} />
                       <span className="text-sm font-semibold">{config.label}</span>
-                      <span className="text-xs text-text-muted bg-surface-sunken px-1.5 py-0.5 rounded-md">{columnTasks.length}</span>
+                      <span className="bg-secondary px-1.5 py-0.5 text-xs tabular-nums text-subtle-foreground">{columnTasks.length}</span>
                     </div>
-                    <button className="w-6 h-6 rounded-md hover:bg-surface-sunken flex items-center justify-center transition-colors cursor-pointer">
-                      <Plus className="w-3.5 h-3.5 text-text-muted" />
+                    <button type="button" aria-label={`Add task to ${config.label}`} className="flex h-10 w-10 items-center justify-center transition-colors hover:bg-secondary cursor-pointer">
+                      <Plus className="w-3.5 h-3.5 text-subtle-foreground" />
                     </button>
                   </div>
 
                   {/* Cards */}
-                  <div className={cn("space-y-2 p-1 rounded-xl transition-colors min-h-[200px]", isDragOver && "bg-cp-purple-50 border-2 border-dashed border-cp-purple-300")}>
+                  <div className={cn("min-h-[200px] space-y-2 p-1 transition-colors", isDragOver && "border border-dashed border-primary bg-secondary")}>
                     {columnTasks.map((task) => {
                       const project = projects.find((p) => p.id === task.projectId);
                       const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
@@ -222,15 +215,15 @@ export default function ProjectsPage() {
                           draggable
                           onDragStart={() => handleDragStart(task.id)}
                           className={cn(
-                            "kanban-card bg-white rounded-xl border border-border-default p-3.5 cursor-grab active:cursor-grabbing group",
+                            "kanban-card group cursor-grab border border-border bg-card p-3.5 active:cursor-grabbing",
                             draggedTask === task.id && "opacity-50"
                           )}
                         >
                           {/* Project tag */}
                           {project && (
                             <div className="flex items-center gap-1.5 mb-2">
-                              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: project.color }} />
-                              <span className="text-[10px] font-medium text-text-muted uppercase tracking-wider">{project.title}</span>
+                              <div className="w-1.5 h-1.5" style={{ backgroundColor: project.color }} />
+                              <span className="text-xs font-medium text-subtle-foreground uppercase tracking-wider">{project.title}</span>
                             </div>
                           )}
                           {/* Title */}
@@ -239,25 +232,25 @@ export default function ProjectsPage() {
                           {task.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mb-2">
                               {task.tags.slice(0, 2).map((tag) => (
-                                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-md bg-surface-sunken text-text-muted">{tag}</span>
+                                <span key={tag} className="bg-secondary px-1.5 py-0.5 text-xs text-subtle-foreground">{tag}</span>
                               ))}
                             </div>
                           )}
                           {/* Footer */}
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center gap-2">
-                              <Badge variant={priorityVariant[task.priority]} className="text-[10px] px-1.5 py-0">
+                              <Badge variant={priorityVariant[task.priority]} className="text-xs px-1.5 py-0">
                                 {task.priority}
                               </Badge>
                               {task.status !== "done" && (
-                                <span className={cn("text-[10px]", daysLeft < 0 ? "text-cp-coral-600 font-medium" : daysLeft <= 3 ? "text-cp-mustard-700" : "text-text-muted")}>
+                                <span className={cn("text-xs", daysLeft < 0 ? "text-destructive font-medium" : daysLeft <= 3 ? "text-destructive" : "text-subtle-foreground")}>
                                   {daysLeft < 0 ? `${Math.abs(daysLeft)}d late` : `${daysLeft}d left`}
                                 </span>
                               )}
                             </div>
                             {assignee && (
                               <div
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
                                 style={{ backgroundColor: assignee.avatarColor }}
                                 title={assignee.name}
                               >
@@ -272,6 +265,7 @@ export default function ProjectsPage() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 
@@ -281,13 +275,13 @@ export default function ProjectsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border-default">
-                    <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider py-3 px-4">Task</th>
-                    <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider py-3 px-4">Project</th>
-                    <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider py-3 px-4">Status</th>
-                    <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider py-3 px-4">Priority</th>
-                    <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider py-3 px-4">Assignee</th>
-                    <th className="text-left text-xs font-medium text-text-muted uppercase tracking-wider py-3 px-4">Due Date</th>
+                  <tr className="border-b border-border">
+                    <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Task</th>
+                    <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Project</th>
+                    <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Status</th>
+                    <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Priority</th>
+                    <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Assignee</th>
+                    <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Due Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -295,27 +289,27 @@ export default function ProjectsPage() {
                     const project = projects.find((p) => p.id === task.projectId);
                     const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
                     return (
-                      <tr key={task.id} className="border-b border-border-default/50 hover:bg-surface-sunken/50 transition-colors cursor-pointer">
+                      <tr key={task.id} className="border-b border-border/50 hover:bg-secondary/50 transition-colors cursor-pointer">
                         <td className="py-3 px-4">
                           <p className="text-sm font-medium">{task.title}</p>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: project?.color }} />
-                            <span className="text-sm text-text-secondary">{project?.title}</span>
+                            <div className="w-2 h-2" style={{ backgroundColor: project?.color }} />
+                            <span className="text-sm text-muted-foreground">{project?.title}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <select
+                          <Select
                             value={task.status}
                             onChange={(e) => updateTaskStatus(task.id, e.target.value as "todo" | "in_progress" | "review" | "done")}
-                            className="text-xs font-medium px-2 py-1 rounded-md border border-border-default bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-cp-purple-500"
+                            className="h-auto text-xs font-medium px-2 py-1"
                           >
                             <option value="todo">To Do</option>
                             <option value="in_progress">In Progress</option>
                             <option value="review">Review</option>
                             <option value="done">Done</option>
-                          </select>
+                          </Select>
                         </td>
                         <td className="py-3 px-4">
                           <Badge variant={priorityVariant[task.priority]}>{task.priority}</Badge>
@@ -323,16 +317,16 @@ export default function ProjectsPage() {
                         <td className="py-3 px-4">
                           {assignee ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white" style={{ backgroundColor: assignee.avatarColor }}>
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: assignee.avatarColor }}>
                                 {getInitials(assignee.name)}
                               </div>
                               <span className="text-sm">{assignee.name}</span>
                             </div>
                           ) : (
-                            <span className="text-sm text-text-muted">Unassigned</span>
+                            <span className="text-sm text-subtle-foreground">Unassigned</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-sm text-text-secondary">{formatDate(task.dueDate)}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{formatDate(task.dueDate)}</td>
                       </tr>
                     );
                   })}
@@ -341,7 +335,7 @@ export default function ProjectsPage() {
             </div>
           </Card>
         )}
-      </div>
+      </PageFrame>
 
       {/* New Task Dialog */}
       <Dialog open={showNewTask} onOpenChange={setShowNewTask}>
@@ -357,43 +351,43 @@ export default function ProjectsPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Project</label>
-              <select
+              <Select
                 value={newTaskProject}
                 onChange={(e) => setNewTaskProject(e.target.value)}
-                className="w-full h-9 rounded-[10px] border border-border-default bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-cp-purple-500"
+                className="h-9"
               >
                 <option value="">Select project...</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Priority</label>
-                <select
+                <Select
                   value={newTaskPriority}
                   onChange={(e) => setNewTaskPriority(e.target.value as "low" | "medium" | "high" | "urgent")}
-                  className="w-full h-9 rounded-[10px] border border-border-default bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-cp-purple-500"
+                  className="h-9"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Assignee</label>
-                <select
+                <Select
                   value={newTaskAssignee}
                   onChange={(e) => setNewTaskAssignee(e.target.value)}
-                  className="w-full h-9 rounded-[10px] border border-border-default bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-cp-purple-500"
+                  className="h-9"
                 >
                   <option value="">Unassigned</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">

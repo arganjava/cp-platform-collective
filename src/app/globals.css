@@ -1,282 +1,250 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Spline+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────
+   Architect's Project Binder — shadcn/ui semantic token system
+   ──────────────────────────────────────────────────────────────
+   All component styling uses shadcn standard utilities:
+     bg-background  text-foreground  bg-card  text-card-foreground
+     bg-popover  text-popover-foreground
+     bg-primary  text-primary-foreground
+     bg-secondary  text-secondary-foreground
+     bg-muted  text-muted-foreground
+     bg-accent  text-accent-foreground
+     bg-destructive  text-destructive-foreground
+     border-border  border-input  ring-ring
+     bg-sidebar  text-sidebar-foreground  bg-sidebar-accent
+     text-sidebar-accent-foreground  bg-sidebar-primary
+
+   Custom domain tokens (status, priority, brand) remain as
+   semantic extensions and are mapped in the second @theme block.
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Core surfaces */
+  --background: #faf9f7;
+  --foreground: #1a1a1a;
+
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+
+  /* Primary = ink */
+  --primary: #1a1a1a;
+  --primary-foreground: #ffffff;
+
+  /* Secondary = warm sunken surface */
+  --secondary: #f4f2ee;
+  --secondary-foreground: #1a1a1a;
+
+  /* Muted = same warm surface, softer text */
+  --muted: #f4f2ee;
+  --muted-foreground: #525252;
+
+  /* Accent = soft coral */
+  --accent: #fbe5df;
+  --accent-foreground: #963422;
+
+  /* Destructive = deep coral */
+  --destructive: #c44a30;
+  --destructive-foreground: #ffffff;
+
+  /* Structural */
+  --border: #e4e1dc;
+  --input: #c9c5be;
+  --ring: #c44a30;
+
+  /* Sidebar — binder cover */
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #a8a39d;
+  --sidebar-primary: #e85d3f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #ffffff;
+
+  /* Radius — square geometry */
+  --radius: 0px;
+
+  /* ── Custom domain tokens (not part of shadcn standard) ── */
+
+  /* Brand signature coral */
+  --brand: #e85d3f;
+  --brand-foreground: #ffffff;
+
+  /* Subtle text — lighter than muted-foreground */
+  --subtle-foreground: #8a8580;
+
+  /* Semantic workflow colors */
+  --status-todo: #8a8580;
+  --status-progress: #1a1a1a;
+  --status-review: #c44a30;
+  --status-done: #525252;
+  --status-blocked: #c44a30;
+
+  --priority-low: #8a8580;
+  --priority-medium: #525252;
+  --priority-high: #c44a30;
+  --priority-urgent: #8f2e20;
+
+  /* Chart palette */
+  --chart-1: #e85d3f;
+  --chart-2: #1a1a1a;
+  --chart-3: #525252;
+  --chart-4: #c44a30;
+  --chart-5: #8a8580;
+
+  /* Legacy compatibility ramps (chart data, inline styles) */
+  --cp-ink: #1a1a1a;
+  --cp-ink-soft: #525252;
+  --cp-coral: #e85d3f;
+  --cp-coral-deep: #c44a30;
+  --cp-coral-soft: #fbe5df;
+  --cp-coral-50: #fff6f3;
+  --cp-coral-100: #fbe5df;
+  --cp-coral-300: #f1aa99;
+  --cp-coral-500: #e85d3f;
+  --cp-coral-600: #d04a30;
+  --cp-coral-800: #963422;
+}
+
+/* ── Map semantic variables to Tailwind v4 utilities ── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+  /* Custom domain tokens */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-status-todo: var(--status-todo);
+  --color-status-progress: var(--status-progress);
+  --color-status-review: var(--status-review);
+  --color-status-done: var(--status-done);
+  --color-status-blocked: var(--status-blocked);
+  --color-priority-low: var(--priority-low);
+  --color-priority-medium: var(--priority-medium);
+  --color-priority-high: var(--priority-high);
+  --color-priority-urgent: var(--priority-urgent);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Legacy compat (inline styles in seed data, chart code) */
+  --color-cp-ink: var(--cp-ink);
+  --color-cp-ink-soft: var(--cp-ink-soft);
+  --color-cp-coral: var(--cp-coral);
+  --color-cp-coral-deep: var(--cp-coral-deep);
+  --color-cp-coral-soft: var(--cp-coral-soft);
+  --color-cp-coral-50: var(--cp-coral-50);
+  --color-cp-coral-100: var(--cp-coral-100);
+  --color-cp-coral-300: var(--cp-coral-300);
+  --color-cp-coral-500: var(--cp-coral-500);
+  --color-cp-coral-600: var(--cp-coral-600);
+  --color-cp-coral-800: var(--cp-coral-800);
+}
+
+/* ── Non-color design tokens ── */
 @theme {
-  /* CP Brand Colors - Bold, Visionary, Inclusive, Creative */
-  --color-cp-purple-50: #f5f0ff;
-  --color-cp-purple-100: #ede5ff;
-  --color-cp-purple-200: #ddd0ff;
-  --color-cp-purple-300: #c4abff;
-  --color-cp-purple-400: #a67aff;
-  --color-cp-purple-500: #8b46ff;
-  --color-cp-purple-600: #7c22ff;
-  --color-cp-purple-700: #6d10eb;
-  --color-cp-purple-800: #5b0ec5;
-  --color-cp-purple-900: #4a0d9f;
-  --color-cp-purple-950: #2d0066;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 
-  --color-cp-coral-50: #fff5f3;
-  --color-cp-coral-100: #ffe8e3;
-  --color-cp-coral-200: #ffd4cc;
-  --color-cp-coral-300: #ffb3a5;
-  --color-cp-coral-400: #ff8b73;
-  --color-cp-coral-500: #ff6b4a;
-  --color-cp-coral-600: #ed4a27;
-  --color-cp-coral-700: #c8371a;
-  --color-cp-coral-800: #a5301a;
-  --color-cp-coral-900: #882d1d;
-  --color-cp-coral-950: #4b1309;
+  --font-heading: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: "Spline Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 
-  --color-cp-mustard-50: #fffdf0;
-  --color-cp-mustard-100: #fff9d6;
-  --color-cp-mustard-200: #fff2a8;
-  --color-cp-mustard-300: #ffe770;
-  --color-cp-mustard-400: #ffd633;
-  --color-cp-mustard-500: #f5c200;
-  --color-cp-mustard-600: #d9a000;
-  --color-cp-mustard-700: #b37700;
-  --color-cp-mustard-800: #915d08;
-  --color-cp-mustard-900: #784b0e;
-  --color-cp-mustard-950: #462700;
+  --shadow-sm: 0 1px 2px rgba(26, 26, 26, 0.05);
+  --shadow-md: 0 4px 12px rgba(26, 26, 26, 0.08);
+  --shadow-lg: 0 8px 24px rgba(26, 26, 26, 0.12);
+  --shadow-xl: 0 20px 48px rgba(26, 26, 26, 0.16);
 
-  --color-cp-teal-50: #f0fdfa;
-  --color-cp-teal-100: #ccfbef;
-  --color-cp-teal-200: #99f6df;
-  --color-cp-teal-300: #5eeace;
-  --color-cp-teal-400: #2dd4b8;
-  --color-cp-teal-500: #14b8a0;
-  --color-cp-teal-600: #0d9484;
-  --color-cp-teal-700: #0f766b;
-  --color-cp-teal-800: #115e57;
-  --color-cp-teal-900: #134e48;
-  --color-cp-teal-950: #042f2b;
-
-  /* Surface colors */
-  --color-surface: #fafafc;
-  --color-surface-elevated: #ffffff;
-  --color-surface-sunken: #f1f1f6;
-  --color-surface-overlay: rgba(0, 0, 0, 0.5);
-
-  /* Text colors */
-  --color-text-primary: #1a1a2e;
-  --color-text-secondary: #6b6b80;
-  --color-text-muted: #9898ac;
-  --color-text-inverse: #ffffff;
-
-  /* Border */
-  --color-border-default: #e4e4ef;
-  --color-border-strong: #c8c8d8;
-
-  /* Status colors */
-  --color-status-todo: #9898ac;
-  --color-status-progress: #8b46ff;
-  --color-status-review: #ffd633;
-  --color-status-done: #14b8a0;
-  --color-status-blocked: #ff6b4a;
-
-  /* Priority colors */
-  --color-priority-low: #14b8a0;
-  --color-priority-medium: #ffd633;
-  --color-priority-high: #ff6b4a;
-  --color-priority-urgent: #dc2626;
-
-  /* Sidebar */
-  --color-sidebar-bg: #1a1a2e;
-  --color-sidebar-text: #c8c8e0;
-  --color-sidebar-text-active: #ffffff;
-  --color-sidebar-hover: rgba(139, 70, 255, 0.15);
-  --color-sidebar-active: rgba(139, 70, 255, 0.25);
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-  --shadow-md: 0 4px 12px rgba(26, 26, 46, 0.08);
-  --shadow-lg: 0 8px 30px rgba(26, 26, 46, 0.12);
-  --shadow-xl: 0 20px 60px rgba(26, 26, 46, 0.15);
-
-  /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
-
-  /* Font family */
-  --font-heading: "Sora", system-ui, sans-serif;
-  --font-body: "DM Sans", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
-
-  /* Animations */
-  --animate-fade-in: fade-in 0.3s ease-out;
-  --animate-slide-up: slide-up 0.3s ease-out;
-  --animate-slide-down: slide-down 0.3s ease-out;
-  --animate-scale-in: scale-in 0.2s ease-out;
-  --animate-shimmer: shimmer 2s infinite;
+  --animate-fade-in: fade-in 0.24s cubic-bezier(0.2, 0, 0, 1);
+  --animate-slide-down: slide-down 0.2s cubic-bezier(0.2, 0, 0, 1);
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
 
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slide-down {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scale-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-
-
-/* Base styles */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  font-family: var(--font-body);
-  color: var(--color-text-primary);
-  background: var(--color-surface);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-/* Note: decorative background gradients (gradient-brand) are fine — the anti-pattern is gradient TEXT (background-clip: text) */
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-default);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-strong);
-}
-
-/* Focus styles for accessibility */
-:focus-visible {
-  outline: 2px solid var(--color-cp-purple-500);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-/* Selection */
-::selection {
-  background: var(--color-cp-purple-200);
-  color: var(--color-cp-purple-900);
-}
-
-/* Custom utility classes */
-.glass-effect {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.heading {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.gradient-brand {
-  background: linear-gradient(135deg, var(--color-cp-purple-600) 0%, var(--color-cp-purple-500) 50%, var(--color-cp-coral-500) 100%);
-}
-
-.card-hover {
-  transition: all 0.2s ease;
-}
-
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-/* Kanban column animation */
-.kanban-card {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.kanban-card:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.kanban-card.dragging {
-  transform: rotate(2deg);
-  box-shadow: var(--shadow-xl);
-  opacity: 0.9;
-}
-
-/* Gantt chart styling */
-.gantt-bar {
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.gantt-bar:hover {
-  filter: brightness(1.1);
-  transform: scaleY(1.1);
-}
-
-/* Notification badge pulse */
-.notification-pulse {
-  animation: pulse-ring 2s ease-out infinite;
-}
-
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(255, 107, 74, 0.6); }
-  70% { box-shadow: 0 0 0 8px rgba(255, 107, 74, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 107, 74, 0); }
-}
-
-/* Status indicator dot */
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-/* Print styles for reports */
-@media print {
-  .no-print {
-    display: none !important;
-  }
+@layer base {
+  html { scroll-behavior: smooth; }
   body {
-    background: white;
+    font-family: var(--font-body);
+    color: var(--foreground);
+    background: var(--background);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "tnum" 1, "cv01" 1;
   }
+  button, select, input, textarea { border-radius: 0; }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-input); }
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  ::selection { background: var(--color-accent); color: var(--color-destructive); }
+}
+
+@layer utilities {
+  .heading { font-family: var(--font-heading); font-weight: 700; letter-spacing: -0.03em; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .kanban-card { transition: border-color 160ms ease, background-color 160ms ease; }
+  .kanban-card:hover { border-color: var(--color-input); }
+  .kanban-card.dragging { border-color: var(--color-primary); box-shadow: var(--shadow-lg); opacity: 0.9; }
+  .gantt-bar { transition: filter 160ms ease; cursor: pointer; }
+  .gantt-bar:hover { filter: brightness(0.94); }
+  .status-dot { width: 8px; height: 8px; display: inline-block; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
 }

@@ -7,16 +7,8 @@ import { cn, formatDate, getInitials } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  FolderKanban,
-  CheckSquare,
-  DollarSign,
-  Clock,
-  ArrowUpRight,
-  Users,
-  CalendarDays,
-  Sparkles,
-} from "lucide-react";
+import { PageFrame, TitleBlock, SheetSummary, SummaryMetric } from "@/components/page-layout";
+import { CalendarDays, Users } from "lucide-react";
 
 const RechartsArea = dynamic(() => import("@/components/dashboard-chart").then(m => m.DashboardChart), { ssr: false });
 
@@ -65,140 +57,83 @@ export default function DashboardPage() {
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 5);
 
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
   return (
-      <div className="space-y-6 animate-fade-in">
-        {/* Welcome banner */}
-        <div className="relative overflow-hidden rounded-[18px] gradient-brand p-6 text-white">
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-5 h-5" />
-              <span className="text-white/80 text-sm font-medium">Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, Vincent</span>
-            </div>
-            <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight mb-1">
-              Redefining Ability. Reimagining Possibility.
-            </h1>
-            <p className="text-white/70 text-sm max-w-xl">
-              Here&apos;s what&apos;s happening across your projects today. {overdueTasks > 0 ? `${overdueTasks} task${overdueTasks > 1 ? "s" : ""} need attention.` : "Everything is on track."}
-            </p>
-          </div>
-          <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -right-5 -bottom-10 w-32 h-32 bg-white/5 rounded-full blur-2xl" />
-        </div>
+      <PageFrame>
+        <TitleBlock
+          title="Dashboard"
+          description="What needs attention across your projects today."
+          meta={
+            <>
+              <span>{dateStr}</span>
+              <span>{activeProjects.length} active projects</span>
+              <span>{totalTasks} tasks in flight</span>
+            </>
+          }
+        />
 
-        {/* Stat cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="card-hover">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-cp-purple-100 flex items-center justify-center">
-                  <FolderKanban className="w-5 h-5 text-cp-purple-600" />
-                </div>
-                <Badge variant="purple">{activeProjects.length} active</Badge>
-              </div>
-              <p className="text-2xl font-bold tracking-tight">{projects.length}</p>
-              <p className="text-sm text-text-secondary">Total Projects</p>
-            </CardContent>
-          </Card>
+        <SheetSummary>
+          <SummaryMetric value={projects.length} label="Projects" indicator={<Badge variant="neutral">{activeProjects.length} active</Badge>} />
+          <SummaryMetric value={totalTasks} label="Tasks" indicator={<Badge variant="positive">{completionPct}% done</Badge>} />
+          <SummaryMetric value={overdueTasks} label="Overdue" indicator={overdueTasks > 0 ? <Badge variant="danger">{overdueTasks} need attention</Badge> : <Badge variant="positive">On track</Badge>} />
+          <SummaryMetric value={`$${(totalRevenue / 1000).toFixed(0)}k`} label="Revenue" indicator={<Badge variant="neutral">+${(thisMonthRevenue / 1000).toFixed(0)}k this month</Badge>} />
+        </SheetSummary>
 
-          <Card className="card-hover">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-cp-teal-100 flex items-center justify-center">
-                  <CheckSquare className="w-5 h-5 text-cp-teal-600" />
-                </div>
-                <Badge variant="success">{completionPct}% done</Badge>
-              </div>
-              <p className="text-2xl font-bold tracking-tight">{totalTasks}</p>
-              <p className="text-sm text-text-secondary">Total Tasks</p>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-cp-coral-100 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-cp-coral-600" />
-                </div>
-                {overdueTasks > 0 ? (
-                  <Badge variant="danger">{overdueTasks} overdue</Badge>
-                ) : (
-                  <Badge variant="success">On track</Badge>
-                )}
-              </div>
-              <p className="text-2xl font-bold tracking-tight">{overdueTasks}</p>
-              <p className="text-sm text-text-secondary">Overdue Tasks</p>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-cp-mustard-100 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-cp-mustard-700" />
-                </div>
-                <Badge variant="teal">
-                  <ArrowUpRight className="w-3 h-3 mr-0.5" />
-                  +${(thisMonthRevenue / 1000).toFixed(0)}k
-                </Badge>
-              </div>
-              <p className="text-2xl font-bold tracking-tight">${(totalRevenue / 1000).toFixed(0)}k</p>
-              <p className="text-sm text-text-secondary">Total Revenue</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Main content grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Task breakdown + Chart */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Task status breakdown */}
+        <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.9fr)]">
+          {/* Left column */}
+          <div className="min-w-0 space-y-8">
             <Card>
               <CardHeader>
                 <CardTitle>Task Overview</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-4 gap-3 mb-6">
+                <div className="grid grid-cols-2 gap-0 border-y border-border sm:grid-cols-4">
                   {(["todo", "in_progress", "review", "done"] as const).map((status) => {
                     const count = tasks.filter((t) => t.status === status).length;
                     return (
-                      <div key={status} className="text-center p-3 rounded-xl bg-surface-sunken">
-                        <div className="w-2.5 h-2.5 rounded-full mx-auto mb-2" style={{ backgroundColor: statusColors[status] }} />
-                        <p className="text-xl font-bold">{count}</p>
-                        <p className="text-xs text-text-muted">{statusLabels[status]}</p>
+                      <div key={status} className="flex flex-col gap-1 px-4 py-3 border-r border-border last:border-r-0">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2" style={{ backgroundColor: statusColors[status] }} />
+                          <span className="text-xs font-medium uppercase tracking-wider text-subtle-foreground">{statusLabels[status]}</span>
+                        </div>
+                        <p className="text-xl font-bold tabular">{count}</p>
                       </div>
                     );
                   })}
                 </div>
-                <RechartsArea />
+                <div className="mt-6">
+                  <RechartsArea />
+                </div>
               </CardContent>
             </Card>
 
-            {/* Upcoming deadlines */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Upcoming Deadlines</CardTitle>
-                  <CalendarDays className="w-4 h-4 text-text-muted" />
+                  <CalendarDays className="w-4 h-4 text-subtle-foreground" aria-hidden="true" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="divide-y divide-border">
                   {upcomingDeadlines.map((task) => {
                     const project = projects.find((p) => p.id === task.projectId);
                     const daysLeft = Math.ceil((new Date(task.dueDate).getTime() - new Date().getTime()) / 86400000);
                     const isOverdue = daysLeft < 0;
                     return (
-                      <div key={task.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-sunken transition-colors group">
-                        <div className="w-1.5 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: priorityColors[task.priority] }} />
+                      <div key={task.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                        <div className="w-1 h-8 flex-shrink-0" style={{ backgroundColor: priorityColors[task.priority] }} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{task.title}</p>
-                          <p className="text-xs text-text-muted">{project?.title}</p>
+                          <p className="text-xs text-subtle-foreground truncate">{project?.title}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <p className={cn("text-xs font-medium", isOverdue ? "text-cp-coral-600" : daysLeft <= 3 ? "text-cp-mustard-700" : "text-text-secondary")}>
+                          <p className={cn("text-xs font-semibold tabular", isOverdue ? "text-destructive" : daysLeft <= 3 ? "text-destructive" : "text-muted-foreground")}>
                             {isOverdue ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
                           </p>
-                          <p className="text-[10px] text-text-muted">{formatDate(task.dueDate)}</p>
+                          <p className="text-xs text-subtle-foreground">{formatDate(task.dueDate)}</p>
                         </div>
                       </div>
                     );
@@ -208,49 +143,46 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Right sidebar */}
-          <div className="space-y-6">
-            {/* Active projects */}
+          {/* Right column */}
+          <div className="min-w-0 space-y-8">
             <Card>
               <CardHeader>
                 <CardTitle>Active Projects</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="divide-y divide-border">
                   {activeProjects.map((project) => {
                     const projectTasks = tasks.filter((t) => t.projectId === project.id);
                     const doneTasks = projectTasks.filter((t) => t.status === "done").length;
                     const progress = projectTasks.length > 0 ? Math.round((doneTasks / projectTasks.length) * 100) : 0;
                     const members = project.memberIds.map((id) => getUserById(id)).filter(Boolean);
                     return (
-                      <div key={project.id} className="p-3 rounded-xl hover:bg-surface-sunken transition-colors cursor-pointer card-hover">
+                      <div key={project.id} className="py-3 first:pt-0 last:pb-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-                          <h4 className="text-sm font-semibold truncate">{project.title}</h4>
+                          <div className="w-2 h-2 flex-shrink-0" style={{ backgroundColor: project.color }} />
+                          <h4 className="text-sm font-semibold truncate flex-1">{project.title}</h4>
+                          <span className="text-xs text-subtle-foreground tabular">{projectTasks.length} tasks</span>
                         </div>
                         <div className="flex items-center gap-2 mb-2">
-                          <Progress value={progress} className="flex-1" color={project.color} />
-                          <span className="text-xs text-text-muted font-medium w-8 text-right">{progress}%</span>
+                          <Progress value={progress} label={`${project.title} completion`} className="flex-1" color={project.color} />
+                          <span className="text-xs text-subtle-foreground font-medium tabular w-8 text-right">{progress}%</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex -space-x-1.5">
-                            {members.slice(0, 3).map((member) => (
-                              <div
-                                key={member!.id}
-                                className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-bold text-white"
-                                style={{ backgroundColor: member!.avatarColor }}
-                                title={member!.name}
-                              >
-                                {getInitials(member!.name)}
-                              </div>
-                            ))}
-                            {members.length > 3 && (
-                              <div className="w-5 h-5 rounded-full border-2 border-white bg-surface-sunken flex items-center justify-center text-[8px] font-medium text-text-muted">
-                                +{members.length - 3}
-                              </div>
-                            )}
-                          </div>
-                          <span className="text-xs text-text-muted">{projectTasks.length} tasks</span>
+                        <div className="flex -space-x-1.5">
+                          {members.slice(0, 4).map((member) => (
+                            <div
+                              key={member!.id}
+                              className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white"
+                              style={{ backgroundColor: member!.avatarColor }}
+                              title={member!.name}
+                            >
+                              {getInitials(member!.name)}
+                            </div>
+                          ))}
+                          {members.length > 4 && (
+                            <div className="w-5 h-5 border-2 border-white bg-secondary flex items-center justify-center text-[10px] font-medium text-subtle-foreground">
+                              +{members.length - 4}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -259,31 +191,30 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Team activity */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Team</CardTitle>
-                  <Users className="w-4 h-4 text-text-muted" />
+                  <Users className="w-4 h-4 text-subtle-foreground" aria-hidden="true" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="divide-y divide-border">
                   {users.slice(0, 6).map((user) => {
                     const userTasks = tasks.filter((t) => t.assigneeId === user.id && t.status !== "done");
                     return (
-                      <div key={user.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-sunken transition-colors">
+                      <div key={user.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
                           style={{ backgroundColor: user.avatarColor }}
                         >
                           {getInitials(user.name)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{user.name}</p>
-                          <p className="text-xs text-text-muted">{userTasks.length} active tasks</p>
+                          <p className="text-xs text-subtle-foreground tabular">{userTasks.length} active tasks</p>
                         </div>
-                        <div className="w-2 h-2 rounded-full bg-cp-teal-400" title="Online" />
+                        <div className="w-1.5 h-1.5 bg-muted-foreground" title="Online" />
                       </div>
                     );
                   })}
@@ -292,6 +223,6 @@ export default function DashboardPage() {
             </Card>
           </div>
         </div>
-      </div>
+      </PageFrame>
   );
 }

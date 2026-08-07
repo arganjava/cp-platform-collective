@@ -7,21 +7,14 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { sidebarCollapsed } = useStore();
+  const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-background">
       <Sidebar />
-      <div
-        className={cn(
-          "transition-all duration-300 ease-in-out",
-          sidebarCollapsed ? "ml-[68px]" : "ml-[240px]"
-        )}
-      >
+      <div className={cn("min-h-screen transition-[margin] duration-200 ease-out", sidebarCollapsed ? "md:ml-[68px]" : "md:ml-[240px]")}>
         <TopBar />
-        <main className="p-6">
-          {children}
-        </main>
+        <main className="px-4 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</main>
       </div>
     </div>
   );

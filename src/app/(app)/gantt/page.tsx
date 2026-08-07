@@ -3,15 +3,16 @@
 import React, { useState, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 
 type ZoomLevel = "day" | "week" | "month";
 
 const priorityColors: Record<string, string> = {
-  low: "#14b8a0",
-  medium: "#ffd633",
-  high: "#ff6b4a",
-  urgent: "#dc2626",
+  low: "var(--color-priority-low)",
+  medium: "var(--color-priority-medium)",
+  high: "var(--color-priority-high)",
+  urgent: "var(--color-priority-urgent)",
 };
 
 export default function GanttPage() {
@@ -84,40 +85,37 @@ export default function GanttPage() {
   // Today marker
   const today = new Date();
   const todayOffset = ((today.getTime() - timelineStart.getTime()) / 86400000 / totalDays) * 100;
+  const columnWidth = zoom === "day" ? 40 : zoom === "week" ? 80 : 120;
+  const chartWidth = Math.max(1000, 280 + columns.length * columnWidth);
 
   return (
-      <div className="space-y-6 animate-fade-in">
+      <PageFrame className="max-w-[1600px]">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold font-[family-name:var(--font-heading)] tracking-tight">Timeline</h1>
-            <p className="text-sm text-text-secondary mt-0.5">Gantt chart view of project schedules and task timelines</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-surface-sunken rounded-lg p-0.5">
-              {(["day", "week", "month"] as ZoomLevel[]).map((z) => (
-                <button
-                  key={z}
-                  onClick={() => setZoom(z)}
-                  className={cn(
-                    "px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer capitalize",
-                    zoom === z ? "bg-white text-text-primary shadow-sm" : "text-text-muted hover:text-text-secondary"
-                  )}
-                >
-                  {z}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
+        <PageHeader
+          title="Timeline"
+          description="Gantt chart view of project schedules and task timelines"
+          actions={<div className="flex items-center bg-secondary p-1">
+            {(["day", "week", "month"] as ZoomLevel[]).map((z) => (
+              <button
+                key={z}
+                onClick={() => setZoom(z)}
+                className={cn(
+                  "min-h-10 px-3 text-xs font-semibold transition-colors capitalize",
+                  zoom === z ? "bg-card text-foreground" : "text-subtle-foreground hover:text-muted-foreground"
+                )}
+              >
+                {z}
+              </button>
+            ))}
+          </div>}
+        />
+        <Toolbar className="border-0 bg-transparent p-0">
         {/* Project filter */}
-        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setSelectedProject(null)}
             className={cn(
-              "px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
-              !selectedProject ? "bg-cp-purple-600 text-white" : "bg-white border border-border-default text-text-secondary hover:border-border-strong"
+              "px-3 py-1.5 text-sm font-medium transition-all cursor-pointer",
+              !selectedProject ? "bg-primary text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
             )}
           >
             All Projects
@@ -127,33 +125,33 @@ export default function GanttPage() {
               key={p.id}
               onClick={() => setSelectedProject(p.id === selectedProject ? null : p.id)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                selectedProject === p.id ? "text-white" : "bg-white border border-border-default text-text-secondary hover:border-border-strong"
+                "px-3 py-1.5 text-sm font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                selectedProject === p.id ? "text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
               )}
               style={selectedProject === p.id ? { backgroundColor: p.color } : undefined}
             >
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+              <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
               {p.title}
             </button>
           ))}
-        </div>
+        </Toolbar>
 
         {/* Gantt Chart */}
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <div className="min-w-[1000px]">
+          <div className="w-full overflow-x-auto">
+            <div className="min-w-[1000px]" style={{ width: chartWidth }}>
               {/* Header row with dates */}
-              <div className="flex border-b border-border-default bg-surface-sunken">
-                <div className="w-[280px] flex-shrink-0 px-4 py-2.5 border-r border-border-default">
-                  <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Task</span>
+              <div className="flex border-b border-border bg-secondary">
+                <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-secondary px-4 py-2.5">
+                  <span className="text-xs font-medium text-subtle-foreground uppercase tracking-wider">Task</span>
                 </div>
                 <div className="flex-1 relative">
                   <div className="flex">
                     {columns.map((col, i) => (
                       <div
                         key={i}
-                        className="flex-shrink-0 px-2 py-2.5 text-center border-r border-border-default/50 text-[10px] font-medium text-text-muted"
-                        style={{ width: zoom === "day" ? 40 : zoom === "week" ? 80 : 120 }}
+                        className="flex-shrink-0 px-2 py-2.5 text-center border-r border-border/50 text-xs font-medium text-subtle-foreground"
+                        style={{ width: columnWidth }}
                       >
                         {formatColumnHeader(col)}
                       </div>
@@ -162,10 +160,10 @@ export default function GanttPage() {
                   {/* Today marker */}
                   {todayOffset >= 0 && todayOffset <= 100 && (
                     <div
-                      className="absolute top-0 bottom-0 w-px bg-cp-coral-500 z-10"
+                      className="absolute top-0 bottom-0 w-px bg-accent0 z-10"
                       style={{ left: `${todayOffset}%` }}
                     >
-                      <div className="absolute -top-0 left-1/2 -translate-x-1/2 bg-cp-coral-500 text-white text-[9px] px-1 py-0.5 rounded-b-sm font-medium whitespace-nowrap">
+                      <div className="absolute -top-0 left-1/2 -translate-x-1/2 bg-accent0 text-white text-xs px-1 py-0.5 font-medium whitespace-nowrap">
                         Today
                       </div>
                     </div>
@@ -182,17 +180,17 @@ export default function GanttPage() {
                 return (
                   <div key={project.id}>
                     {/* Project header row */}
-                    <div className="flex border-b border-border-default bg-surface-sunken/50">
-                      <div className="w-[280px] flex-shrink-0 px-4 py-2 border-r border-border-default">
+                    <div className="flex border-b border-border bg-secondary/50">
+                      <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-secondary/50 px-4 py-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                          <div className="w-2.5 h-2.5" style={{ backgroundColor: project.color }} />
                           <span className="text-sm font-semibold">{project.title}</span>
                         </div>
                       </div>
                       <div className="flex-1 relative py-2">
                         {/* Project duration bar */}
                         <div
-                          className="absolute h-2 rounded-full opacity-20 top-1/2 -translate-y-1/2"
+                          className="absolute h-2 opacity-20 top-1/2 -translate-y-1/2"
                           style={{
                             ...getBarPosition(project.startDate, project.endDate),
                             backgroundColor: project.color,
@@ -211,23 +209,23 @@ export default function GanttPage() {
                         <div
                           key={task.id}
                           className={cn(
-                            "flex border-b border-border-default/50 transition-colors",
-                            isHovered && "bg-cp-purple-50/30"
+                            "flex border-b border-border/50 transition-colors",
+                            isHovered && "bg-secondary/50"
                           )}
                           onMouseEnter={() => setHoveredTask(task.id)}
                           onMouseLeave={() => setHoveredTask(null)}
                         >
                           {/* Task info */}
-                          <div className="w-[280px] flex-shrink-0 px-4 py-2.5 border-r border-border-default">
+                          <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-card px-4 py-2.5">
                             <div className="flex items-center gap-2 pl-4">
                               <div
-                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                className="w-1.5 h-1.5 flex-shrink-0"
                                 style={{ backgroundColor: priorityColors[task.priority] }}
                               />
                               <span className="text-sm truncate">{task.title}</span>
                               {assignee && (
                                 <div
-                                  className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0 ml-auto"
+                                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ml-auto"
                                   style={{ backgroundColor: assignee.avatarColor }}
                                   title={assignee.name}
                                 >
@@ -240,15 +238,15 @@ export default function GanttPage() {
                           {/* Gantt bar */}
                           <div className="flex-1 relative py-2.5">
                             <div
-                              className="gantt-bar absolute h-6 rounded-md top-1/2 -translate-y-1/2 flex items-center px-2"
+                              className="gantt-bar absolute h-6 top-1/2 -translate-y-1/2 flex items-center px-2"
                               style={{
                                 ...barPos,
-                                backgroundColor: task.status === "done" ? "var(--color-cp-teal-400)" : project.color,
+                                backgroundColor: task.status === "done" ? "var(--muted-foreground)" : project.color,
                                 opacity: task.status === "done" ? 0.7 : 1,
                               }}
                             >
                               {isHovered && (
-                                <span className="text-[10px] text-white font-medium whitespace-nowrap overflow-hidden">
+                                <span className="text-xs text-white font-medium whitespace-nowrap overflow-hidden">
                                   {task.title}
                                 </span>
                               )}
@@ -257,7 +255,7 @@ export default function GanttPage() {
                             {columns.map((_, i) => (
                               <div
                                 key={i}
-                                className="absolute top-0 bottom-0 border-r border-border-default/30"
+                                className="absolute top-0 bottom-0 border-r border-border/30"
                                 style={{ left: `${((i + 1) / columns.length) * 100}%` }}
                               />
                             ))}
@@ -273,25 +271,25 @@ export default function GanttPage() {
         </Card>
 
         {/* Legend */}
-        <div className="flex items-center gap-6 px-2">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-2">
           <div className="flex items-center gap-4">
-            <span className="text-xs text-text-muted font-medium">Priority:</span>
+            <span className="text-xs text-subtle-foreground font-medium">Priority:</span>
             {Object.entries(priorityColors).map(([key, color]) => (
               <div key={key} className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                <span className="text-xs text-text-secondary capitalize">{key}</span>
+                <div className="w-2.5 h-2.5" style={{ backgroundColor: color }} />
+                <span className="text-xs text-muted-foreground capitalize">{key}</span>
               </div>
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-2 rounded-sm bg-cp-teal-400 opacity-70" />
-            <span className="text-xs text-text-secondary">Completed</span>
+            <div className="w-4 h-2 bg-muted-foreground opacity-70" />
+            <span className="text-xs text-muted-foreground">Completed</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-px h-4 bg-cp-coral-500" />
-            <span className="text-xs text-text-secondary">Today</span>
+            <div className="w-px h-4 bg-accent0" />
+            <span className="text-xs text-muted-foreground">Today</span>
           </div>
         </div>
-      </div>
+      </PageFrame>
   );
 }

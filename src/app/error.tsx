@@ -15,13 +15,11 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-cp-coral-100 flex items-center justify-center mx-auto">
-          <span className="text-2xl">⚠️</span>
-        </div>
-        <h2 className="text-xl font-bold font-[family-name:var(--font-heading)]">Something went wrong</h2>
-        <p className="text-text-secondary text-sm max-w-md">
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center space-y-4 max-w-md px-4">
+        <div className="h-px w-12 bg-brand mx-auto" aria-hidden="true" />
+        <h2 className="text-xl font-bold heading">Something went wrong</h2>
+        <p className="text-muted-foreground text-sm">
           An unexpected error occurred. Please try again.
         </p>
         <Button onClick={reset} variant="default">

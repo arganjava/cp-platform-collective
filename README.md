@@ -5,17 +5,17 @@
 
 ## Overview
 
-A modern, lightweight project management platform built for the CP team to track projects, tasks, sales revenue, and team performance — all in one place.
+A lightweight internal workspace for CP to coordinate projects, track tasks, record revenue, and report on delivery and impact.
 
 ## Features
 
 - **Dashboard** — At-a-glance view of projects, tasks, revenue, and upcoming deadlines
 - **Kanban Board** — Drag-and-drop task management across To Do → In Progress → Review → Done
-- **Task Management** — Full CRUD with priority levels, assignees, and due dates
+- **Task Management** — Priority levels, assignees, due dates, filters, and inline status changes
 - **Gantt Timeline** — Visual timeline view of project schedules and task durations
 - **Sales Tracking** — Log revenue from grants, sponsorships, workshops, commissions, and artwork sales
 - **Reports & Analytics** — Charts and breakdowns for sales, project progress, and team performance
-- **Notifications** — Real-time notification system with unread badges and mark-all-read
+- **Notifications** — Unread notifications with mark-all-read support
 
 ## Tech Stack
 
@@ -23,7 +23,7 @@ A modern, lightweight project management platform built for the CP team to track
 |-------|-----------|
 | Framework | Next.js 15 (App Router) + React 19 |
 | Language | TypeScript |
-| Styling | Tailwind CSS v4 + custom CP design system |
+| Styling | Tailwind CSS v4 + CP Editorial Operations design tokens |
 | UI Components | Radix UI primitives + CVA |
 | State Management | Zustand |
 | Charts | Recharts |
@@ -32,63 +32,81 @@ A modern, lightweight project management platform built for the CP team to track
 ## Getting Started
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
+```
 
-# Build for production
+The development server uses Turbopack. Open [http://localhost:3456](http://localhost:3456) when using the project's SSH preview setup, or [http://localhost:3000](http://localhost:3000) for the default Next.js port.
+
+```bash
 npm run build
-
-# Start production server
 npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to access the platform.
+## Design system
 
-## Project Structure
+The platform follows **CP Editorial Operations**, an internal Operate-mode expression of Collective Perspectives' public visual language:
+
+- **Ink + paper foundation** for high contrast and calm scanning
+- **CP Coral** for scarce expressive emphasis and urgency
+- **Selection Purple** for focus, active navigation, and selected states
+- **Completion Teal** and **Attention Mustard** for semantic workflow states
+- **Sora** for hierarchy and **DM Sans** for readable operational UI
+- **Flat-by-default surfaces**, quiet dividers, and purposeful motion
+
+Persistent design context lives in `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json`, and the route briefs under `.impeccable/surfaces/`. Run `npx impeccable detect src/` before shipping UI changes.
+
+## Impeccable workflow
+
+Impeccable is installed project-local for the detected coding clients: Claude Code, Cursor, Gemini CLI, Codex CLI, OpenCode, and Pi. The installed skill payload reports v4.0.4; the invoking `npx impeccable` CLI currently reports 3.5.0, so keep the skill and CLI updated together with `npx impeccable update`.
+
+```bash
+# Keep the project-local skills and hooks current
+npx impeccable update
+npx impeccable check
+
+# Initialize or refresh durable project context when product truth changes
+# Run this from an Impeccable-enabled coding client:
+/impeccable init
+
+# Review or validate UI work
+npx impeccable detect src/
+/impeccable critique src/app/(app)/page.tsx
+/impeccable audit src/app/(app)/page.tsx
+
+# Check or repair the project design hook
+/impeccable hooks status
+/impeccable hooks on
+```
+
+The repository uses Impeccable's official skill, CLI, and provider-native hook workflow documented at [impeccable.style](https://impeccable.style/docs/init/). No verified official Impeccable MCP integration was found or configured; the supported workflow used here is skill + CLI + hooks. Do not add an MCP entry unless a future official Impeccable release documents one for the client being used.
+
+Provider notes:
+
+- Claude Code uses `.claude/settings.local.json` and `.claude/skills/impeccable/`. The local settings file is developer/machine-local; use the client’s shared settings mechanism if the team explicitly wants a committed shared hook.
+- Codex CLI uses `.codex/hooks.json` and `.agents/skills/impeccable/`; Codex may require one-time hook approval in `/hooks`.
+- Cursor uses `.cursor/hooks.json`, `.cursor/agents/`, and `.cursor/skills/impeccable/`; confirm hooks are enabled in Cursor settings.
+- Gemini CLI, OpenCode, and Pi have project-local Impeccable skill directories. Their skill is installed, but automatic provider-native hooks are not assumed unless that client documents and enables them.
+- Hook consent/settings can be client-local. Do not commit personal consent files unless the team explicitly wants shared behavior.
+- Command prefixes vary by client: Claude/Cursor/Gemini/OpenCode/Pi use `/impeccable ...`; Codex uses `$impeccable ...`.
+
+Run the context loader once per design session with a route target when working directly from a shell, for example:
+
+```bash
+node .agents/skills/impeccable/scripts/context.mjs --target 'src/app/(app)/page.tsx'
+```
+
+This loads the matching product, design, and surface context before a critique or UI change. The current design sidecar may need refreshing after later `DESIGN.md` edits; use `/impeccable document` only when you intentionally want to regenerate the visual-system metadata.
+
+## Project structure
 
 ```
-src/
-├── app/
-│   ├── layout.tsx          # Root layout
-│   ├── page.tsx            # Dashboard
-│   ├── globals.css         # CP design system & theme
-│   ├── projects/page.tsx   # Kanban board + list view
-│   ├── tasks/page.tsx      # Task management table
-│   ├── gantt/page.tsx      # Gantt timeline view
-│   ├── sales/page.tsx      # Sales tracking
-│   └── reports/page.tsx    # Reports & analytics
-├── components/
-│   ├── ui/                 # Reusable UI primitives
-│   ├── sidebar.tsx         # Navigation sidebar
-│   ├── topbar.tsx          # Top bar with search & notifications
-│   ├── app-shell.tsx       # App layout wrapper
-│   ├── dashboard-chart.tsx # Dashboard area chart
-│   └── reports-charts.tsx  # Report page charts
-└── lib/
-    ├── types.ts            # TypeScript type definitions
-    ├── store.ts            # Zustand state management
-    ├── seed-data.ts        # Demo data
-    └── utils.ts            # Utility functions
+src/app/                 # App Router, route group, global tokens
+src/components/          # Shell, charts, and shared UI primitives
+src/lib/                 # Types, Zustand store, seed data, utilities
+PRODUCT.md               # Durable product truth
+DESIGN.md                # Canonical visual design contract
+.impeccable/             # Persistent Impeccable tokens and surface context
 ```
 
-## Design System
-
-The platform uses a custom design system reflecting CP's brand DNA:
-
-- **Primary Purple** `#8b46ff` — Visionary, creative energy
-- **Coral** `#ff6b4a` — Bold, passionate action
-- **Teal** `#14b8a0` — Growth, progress, completion
-- **Mustard** `#ffd633` — Warmth, attention, highlights
-
-Typography: **Plus Jakarta Sans** (headings) + **Inter** (body)
-
-## Team
-
-Built for Collective Perspectives — a Singapore-based social enterprise empowering Persons with Disabilities through creative platforms, skills development, and economic activities.
-
----
-
-*Built with ❤️ for the CP family*
+Built for Collective Perspectives — a Singapore-based social enterprise empowering Persons living with Disabilities through creative platforms, skills development, and economic activities.

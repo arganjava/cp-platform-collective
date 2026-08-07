@@ -1,40 +1,60 @@
-# CP Platform — Product Context
+# Product
 
-## Who We Are
-**Collective Perspectives (CP)** is a Singapore-based social enterprise that empowers Persons with Disabilities (PwD) through arts, creativity, and cultural programming. Founded in 2019, CP operates at the intersection of disability inclusion, creative expression, and social impact.
+<!-- impeccable:product-schema 1 -->
 
-## Tagline
-> Redefining Ability. Reimagining Possibility.
+## Platform
 
-## Who This Product Is For
-This is an **internal platform** for the CP team — artists, program managers, coordinators, and leadership who manage projects, track deliverables, log revenue, and report on impact. Users range from tech-savvy coordinators to artists who may have visual, motor, or cognitive accessibility needs.
+web
 
-## Product Positioning
-A lightweight project management and reporting tool tailored for a creative social enterprise. It replaces spreadsheets and ad-hoc tools with a unified workspace that reflects CP's identity — not a generic SaaS dashboard.
+## Users
 
-## Brand Personality
-- **Bold** — We don't shy away from making a statement
-- **Visionary** — We see possibility where others see limitation
-- **Empathetic** — Every design decision considers our diverse team
-- **Resilient** — Built to last, built to adapt
-- **Inclusive** — Accessibility is not an afterthought; it's foundational
-- **Culturally Vibrant** — Art and creativity run through everything we do
+CP artists, programme managers, coordinators, leadership, and partners use this internal workspace to coordinate work, track deliverables, record revenue, and report on delivery and impact. Users have varied visual, motor, cognitive, and technical access needs.
 
-## Capabilities
-- Task and project management with Kanban and Gantt views
-- Sales/revenue tracking across grants, sponsorships, workshops, commissions
-- Reporting dashboards with charts and export
-- Team notifications and activity tracking
+## Product Purpose
 
-## Constraints
-- Internal-only tool (no public-facing signup/login needed)
-- Must be accessible to team members with various disabilities
-- Small team — simplicity over feature bloat
-- Singapore-based — use en-SG locale for dates and currency (SGD)
+Replace spreadsheets and disconnected updates with one calm, trustworthy place to understand what is happening, what needs attention, who owns the next step, and how projects contribute to CP's sustainability and impact.
 
-## Design Principles
-1. **Accessibility First** — WCAG AA minimum, high contrast, large touch targets, screen reader friendly
-2. **Brand-Authentic** — Every surface should feel like CP, not a template
-3. **Clarity Over Decoration** — Functional beauty, not ornamentation
-4. **Reduce Cognitive Load** — Clear hierarchy, predictable patterns, minimal choices per view
-5. **Celebrate Creativity** — Use color and motion to express CP's vibrant identity
+## Positioning
+
+A lightweight project management and reporting tool for a creative social enterprise. It connects delivery work, revenue activity, team awareness, and reporting in one workspace tailored to Collective Perspectives rather than a generic SaaS dashboard.
+
+## Operating Context
+
+The product supports project and task coordination, Kanban and list workflows, Gantt scheduling, notifications, sales/revenue logging, and reports. It is used by a Singapore-based team and follows en-SG date conventions and Singapore-dollar financial reporting.
+
+## Capabilities and Constraints
+
+- Project and task management with Kanban, list, and Gantt views
+- Notifications and activity awareness
+- Sales and revenue tracking in Singapore dollars
+- Reports across project delivery, revenue, and team workload
+- Internal-only tool; no public signup flow is required
+- Keep workflows lightweight: clarity over feature volume
+- Preserve existing routes and operational behavior while improving the visual system
+
+## Brand Commitments
+
+- Collective Perspectives
+- Redefining Ability. Reimagining Possibility.
+- Present Persons living with Disabilities as creators, leaders, collaborators, and income-generating professionals — never as objects of pity.
+- Pair creative ambition with practical, measurable progress.
+- Carry the public CP identity into the internal tool through high contrast, human language, direct hierarchy, and purposeful expression.
+
+## Evidence on Hand
+
+- Public brand and mission reference: https://collectivep.com/
+- Existing product routes and seeded operational data in `src/app/` and `src/lib/seed-data.ts`
+- Existing visual tokens and shared primitives in `src/app/globals.css` and `src/components/ui/`
+- Do not fabricate testimonials, impact claims, customer claims, benchmarks, or financial outcomes beyond supplied product data.
+
+## Product Principles
+
+1. **Agency, not charity.** Language and hierarchy respect the capability of the people doing the work.
+2. **Clear enough to operate.** Every view answers what is happening, what matters, and what to do next.
+3. **CP, not generic SaaS.** The tool carries the public brand's high-contrast, human, editorial confidence without becoming a marketing page.
+4. **Purposeful expression.** Creative color and motion communicate state or meaningful CP emphasis.
+5. **Accessible by default.** Semantics, focus, contrast, touch targets, readable density, and motion preferences are foundational.
+
+## Accessibility & Inclusion
+
+WCAG AA is the minimum bar. The interface must support keyboard navigation, visible focus, readable contrast, non-color status cues, generous interaction targets, screen-reader-friendly controls, and `prefers-reduced-motion` alternatives. Use respectful, agency-first language throughout the product.
