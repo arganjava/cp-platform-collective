@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
-  Search,
   LayoutGrid,
   List,
 } from "lucide-react";
@@ -28,9 +27,8 @@ const statusConfig = {
 };
 
 export default function ProjectsPage() {
-  const { projects, tasks, users, getUserById, updateTaskStatus, addTask, addProject } = useStore();
+  const { projects, tasks, users, getUserById, updateTaskStatus, addTask, addProject, searchQuery } = useStore();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [view, setView] = useState<"board" | "list">("board");
   const [showNewTask, setShowNewTask] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -48,9 +46,14 @@ export default function ProjectsPage() {
     ? tasks.filter((t) => t.projectId === selectedProject)
     : tasks;
 
-  const filteredTasks = displayedTasks.filter((t) =>
-    t.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const query = searchQuery.trim().toLowerCase();
+  const filteredTasks = displayedTasks.filter((t) => {
+    if (!query) return true;
+    const project = projects.find((p) => p.id === t.projectId);
+    const assignee = getUserById(t.assigneeId);
+    const haystack = [t.title, project?.title ?? "", assignee?.name ?? "", ...t.tags].join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
 
   const tasksByStatus = {
     todo: filteredTasks.filter((t) => t.status === "todo").sort((a, b) => a.order - b.order),
@@ -157,18 +160,7 @@ export default function ProjectsPage() {
               {p.title}
             </button>
           ))}
-          <div className="flex-1" />
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
-            <Input
-              aria-label="Search tasks"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 w-56"
-            />
-          </div>
-          <Tabs value={view} onValueChange={(v) => setView(v as "board" | "list")}>
+          <Tabs className="ml-auto" value={view} onValueChange={(v) => setView(v as "board" | "list")}>
             <TabsList>
               <TabsTrigger value="board"><LayoutGrid className="w-4 h-4 mr-1" />Board</TabsTrigger>
               <TabsTrigger value="list"><List className="w-4 h-4 mr-1" />List</TabsTrigger>

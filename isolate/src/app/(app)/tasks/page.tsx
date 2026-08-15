@@ -12,7 +12,6 @@ import { Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Plus,
-  Search,
   CalendarDays,
   CheckCircle2,
   Clock,
@@ -35,8 +34,7 @@ const statusConfig = {
 };
 
 export default function TasksPage() {
-  const { tasks, projects, users, getUserById, updateTaskStatus, addTask } = useStore();
-  const [searchQuery, setSearchQuery] = useState("");
+  const { tasks, projects, users, getUserById, updateTaskStatus, addTask, searchQuery } = useStore();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"dueDate" | "priority" | "project">("dueDate");
@@ -45,9 +43,15 @@ export default function TasksPage() {
   const [newTaskProject, setNewTaskProject] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
 
+  const query = searchQuery.trim().toLowerCase();
   const filteredTasks = tasks
     .filter((t) => {
-      if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (query) {
+        const project = projects.find((p) => p.id === t.projectId);
+        const assignee = getUserById(t.assigneeId);
+        const haystack = [t.title, project?.title ?? "", assignee?.name ?? "", ...t.tags].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       return true;
@@ -116,10 +120,6 @@ export default function TasksPage() {
 
         {/* Filters */}
         <Toolbar>
-          <div className="relative min-w-[220px] flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
-            <Input placeholder="Search tasks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
-          </div>
           <Select
             value={filterPriority}
             onChange={(e) => setFilterPriority(e.target.value)}

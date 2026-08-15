@@ -34,9 +34,13 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { projects, tasks, sales, users, getUserById } = useStore();
+  const { projects, tasks, sales, users, getUserById, searchQuery } = useStore();
+
+  const query = searchQuery.trim().toLowerCase();
+  const matchesQuery = (text: string) => !query || text.toLowerCase().includes(query);
 
   const activeProjects = projects.filter((p) => p.status === "active");
+  const visibleProjects = activeProjects.filter((p) => matchesQuery(p.title));
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === "done").length;
   const completionPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -54,6 +58,11 @@ export default function DashboardPage() {
 
   const upcomingDeadlines = [...tasks]
     .filter((t) => t.status !== "done")
+    .filter((t) => {
+      if (!query) return true;
+      const project = projects.find((p) => p.id === t.projectId);
+      return matchesQuery(`${t.title} ${project?.title ?? ""}`);
+    })
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 5);
 
@@ -151,7 +160,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="divide-y divide-border">
-                  {activeProjects.map((project) => {
+                  {visibleProjects.map((project) => {
                     const projectTasks = tasks.filter((t) => t.projectId === project.id);
                     const doneTasks = projectTasks.filter((t) => t.status === "done").length;
                     const progress = projectTasks.length > 0 ? Math.round((doneTasks / projectTasks.length) * 100) : 0;
@@ -200,7 +209,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="divide-y divide-border">
-                  {users.slice(0, 6).map((user) => {
+                  {users.filter((u) => matchesQuery(u.name)).slice(0, 6).map((user) => {
                     const userTasks = tasks.filter((t) => t.assigneeId === user.id && t.status !== "done");
                     return (
                       <div key={user.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">

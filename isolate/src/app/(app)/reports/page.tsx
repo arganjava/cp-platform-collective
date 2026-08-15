@@ -76,26 +76,53 @@ function taskIntersectsRange(task: { startDate: string; dueDate: string }, range
 }
 
 export default function ReportsPage() {
-  const { projects, tasks, sales, users, getUserById } = useStore();
+  const { projects, tasks, sales, users, getUserById, searchQuery } = useStore();
   const [activeTab, setActiveTab] = useState("overview");
   const [period, setPeriod] = useState<ReportPeriod>("all");
   const [projectId, setProjectId] = useState("all");
 
   const range = useMemo(() => getPeriodRange(period), [period]);
+  const query = searchQuery.trim().toLowerCase();
   const selectedProject = projects.find((project) => project.id === projectId);
   const projectLabel = selectedProject?.title || "All projects";
 
   const filteredSales = useMemo(
-    () => sales.filter((sale) => (projectId === "all" || sale.projectId === projectId) && isDateInRange(sale.date, range)),
-    [projectId, range, sales]
+    () =>
+      sales.filter((sale) => {
+        if (projectId !== "all" && sale.projectId !== projectId) return false;
+        if (!isDateInRange(sale.date, range)) return false;
+        if (query) {
+          const project = projects.find((p) => p.id === sale.projectId);
+          const haystack = `${sale.clientName} ${sale.notes} ${project?.title ?? ""}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        return true;
+      }),
+    [projectId, range, sales, query, projects]
   );
   const filteredTasks = useMemo(
-    () => tasks.filter((task) => (projectId === "all" || task.projectId === projectId) && taskIntersectsRange(task, range)),
-    [projectId, range, tasks]
+    () =>
+      tasks.filter((task) => {
+        if (projectId !== "all" && task.projectId !== projectId) return false;
+        if (!taskIntersectsRange(task, range)) return false;
+        if (query) {
+          const project = projects.find((p) => p.id === task.projectId);
+          const assignee = getUserById(task.assigneeId);
+          const haystack = `${task.title} ${project?.title ?? ""} ${assignee?.name ?? ""}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        return true;
+      }),
+    [projectId, range, tasks, query, projects, getUserById]
   );
   const filteredProjects = useMemo(
-    () => projects.filter((project) => projectId === "all" || project.id === projectId),
-    [projectId, projects]
+    () =>
+      projects.filter((project) => {
+        if (projectId !== "all" && project.id !== projectId) return false;
+        if (query && !`${project.title} ${project.description}`.toLowerCase().includes(query)) return false;
+        return true;
+      }),
+    [projectId, projects, query]
   );
 
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.amount, 0);

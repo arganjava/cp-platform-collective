@@ -16,17 +16,23 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function GanttPage() {
-  const { projects, tasks, getUserById } = useStore();
+  const { projects, tasks, getUserById, searchQuery } = useStore();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomLevel>("week");
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
 
   const activeProjects = projects.filter((p) => p.status === "active");
+  const query = searchQuery.trim().toLowerCase();
 
   // Calculate timeline bounds
-  const allTasks = selectedProject
+  const allTasks = (selectedProject
     ? tasks.filter((t) => t.projectId === selectedProject)
-    : tasks;
+    : tasks
+  ).filter((t) => {
+    if (!query) return true;
+    const project = projects.find((p) => p.id === t.projectId);
+    return `${t.title} ${project?.title ?? ""}`.toLowerCase().includes(query);
+  });
 
   const timelineStart = useMemo(() => {
     const dates = allTasks.map((t) => new Date(t.startDate).getTime());

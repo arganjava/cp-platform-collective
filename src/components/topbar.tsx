@@ -2,41 +2,39 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useStore } from "@/lib/store";
-import { usePathname, useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/client";
-import { cn, getInitials, getRelativeTime } from "@/lib/utils";
-import { Search, Bell, ChevronDown, User, LogOut, Settings, ClipboardList, MessageCircle, Clock3, Info } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { cn, getRelativeTime } from "@/lib/utils";
+import { Search, Bell, ClipboardList, MessageCircle, Clock3, Info } from "lucide-react";
+import { UserMenu } from "@/components/user-menu";
 
 const pageTitles: Record<string, string> = { "/": "Dashboard", "/projects": "Projects", "/tasks": "My Tasks", "/gantt": "Timeline", "/sales": "Sales", "/reports": "Reports" };
 
 export function TopBar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { searchQuery, setSearchQuery, notifications, markNotificationRead, markAllNotificationsRead, getUnreadCount, currentUserId, getUserById, reset } = useStore();
+  const { searchQuery, setSearchQuery, notifications, markNotificationRead, markAllNotificationsRead, getUnreadCount, currentUserId } = useStore();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-  const profileRef = useRef<HTMLDivElement>(null);
-
-  async function handleSignOut() {
-    try {
-      await getSupabase().auth.signOut();
-    } catch {
-      // Continue with local sign-out even if the network call fails.
-    }
-    reset();
-    router.push("/login");
-    router.refresh();
-  }
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const unreadCount = getUnreadCount();
-  const currentUser = getUserById(currentUserId);
   const userNotifications = notifications.filter((n) => n.userId === currentUserId);
+
+  // ⌘K / Ctrl+K focuses the global search.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotifications(false);
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setShowProfile(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -51,15 +49,13 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-2 border-b border-border bg-card px-4 pl-16 sm:gap-3 sm:px-6 md:pl-6">
-      <div className="min-w-0 md:hidden">
-        <p className="truncate font-heading text-sm font-bold text-foreground">{pageTitles[pathname] || "CP Platform"}</p>
-      </div>
-
-      <div className="flex items-center gap-1.5 sm:gap-3">
+    <header className="sticky top-0 z-30 flex min-h-16 items-center gap-2 border-b border-border bg-card px-4 pl-16 sm:gap-3 sm:px-6 md:pl-6">
+      {/* Left: search on desktop, page title on mobile */}
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
         <div className="relative hidden sm:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground" aria-hidden="true" />
           <input
+            ref={searchRef}
             type="search"
             aria-label="Search tasks and projects"
             placeholder="Search tasks, projects..."
@@ -70,6 +66,13 @@ export function TopBar() {
           <kbd className="absolute right-3 top-1/2 hidden -translate-y-1/2 border border-border bg-secondary px-1.5 py-0.5 font-mono text-xs text-subtle-foreground lg:block">⌘K</kbd>
         </div>
 
+        <div className="min-w-0 md:hidden">
+          <p className="truncate font-heading text-sm font-bold text-foreground">{pageTitles[pathname] || "CP Platform"}</p>
+        </div>
+      </div>
+
+      {/* Right: actions */}
+      <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
         <div className="relative" ref={notifRef}>
           <button type="button" aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`} aria-expanded={showNotifications} onClick={() => setShowNotifications(!showNotifications)} className="relative flex h-11 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Bell className="h-5 w-5" aria-hidden="true" />
@@ -98,32 +101,7 @@ export function TopBar() {
           )}
         </div>
 
-        <div className="relative" ref={profileRef}>
-          <button type="button" aria-label="Open profile menu" aria-expanded={showProfile} onClick={() => setShowProfile(!showProfile)} className="flex min-h-11 items-center gap-2 px-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-2">
-            <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-white" style={{ backgroundColor: currentUser?.avatarColor || "var(--primary)" }}>
-              {currentUser?.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={currentUser.avatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                currentUser ? getInitials(currentUser.name) : "?"
-              )}
-            </span>
-            <span className="hidden text-left sm:block"><span className="block text-sm font-semibold leading-tight text-foreground">{currentUser?.name || "User"}</span><span className="block text-xs capitalize leading-tight text-subtle-foreground">{currentUser?.role || "member"}</span></span>
-            <ChevronDown className="h-4 w-4 text-subtle-foreground" aria-hidden="true" />
-          </button>
-
-          {showProfile && (
-            <div className="absolute right-0 top-14 w-56 overflow-hidden border border-border bg-card shadow-lg">
-              <div className="border-b border-border px-4 py-3"><p className="font-semibold text-sm">{currentUser?.name}</p><p className="text-xs text-subtle-foreground">{currentUser?.email}</p></div>
-              <div className="p-1">
-                <button type="button" className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"><User className="h-4 w-4" aria-hidden="true" /> Profile</button>
-                <button type="button" className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"><Settings className="h-4 w-4" aria-hidden="true" /> Settings</button>
-                <div className="my-1 border-t border-border" />
-                <button type="button" onClick={handleSignOut} className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-accent"><LogOut className="h-4 w-4" aria-hidden="true" /> Sign out</button>
-              </div>
-            </div>
-          )}
-        </div>
+        <UserMenu />
       </div>
     </header>
   );

@@ -13,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Plus,
-  Search,
 } from "lucide-react";
 
 const saleTypeConfig = {
@@ -25,8 +24,7 @@ const saleTypeConfig = {
 };
 
 export default function SalesPage() {
-  const { sales, projects, addSale } = useStore();
-  const [searchQuery, setSearchQuery] = useState("");
+  const { sales, projects, addSale, searchQuery } = useStore();
   const [filterType, setFilterType] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
   const [showNewSale, setShowNewSale] = useState(false);
@@ -38,9 +36,14 @@ export default function SalesPage() {
     notes: "",
   });
 
+  const query = searchQuery.trim().toLowerCase();
   const filteredSales = sales
     .filter((s) => {
-      if (searchQuery && !s.clientName.toLowerCase().includes(searchQuery.toLowerCase()) && !s.notes.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (query) {
+        const project = projects.find((p) => p.id === s.projectId);
+        const haystack = [s.clientName, s.notes, project?.title ?? "", saleTypeConfig[s.type]?.label ?? s.type].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
       if (filterType !== "all" && s.type !== filterType) return false;
       if (filterProject !== "all" && s.projectId !== filterProject) return false;
       return true;
@@ -168,10 +171,6 @@ export default function SalesPage() {
 
         {/* Filters */}
         <Toolbar>
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
-            <Input placeholder="Search sales..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
-          </div>
           <Select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
