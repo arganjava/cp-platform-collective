@@ -4,6 +4,7 @@ import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Loader2, AlertCircle } from "lucide-react";
 
 function LoginForm() {
@@ -41,6 +42,9 @@ function LoginForm() {
   if (!isSupabaseConfigured) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="fixed right-4 top-4 z-50">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center bg-brand text-white" aria-hidden="true">
@@ -72,6 +76,9 @@ function LoginForm() {
 
   return (
     <div className="grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
+      <div className="fixed right-4 top-4 z-50">
+        <ThemeToggle />
+      </div>
       {/* ── Brand panel ─────────────────────────────────────────── */}
       <div className="relative hidden overflow-hidden bg-sidebar text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="flex items-center gap-3">

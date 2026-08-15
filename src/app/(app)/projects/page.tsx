@@ -142,7 +142,7 @@ export default function ProjectsPage() {
             onClick={() => setSelectedProject(null)}
             className={cn(
               "min-h-10 px-4 py-2 text-sm font-medium transition-all cursor-pointer",
-              !selectedProject ? "bg-primary text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
+              !selectedProject ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
             )}
           >
             All Projects
@@ -153,7 +153,7 @@ export default function ProjectsPage() {
               onClick={() => setSelectedProject(p.id)}
               className={cn(
                 "px-4 py-2 text-sm font-medium transition-all cursor-pointer flex items-center gap-2",
-                selectedProject === p.id ? "bg-primary text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
+                selectedProject === p.id ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
               )}
             >
               <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
@@ -242,7 +242,7 @@ export default function ProjectsPage() {
                             </div>
                             {assignee && (
                               <div
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
                                 style={{ backgroundColor: assignee.avatarColor }}
                                 title={assignee.name}
                               >
@@ -309,7 +309,7 @@ export default function ProjectsPage() {
                         <td className="py-3 px-4">
                           {assignee ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: assignee.avatarColor }}>
+                              <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground" style={{ backgroundColor: assignee.avatarColor }}>
                                 {getInitials(assignee.name)}
                               </div>
                               <span className="text-sm">{assignee.name}</span>

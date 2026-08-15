@@ -7,7 +7,7 @@ const Avatar = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElem
     return (
       <div
         ref={ref}
-        className={cn("relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-white", sizeClasses[size], className)}
+        className={cn("relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-primary-foreground", sizeClasses[size], className)}
         style={color ? { backgroundColor: color } : undefined}
         {...props}
       >

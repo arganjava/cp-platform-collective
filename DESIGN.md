@@ -185,6 +185,18 @@ Status and priority colors are domain tokens used in inline styles for data-driv
 - **Status:** todo (`--status-todo` #8a8580), in_progress (`--status-progress` #1a1a1a), review (`--status-review` #c44a30), done (`--status-done` #525252)
 - **Priority:** low (`--priority-low` #8a8580), medium (`--priority-medium` #525252), high (`--priority-high` #c44a30), urgent (`--priority-urgent` #8f2e20)
 
+## Dark mode
+
+Night drafting room: the binder goes dark but stays the binder. The canvas is warm charcoal, ink inverts to off-white, and the coral signature accent is unchanged. Implemented as a `.dark` token override in `src/app/globals.css`, activated by `next-themes` (class on `<html>`, default follows the system, toggle in the topbar and Settings).
+
+- **Canvas** → `bg-background` (#151413), **elevated surface** → `bg-card` (#1d1c1a), **sunken surface** → `bg-secondary`/`bg-muted` (#242220)
+- **Ink inverts**: `--primary`/`--foreground` become off-white (#e7e3dd) with dark foregrounds (#151413) so buttons, tooltips, badges, and avatars keep AA contrast — `text-primary-foreground` / `text-destructive-foreground` are the invariants, never `text-white` on a token background.
+- **Accent** → ember coral: `--accent` (#33201b) with light coral text (#f1aa99); `--destructive` brightens to #e06a4a with dark text.
+- **Status/priority/chart tokens flip** to light values (e.g. `--status-progress` becomes off-white, `--status-done` #a39d95) so data-driven dots, bars, and pie slices stay visible on dark.
+- **Sidebar** stays a darker cover (#0f0e0d) than the canvas; the login brand panel inherits it.
+- **Borders/hairlines** stay the structure carrier (#2e2b28); shadows deepen but only float on dialogs/dropdowns as in light mode.
+- Contrast floor is WCAG AA in both modes (4.5:1 body text, 3:1 UI indicators); the dark palette was checked against it.
+
 ## Radius hierarchy
 
 Square geometry throughout — a deliberate architectural choice, not global flattening:

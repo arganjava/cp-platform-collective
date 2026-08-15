@@ -1,33 +1,46 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-06T10:30:00.000Z",
+  "generatedAt": "2026-08-15T00:00:00.000Z",
   "title": "Design System: CP Platform",
   "extensions": {
     "colorMeta": {
-      "ink": { "role": "primary", "displayName": "Ink", "canonical": "#171717", "tonalRamp": ["#171717", "#2b2b2b", "#414141", "#5a5a5a", "#737373", "#8d8d8d", "#a8a8a8", "#c4c4c4"] },
-      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#ffffff", "tonalRamp": ["#ffffff", "#fbfbfa", "#f5f5f3", "#efefec", "#e6e6e2", "#d9d9d4", "#c7c7c1", "#b3b3ac"] },
-      "coral": { "role": "primary", "displayName": "CP Coral", "canonical": "#e85d3f", "tonalRamp": ["#4f1b12", "#713022", "#91402f", "#ad4c36", "#c9573d", "#e85d3f", "#f18e79", "#f9c3b6"] },
-      "purple": { "role": "secondary", "displayName": "Selection Purple", "canonical": "#7040d8", "tonalRamp": ["#24104f", "#371b73", "#4c2995", "#5e34b5", "#7040d8", "#8962e1", "#aa8fe9", "#d4c7f5"] },
-      "teal": { "role": "tertiary", "displayName": "Completion Teal", "canonical": "#147d70", "tonalRamp": ["#062e29", "#084d45", "#0c6258", "#147d70", "#3e9b90", "#70b9b0", "#a4d6d0", "#d6eeeb"] },
-      "mustard": { "role": "tertiary", "displayName": "Attention Mustard", "canonical": "#9a7000", "tonalRamp": ["#382700", "#594000", "#765500", "#9a7000", "#b99122", "#d2b35b", "#e8d49b", "#f5eac9"] }
+      "background": { "role": "neutral", "displayName": "Vellum Canvas", "canonical": "#faf9f7", "tonalRamp": ["#2b2622", "#413b35", "#575049", "#6e665e", "#867d74", "#b9afa4", "#e5ded6", "#faf9f7"] },
+      "foreground": { "role": "neutral", "displayName": "Ink", "canonical": "#1a1a1a", "tonalRamp": ["#000000", "#0c0c0c", "#1a1a1a", "#262626", "#333333", "#414141", "#525252", "#6b6b6b"] },
+      "card": { "role": "neutral", "displayName": "Paper", "canonical": "#ffffff", "tonalRamp": ["#c9c5be", "#d6d3cd", "#e2e0da", "#ebe9e4", "#f2f1ed", "#f7f6f3", "#fbfbf9", "#ffffff"] },
+      "primary": { "role": "primary", "displayName": "Ink", "canonical": "#1a1a1a", "tonalRamp": ["#000000", "#0c0c0c", "#1a1a1a", "#262626", "#333333", "#414141", "#525252", "#6b6b6b"] },
+      "secondary": { "role": "neutral", "displayName": "Sunken Surface", "canonical": "#f4f2ee", "tonalRamp": ["#a8a39d", "#b7b2ab", "#c6c1ba", "#d3cec7", "#dedad4", "#e8e5df", "#f0eee9", "#f4f2ee"] },
+      "muted-foreground": { "role": "neutral", "displayName": "Stone", "canonical": "#525252", "tonalRamp": ["#1c1c1c", "#2b2b2b", "#3a3a3a", "#484848", "#525252", "#6e6e6e", "#8f8f8f", "#b3b3b3"] },
+      "accent": { "role": "secondary", "displayName": "Ember Coral", "canonical": "#fbe5df", "tonalRamp": ["#4f1b12", "#6d2c1c", "#8a3a26", "#a94a30", "#c65c3d", "#e0856d", "#f3c4b8", "#fbe5df"] },
+      "destructive": { "role": "tertiary", "displayName": "Deep Coral", "canonical": "#c44a30", "tonalRamp": ["#2b0f08", "#45190f", "#602416", "#7d301d", "#9a3c24", "#c44a30", "#dc7a5e", "#f1b3a2"] },
+      "brand": { "role": "primary", "displayName": "CP Coral", "canonical": "#e85d3f", "tonalRamp": ["#4f1b12", "#713022", "#91402f", "#ad4c36", "#c9573d", "#e85d3f", "#f18e79", "#f9c3b6"] },
+      "subtle-foreground": { "role": "neutral", "displayName": "Taupe", "canonical": "#8a8580", "tonalRamp": ["#2e2b28", "#423e39", "#57524d", "#6d6761", "#8a8580", "#a49f99", "#beb9b3", "#d8d3cd"] },
+      "sidebar": { "role": "neutral", "displayName": "Binder Cover", "canonical": "#1a1a1a", "tonalRamp": ["#0a0a0a", "#1a1a1a", "#2a2a2a", "#3a3a3a", "#4a4a4a", "#5b5b5b", "#6d6d6d", "#808080"] },
+      "sidebar-accent": { "role": "neutral", "displayName": "Cover Accent", "canonical": "#2a2a2a", "tonalRamp": ["#141414", "#1f1f1f", "#2a2a2a", "#353535", "#414141", "#4e4e4e", "#5c5c5c", "#6b6b6b"] }
     },
     "typographyMeta": {
-      "display": { "displayName": "Sora Display", "purpose": "Route titles and rare high-level CP statements." },
-      "body": { "displayName": "DM Sans", "purpose": "Readable operational copy, forms, tables, and labels." }
+      "heading": { "displayName": "Bricolage Grotesque", "purpose": "Route titles, sheet headers, and rare high-level statements. Weight 700, tracking -0.03em." },
+      "body": { "displayName": "Spline Sans", "purpose": "Readable operational copy, forms, tables, and labels." },
+      "mono": { "displayName": "JetBrains Mono", "purpose": "Sheet numbers, tabular figures, and measured data." }
     },
     "shadows": [
-      { "name": "low", "value": "0 1px 2px rgba(23,23,23,0.06)", "purpose": "Rare resting separation." },
-      { "name": "raised", "value": "0 8px 24px rgba(23,23,23,0.12)", "purpose": "Dropdowns, dialogs, and active drag surfaces." }
+      { "name": "sm", "value": "0 1px 2px rgba(26,26,26,0.05)", "purpose": "Rare resting separation only." },
+      { "name": "md", "value": "0 4px 12px rgba(26,26,26,0.08)", "purpose": "Chart tooltips and small floating surfaces." },
+      { "name": "lg", "value": "0 8px 24px rgba(26,26,26,0.12)", "purpose": "Dialogs, dropdowns, notification panels." },
+      { "name": "xl", "value": "0 20px 48px rgba(26,26,26,0.16)", "purpose": "Large floating surfaces; drag state on kanban cards." }
     ],
     "motion": [
       { "name": "ease-standard", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "Short state transitions." },
-      { "name": "duration-fast", "value": "160ms", "purpose": "Hover and focus feedback." },
-      { "name": "duration-standard", "value": "240ms", "purpose": "Entrances and panel transitions." }
+      { "name": "duration-fast", "value": "160ms", "purpose": "Hover and focus feedback on kanban cards, gantt bars, buttons." },
+      { "name": "duration-standard", "value": "240ms", "purpose": "Entrances and panel transitions." },
+      { "name": "fade-in", "value": "fade-in 0.24s cubic-bezier(0.2, 0, 0, 1)", "purpose": "Overlay entrances." },
+      { "name": "slide-down", "value": "slide-down 0.2s cubic-bezier(0.2, 0, 0, 1)", "purpose": "Dropdown and notification panel entrances." },
+      { "name": "scale-in", "value": "scale-in 0.2s cubic-bezier(0.2, 0, 0, 1)", "purpose": "Dialog entrances." }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
       { "name": "md", "value": "768px" },
-      { "name": "lg", "value": "1024px" }
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
     ]
   },
   "components": [
@@ -35,53 +48,117 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The dependable action for completing an operational task.",
+      "description": "The dependable ink action for completing an operational task.",
       "html": "<button class=\"ds-btn-primary\">SAVE CHANGES</button>",
-      "css": ".ds-btn-primary { background: #171717; color: #fff; min-height: 40px; padding: 10px 16px; border: 0; border-radius: 8px; font: 600 14px/1.3 'DM Sans', sans-serif; transition: background 160ms cubic-bezier(.2,0,0,1); } .ds-btn-primary:hover { background: #414141; } .ds-btn-primary:focus-visible { outline: 2px solid #7040d8; outline-offset: 2px; }"
+      "css": ".ds-btn-primary { background: var(--primary); color: var(--primary-foreground); min-height: 40px; padding: 10px 16px; border: 0; border-radius: 0; font: 600 14px/1.3 'Spline Sans', system-ui, sans-serif; transition: background 160ms cubic-bezier(.2,0,0,1); cursor: pointer; } .ds-btn-primary:hover { background: color-mix(in oklab, var(--primary) 85%, transparent); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }"
     },
     {
       "name": "Accent Button",
       "kind": "button",
       "refersTo": "button-accent",
-      "description": "A CP coral action reserved for meaningful emphasis or urgency.",
+      "description": "A coral action reserved for meaningful CP emphasis.",
       "html": "<button class=\"ds-btn-accent\">JOIN THE DARE MOVEMENT</button>",
-      "css": ".ds-btn-accent { background: #e85d3f; color: #fff; min-height: 40px; padding: 10px 16px; border: 0; border-radius: 8px; font: 600 14px/1.3 'DM Sans', sans-serif; transition: background 160ms cubic-bezier(.2,0,0,1); } .ds-btn-accent:hover { background: #b83e2b; } .ds-btn-accent:focus-visible { outline: 2px solid #7040d8; outline-offset: 2px; }"
+      "css": ".ds-btn-accent { background: var(--brand); color: #fff; min-height: 40px; padding: 10px 16px; border: 0; border-radius: 0; font: 600 14px/1.3 'Spline Sans', system-ui, sans-serif; transition: background 160ms cubic-bezier(.2,0,0,1); cursor: pointer; } .ds-btn-accent:hover { background: color-mix(in oklab, var(--brand) 90%, transparent); } .ds-btn-accent:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }"
     },
     {
-      "name": "Panel",
-      "kind": "card",
-      "refersTo": "card",
-      "description": "A quiet paper surface for grouped operational information.",
-      "html": "<section class=\"ds-panel\"><h3>Task overview</h3><p>20 tasks across 5 projects.</p></section>",
-      "css": ".ds-panel { background: #fff; color: #171717; border: 1px solid #d9d9d4; border-radius: 12px; padding: 20px; } .ds-panel h3 { margin: 0 0 8px; font: 600 18px/1.3 'Sora', sans-serif; } .ds-panel p { margin: 0; color: #4a4a4a; font: 400 16px/1.5 'DM Sans', sans-serif; }"
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "A quiet bordered action for secondary operations.",
+      "html": "<button class=\"ds-btn-outline\">FILTER</button>",
+      "css": ".ds-btn-outline { background: var(--card); color: var(--foreground); min-height: 40px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 0; font: 600 14px/1.3 'Spline Sans', system-ui, sans-serif; transition: background 160ms cubic-bezier(.2,0,0,1), border-color 160ms cubic-bezier(.2,0,0,1); cursor: pointer; } .ds-btn-outline:hover { background: var(--secondary); border-color: var(--input); } .ds-btn-outline:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "A calm, clearly labelled field for operational input.",
-      "html": "<input class=\"ds-input\" aria-label=\"Search tasks\" placeholder=\"Search tasks\" />",
-      "css": ".ds-input { width: 100%; min-height: 40px; padding: 8px 12px; background: #fff; color: #171717; border: 1px solid #d9d9d4; border-radius: 8px; font: 400 16px/1.5 'DM Sans', sans-serif; } .ds-input:focus-visible { outline: 2px solid #7040d8; outline-offset: 2px; border-color: #7040d8; }"
+      "description": "A calm, clearly labelled square field for operational input.",
+      "html": "<label class=\"ds-field\"><span>Task title</span><input class=\"ds-input\" placeholder=\"What needs to be done?\" /></label>",
+      "css": ".ds-field { display: block; font: 500 14px/1.3 'Spline Sans', system-ui, sans-serif; } .ds-field span { display: block; margin-bottom: 6px; } .ds-input { width: 100%; min-height: 40px; padding: 8px 12px; background: var(--card); color: var(--foreground); border: 1px solid var(--border); border-radius: 0; font: 400 14px/1.4 'Spline Sans', system-ui, sans-serif; transition: border-color 160ms cubic-bezier(.2,0,0,1); } .ds-input::placeholder { color: var(--subtle-foreground); } .ds-input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-color: var(--input); }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge-neutral",
+      "description": "Revision-label style: compact uppercase, tracked, square.",
+      "html": "<span class=\"ds-chip\">In review</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; padding: 2px 8px; background: var(--secondary); color: var(--muted-foreground); border-radius: 0; font: 600 11px/1.3 'Spline Sans', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; }"
+    },
+    {
+      "name": "Danger Badge",
+      "kind": "chip",
+      "refersTo": "badge-danger",
+      "description": "A coral urgency badge for overdue or attention states.",
+      "html": "<span class=\"ds-chip-danger\">2 overdue</span>",
+      "css": ".ds-chip-danger { display: inline-flex; align-items: center; padding: 2px 8px; background: var(--brand); color: #fff; border-radius: 0; font: 600 11px/1.3 'Spline Sans', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A quiet ruled paper surface for grouped operational information.",
+      "html": "<section class=\"ds-panel\"><h3>Task overview</h3><p>20 tasks across 5 projects.</p></section>",
+      "css": ".ds-panel { background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: 0; padding: 24px; } .ds-panel h3 { margin: 0 0 8px; font: 700 18px/1.3 'Bricolage Grotesque', system-ui, sans-serif; letter-spacing: -0.03em; } .ds-panel p { margin: 0; color: var(--muted-foreground); font: 400 14px/1.5 'Spline Sans', system-ui, sans-serif; }"
     },
     {
       "name": "Sidebar Navigation",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "Persistent ink navigation with an unmistakable current location.",
-      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-active\" href=\"#\">Projects</a><a href=\"#\">Tasks</a></nav>",
-      "css": ".ds-nav { background: #171717; padding: 16px 8px; } .ds-nav a { display: block; padding: 10px 12px; border-radius: 8px; color: #d9d9d4; font: 500 14px/1.3 'DM Sans', sans-serif; text-decoration: none; } .ds-nav a:hover { background: #2b2b2b; color: #fff; } .ds-nav .ds-nav-active { background: #e85d3f; color: #fff; }"
+      "description": "Dark binder-cover navigation with numbered sheets and a coral active marker.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-active\" href=\"#\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/></svg>Projects<span class=\"ds-sheet\">02</span></a><a href=\"#\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m9 11 3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>Tasks<span class=\"ds-sheet\">03</span></a></nav>",
+      "css": ".ds-nav { background: var(--sidebar); color: var(--sidebar-foreground); padding: 16px 8px; font: 500 14px/1.3 'Spline Sans', system-ui, sans-serif; } .ds-nav a { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px; color: var(--sidebar-foreground); text-decoration: none; border-radius: 0; transition: background 160ms cubic-bezier(.2,0,0,1); } .ds-nav a:hover { background: var(--sidebar-accent); color: #fff; } .ds-nav .ds-nav-active { background: var(--sidebar-accent); color: #fff; } .ds-nav .ds-nav-active::before { content: \"\"; position: absolute; left: 0; top: 50%; translate: 0 -50%; width: 3px; height: 28px; background: var(--sidebar-primary); } .ds-nav .ds-sheet { margin-left: auto; font: 500 10px/1 'JetBrains Mono', monospace; letter-spacing: 0.05em; } .ds-nav a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }"
+    },
+    {
+      "name": "Progress Bar",
+      "kind": "custom",
+      "refersTo": "progress",
+      "description": "A 2px square progress track; the fill is a semantic color.",
+      "html": "<div class=\"ds-progress\" role=\"progressbar\" aria-valuenow=\"60\" aria-valuemin=\"0\" aria-valuemax=\"100\"><div class=\"ds-progress-fill\" style=\"width:60%\"></div></div>",
+      "css": ".ds-progress { position: relative; height: 2px; background: var(--secondary); border-radius: 0; overflow: hidden; } .ds-progress-fill { position: absolute; inset: 0 auto 0 0; background: var(--brand); }"
+    },
+    {
+      "name": "Kanban Card",
+      "kind": "card",
+      "refersTo": "kanban-card",
+      "description": "A square task card; hover moves the border to input only — no lift, no scale.",
+      "html": "<article class=\"ds-kanban\"><p class=\"ds-kanban-tag\"><span class=\"ds-dot\" style=\"background: var(--brand)\"></span>DARE Festival</p><h4>Design festival marketing materials</h4><footer><span class=\"ds-chip\">high</span></footer></article>",
+      "css": ".ds-kanban { border: 1px solid var(--border); background: var(--card); border-radius: 0; padding: 14px; transition: border-color 160ms cubic-bezier(.2,0,0,1), background-color 160ms cubic-bezier(.2,0,0,1); } .ds-kanban:hover { border-color: var(--input); } .ds-kanban-tag { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font: 500 11px/1.3 'Spline Sans', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.05em; color: var(--subtle-foreground); } .ds-dot { width: 6px; height: 6px; display: inline-block; } .ds-kanban h4 { margin: 0 0 8px; font: 500 14px/1.4 'Spline Sans', system-ui, sans-serif; } .ds-kanban footer { display: flex; justify-content: flex-end; }"
     }
   ],
   "narrative": {
-    "northStar": "CP Editorial Operations",
-    "overview": "Bring the public identity of Collective Perspectives into an internal tool without turning operations into a campaign page. Use ink, paper, disciplined spacing, direct actions, and human agency as the visual foundation. Coral carries CP's expressive energy; purple, teal, and mustard remain semantic signals.",
-    "keyCharacteristics": ["High-contrast ink and paper", "Coral as a scarce signature accent", "Editorial hierarchy with operational density", "Agency-first language", "Accessible states and reduced motion"],
+    "northStar": "Architect's Project Binder",
+    "overview": "Each route is a numbered sheet in an architect's project binder. The sidebar is a binder-cover sheet index. Title blocks, ruled panels, drawing-register language, and revision marks structure the interface. The canvas is warm vellum; structure is ink; the coral signature accent is scarce and deliberate. The tool is Operate-mode: scanability and consistency outrank expression, and the same semantic token system carries a light (vellum) and dark (night drafting room) mode with a WCAG AA contrast floor.",
+    "keyCharacteristics": [
+      "Each route is a numbered sheet; the sidebar is the binder-cover sheet index.",
+      "Square geometry (0px radius) — avatars and status dots are the only circles.",
+      "Hairline borders and tonal layering carry hierarchy; shadows only on floating surfaces.",
+      "Warm vellum canvas, ink structure, scarce coral accent.",
+      "Bricolage Grotesque display, Spline Sans body, JetBrains Mono for measured data.",
+      "Light and dark modes share one semantic token system."
+    ],
     "rules": [
       { "name": "The Scarcity of Color Rule", "body": "A screen should read clearly in grayscale. Accent color marks action, state, or CP emphasis; it does not fill every component.", "section": "colors" },
-      { "name": "The Flat-by-Default Rule", "body": "If spacing, a divider, or a tonal surface can establish hierarchy, prefer it over a shadow.", "section": "elevation" },
-      { "name": "The One Voice Rule", "body": "Use Sora for hierarchy and DM Sans for the operational body. Do not introduce another display face for a route or feature.", "section": "typography" }
+      { "name": "The Square Geometry Rule", "body": "Square geometry throughout: 0px radius on cards, buttons, inputs, badges, progress and revenue bars; circular (full) only for avatars and status dots.", "section": "shapes" },
+      { "name": "The Flat-by-Default Rule", "body": "Hairline borders carry structure. Shadows are reserved for surfaces that float above the work surface — dialogs, dropdowns, notification panels. Resting elements use tonal layering and borders, never shadows.", "section": "elevation" },
+      { "name": "The Semantic Token Rule", "body": "Use shadcn semantic tokens (bg-background, text-foreground, border-border) for all styling; never raw color utilities in page components.", "section": "colors" },
+      { "name": "The One Icon Family Rule", "body": "Lucide is the only icon family — tree-shakeable and visually consistent. Mixing icon families is not allowed.", "section": "components" }
     ],
-    "dos": ["Do use ink, paper, and coral as the primary visual relationship.", "Do let typography, dividers, and whitespace carry hierarchy.", "Do make status understandable through text, icon, and color together.", "Do provide visible focus, keyboard access, and reduced-motion alternatives."],
-    "donts": ["Don't use a purple/coral gradient as the default hero, button, or metric treatment.", "Don't build every section from identical icon-tile stat cards.", "Don't use decorative pulse, blur, or hover movement that does not communicate state.", "Don't make the internal tool read like a public marketing landing page."]
+    "dos": [
+      "Do let hairline borders, dividers, and tonal surfaces carry hierarchy.",
+      "Do use tabular figures for all numeric data.",
+      "Do use the coral accent sparingly for signature moments.",
+      "Do provide visible focus, keyboard access, reduced-motion alternatives, and 44px touch targets.",
+      "Do use SGD and en-SG formatting for financial and date information.",
+      "Do use shadcn semantic tokens for all styling."
+    ],
+    "donts": [
+      "Don't use gradients, icon tiles, or decorative hover lifts.",
+      "Don't use rounded-full on anything except circular indicators (avatars, status dots).",
+      "Don't use shadows on resting elements.",
+      "Don't use raw color utilities (bg-white, text-black) in page components — use semantic tokens.",
+      "Don't mix icon families — Lucide is the only icon library.",
+      "Don't introduce literal route-level colors or arbitrary radius values without a token.",
+      "Don't make the internal tool read like a public marketing landing page."
+    ]
   }
 }

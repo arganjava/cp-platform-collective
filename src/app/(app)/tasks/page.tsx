@@ -170,7 +170,7 @@ export default function TasksPage() {
                             className={cn(
                               "w-5 h-5 border-2 flex items-center justify-center transition-all cursor-pointer flex-shrink-0",
                               task.status === "done"
-                                ? "border-primary bg-primary text-white"
+                                ? "border-primary bg-primary text-primary-foreground"
                                 : "border-input hover:border-primary"
                             )}
                           >
@@ -203,7 +203,7 @@ export default function TasksPage() {
                       <td className="py-3 px-4">
                         {assignee ? (
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: assignee.avatarColor }}>
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground" style={{ backgroundColor: assignee.avatarColor }}>
                               {getInitials(assignee.name)}
                             </div>
                             <span className="text-sm">{assignee.name}</span>

@@ -121,7 +121,7 @@ export default function GanttPage() {
             onClick={() => setSelectedProject(null)}
             className={cn(
               "px-3 py-1.5 text-sm font-medium transition-all cursor-pointer",
-              !selectedProject ? "bg-primary text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
+              !selectedProject ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
             )}
           >
             All Projects
@@ -132,7 +132,7 @@ export default function GanttPage() {
               onClick={() => setSelectedProject(p.id === selectedProject ? null : p.id)}
               className={cn(
                 "px-3 py-1.5 text-sm font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                selectedProject === p.id ? "text-white" : "bg-card border border-border text-muted-foreground hover:border-input"
+                selectedProject === p.id ? "text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
               )}
               style={selectedProject === p.id ? { backgroundColor: p.color } : undefined}
             >
@@ -166,10 +166,10 @@ export default function GanttPage() {
                   {/* Today marker */}
                   {todayOffset >= 0 && todayOffset <= 100 && (
                     <div
-                      className="absolute top-0 bottom-0 w-px bg-accent0 z-10"
+                      className="absolute top-0 bottom-0 w-px bg-brand z-10"
                       style={{ left: `${todayOffset}%` }}
                     >
-                      <div className="absolute -top-0 left-1/2 -translate-x-1/2 bg-accent0 text-white text-xs px-1 py-0.5 font-medium whitespace-nowrap">
+                      <div className="absolute -top-0 left-1/2 -translate-x-1/2 bg-brand text-white text-xs px-1 py-0.5 font-medium whitespace-nowrap">
                         Today
                       </div>
                     </div>
@@ -231,7 +231,7 @@ export default function GanttPage() {
                               <span className="text-sm truncate">{task.title}</span>
                               {assignee && (
                                 <div
-                                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ml-auto"
+                                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground flex-shrink-0 ml-auto"
                                   style={{ backgroundColor: assignee.avatarColor }}
                                   title={assignee.name}
                                 >
@@ -252,7 +252,7 @@ export default function GanttPage() {
                               }}
                             >
                               {isHovered && (
-                                <span className="text-xs text-white font-medium whitespace-nowrap overflow-hidden">
+                                <span className="text-xs text-primary-foreground font-medium whitespace-nowrap overflow-hidden">
                                   {task.title}
                                 </span>
                               )}
@@ -292,7 +292,7 @@ export default function GanttPage() {
             <span className="text-xs text-muted-foreground">Completed</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-px h-4 bg-accent0" />
+            <div className="w-px h-4 bg-brand" />
             <span className="text-xs text-muted-foreground">Today</span>
           </div>
         </div>

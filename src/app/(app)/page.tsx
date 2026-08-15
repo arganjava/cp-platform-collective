@@ -180,7 +180,7 @@ export default function DashboardPage() {
                           {members.slice(0, 4).map((member) => (
                             <div
                               key={member!.id}
-                              className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white"
+                              className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-primary-foreground"
                               style={{ backgroundColor: member!.avatarColor }}
                               title={member!.name}
                             >
@@ -214,7 +214,7 @@ export default function DashboardPage() {
                     return (
                       <div key={user.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                         <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-primary-foreground flex-shrink-0"
                           style={{ backgroundColor: user.avatarColor }}
                         >
                           {getInitials(user.name)}

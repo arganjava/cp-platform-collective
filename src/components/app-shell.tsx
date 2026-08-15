@@ -10,6 +10,7 @@ import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { isAllowedWorkspaceEmail } from "@/lib/supabase/email-policy";
 import { ensureProfile, fetchTeamData } from "@/lib/supabase/data";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AlertCircle } from "lucide-react";
 
 type ShellStatus = "loading" | "unconfigured" | "error" | "ready";
@@ -65,7 +66,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="relative flex min-h-screen items-center justify-center bg-background">
+        <div className="fixed right-4 top-4 z-50">
+          <ThemeToggle />
+        </div>
         <div className="flex flex-col items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center bg-brand text-white" aria-hidden="true">
             <span className="font-heading text-xl font-bold">CP</span>
@@ -81,7 +85,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (status === "unconfigured") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="relative flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="fixed right-4 top-4 z-50">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center bg-brand text-white" aria-hidden="true">
@@ -116,7 +123,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   if (status === "error") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="relative flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="fixed right-4 top-4 z-50">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md border border-border bg-card p-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" aria-hidden="true" />

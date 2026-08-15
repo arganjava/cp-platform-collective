@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { useStore } from "@/lib/store";
 import { getSupabase } from "@/lib/supabase/client";
 import { uploadAvatar } from "@/lib/supabase/data";
@@ -9,6 +10,7 @@ import { cn, getInitials } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +37,7 @@ const AVATAR_COLORS = [
 
 export function UserMenu() {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const { currentUserId, getUserById, updateUser, reset, notifications, markAllNotificationsRead, users, projects, tasks } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -234,11 +237,11 @@ export function UserMenu() {
                     onClick={() => setAvatarColor(color)}
                     className={cn(
                       "flex h-9 w-9 items-center justify-center rounded-full border transition-colors",
-                      avatarColor === color ? "border-primary ring-2 ring-ring ring-offset-2" : "border-border hover:border-input"
+                      avatarColor === color ? "border-primary ring-2 ring-ring ring-offset-2 ring-offset-background" : "border-border hover:border-input"
                     )}
                     style={{ backgroundColor: color }}
                   >
-                    {avatarColor === color && <Check className="h-4 w-4 text-white" aria-hidden="true" />}
+                    {avatarColor === color && <Check className="h-4 w-4 text-primary-foreground" aria-hidden="true" />}
                   </button>
                 ))}
               </div>
@@ -282,6 +285,26 @@ export function UserMenu() {
                   <dd className="font-medium tabular">{tasks.length}</dd>
                 </div>
               </dl>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold">Appearance</h3>
+              <div className="mt-2 flex items-center justify-between gap-3 border border-border bg-card p-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Theme</p>
+                  <p className="text-xs text-subtle-foreground">Follows your system unless you choose otherwise.</p>
+                </div>
+                <Select
+                  aria-label="Theme preference"
+                  value={theme}
+                  onChange={(event) => setTheme(event.target.value)}
+                  className="w-32 flex-shrink-0"
+                >
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </Select>
+              </div>
             </div>
 
             <div>

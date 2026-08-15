@@ -2,6 +2,9 @@
 
 @import "tailwindcss";
 
+/* Class-based dark mode: next-themes toggles `.dark` on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ──────────────────────────────────────────────────────────────
    Architect's Project Binder — shadcn/ui semantic token system
    ──────────────────────────────────────────────────────────────
@@ -57,6 +60,12 @@
   --input: #c9c5be;
   --ring: #c44a30;
 
+  /* Scrim — modal / drawer overlay */
+  --scrim: #1a1a1a;
+
+  /* Focus-ring offset inherits the canvas, not Tailwind's white default */
+  --tw-ring-offset-color: var(--background);
+
   /* Sidebar — binder cover */
   --sidebar: #1a1a1a;
   --sidebar-foreground: #a8a39d;
@@ -110,6 +119,112 @@
   --cp-coral-800: #963422;
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Dark mode — night drafting room
+   ──────────────────────────────────────────────────────────────
+   The binder goes to night: the canvas is warm charcoal, ink
+   inverts to off-white, the coral signature accent stays.
+   Hairline borders carry structure as in light mode; shadows
+   soften because dark surfaces need no ambient depth.
+   WCAG AA is the floor (4.5:1 body text, 3:1 UI indicators).
+   ────────────────────────────────────────────────────────────── */
+
+.dark {
+  color-scheme: dark;
+
+  /* Core surfaces */
+  --background: #151413;
+  --foreground: #e7e3dd;
+
+  --card: #1d1c1a;
+  --card-foreground: #e7e3dd;
+
+  --popover: #1d1c1a;
+  --popover-foreground: #e7e3dd;
+
+  /* Primary = inverted ink (paper) */
+  --primary: #e7e3dd;
+  --primary-foreground: #151413;
+
+  /* Secondary = warm sunken surface, lifted */
+  --secondary: #242220;
+  --secondary-foreground: #e7e3dd;
+
+  --muted: #242220;
+  --muted-foreground: #a39d95;
+
+  /* Accent = ember coral */
+  --accent: #33201b;
+  --accent-foreground: #f1aa99;
+
+  /* Destructive = bright ember; dark text keeps AA on fills */
+  --destructive: #e06a4a;
+  --destructive-foreground: #151413;
+
+  /* Structural */
+  --border: #2e2b28;
+  --input: #3b3835;
+  --ring: #e85d3f;
+
+  /* Scrim — modal / drawer overlay */
+  --scrim: #0f0e0d;
+
+  /* Sidebar — binder cover, darker than the canvas */
+  --sidebar: #0f0e0d;
+  --sidebar-foreground: #a8a39d;
+  --sidebar-primary: #e85d3f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #242220;
+  --sidebar-accent-foreground: #ffffff;
+
+  /* ── Custom domain tokens ── */
+
+  /* Brand signature coral stays */
+  --brand: #e85d3f;
+  --brand-foreground: #ffffff;
+
+  /* Subtle text — tertiary labels on dark */
+  --subtle-foreground: #8a8580;
+
+  /* Semantic workflow colors */
+  --status-todo: #8a8580;
+  --status-progress: #e7e3dd;
+  --status-review: #e06a4a;
+  --status-done: #a39d95;
+  --status-blocked: #e06a4a;
+
+  --priority-low: #8a8580;
+  --priority-medium: #a39d95;
+  --priority-high: #e06a4a;
+  --priority-urgent: #f1aa99;
+
+  /* Chart palette */
+  --chart-1: #e85d3f;
+  --chart-2: #e7e3dd;
+  --chart-3: #a39d95;
+  --chart-4: #e06a4a;
+  --chart-5: #8a8580;
+
+  /* Legacy compatibility ramps */
+  --cp-ink: #e7e3dd;
+  --cp-ink-soft: #a39d95;
+  --cp-coral: #e85d3f;
+  --cp-coral-deep: #e06a4a;
+  --cp-coral-soft: #33201b;
+  --cp-coral-50: #1d1c1a;
+  --cp-coral-100: #33201b;
+  --cp-coral-300: #f1aa99;
+  --cp-coral-500: #e85d3f;
+  --cp-coral-600: #d04a30;
+  --cp-coral-800: #963422;
+
+  /* Night shadows — deeper, softer */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.6);
+}
+
 /* ── Map semantic variables to Tailwind v4 utilities ── */
 @theme inline {
   --color-background: var(--background);
@@ -137,6 +252,7 @@
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-scrim: var(--scrim);
 
   /* Custom domain tokens */
   --color-brand: var(--brand);
@@ -246,5 +362,5 @@
 
 @media print {
   .no-print { display: none !important; }
-  body { background: white; }
+  body { background: white; color: #1a1a1a; }
 }

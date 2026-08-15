@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { cn, getRelativeTime } from "@/lib/utils";
 import { Search, Bell, ClipboardList, MessageCircle, Clock3, Info } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const pageTitles: Record<string, string> = { "/": "Dashboard", "/projects": "Projects", "/tasks": "My Tasks", "/gantt": "Timeline", "/sales": "Sales", "/reports": "Reports" };
 
@@ -73,6 +74,8 @@ export function TopBar() {
 
       {/* Right: actions */}
       <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
+        <ThemeToggle />
+
         <div className="relative" ref={notifRef}>
           <button type="button" aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`} aria-expanded={showNotifications} onClick={() => setShowNotifications(!showNotifications)} className="relative flex h-11 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Bell className="h-5 w-5" aria-hidden="true" />

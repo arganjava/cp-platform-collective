@@ -347,7 +347,7 @@ export default function ReportsPage() {
               {teamStats.map((member) => (
                 <article key={member.id} className="flex flex-col gap-4 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: member.avatarColor }}>{getInitials(member.name)}</div>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-foreground" style={{ backgroundColor: member.avatarColor }}>{getInitials(member.name)}</div>
                     <div className="min-w-0"><h3 className="truncate font-semibold">{member.name}</h3><p className="text-xs text-subtle-foreground">{member.totalTasks} assigned · {member.completedTasks} completed</p></div>
                   </div>
                   <div className="flex items-center gap-4 sm:w-64"><div className="min-w-0 flex-1"><Progress value={member.completionRate} label={`${member.name} task completion`} color={member.avatarColor} /></div><span className="w-12 text-right text-sm font-semibold">{member.completionRate}%</span></div>

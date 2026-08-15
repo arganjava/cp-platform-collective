@@ -29,13 +29,13 @@ export function Sidebar() {
         aria-label="Open navigation menu"
         aria-expanded={mobileOpen}
         onClick={() => setMobileOpen(true)}
-        className="fixed left-3 top-3 z-50 flex h-11 w-11 items-center justify-center bg-primary text-white shadow-md md:hidden"
+        className="fixed left-3 top-3 z-50 flex h-11 w-11 items-center justify-center bg-primary text-primary-foreground shadow-md md:hidden"
       >
         <Menu className="h-5 w-5" aria-hidden="true" />
       </button>
 
       {mobileOpen && (
-        <button type="button" aria-label="Close navigation menu" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-40 bg-primary/45 md:hidden" />
+        <button type="button" aria-label="Close navigation menu" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-40 bg-scrim/45 md:hidden" />
       )}
 
       <aside
