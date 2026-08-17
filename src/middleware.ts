@@ -60,8 +60,10 @@ export async function middleware(request: NextRequest) {
   if (!user && !isAuthRoute) {
     const redirect = request.nextUrl.clone();
     redirect.pathname = "/login";
-    redirect.searchParams.set("returnTo", pathname);
+    // Clear any original query first, then set returnTo (order matters —
+    // assigning search after searchParams would wipe the param we just set).
     redirect.search = "";
+    redirect.searchParams.set("returnTo", pathname);
     return NextResponse.redirect(redirect);
   }
 

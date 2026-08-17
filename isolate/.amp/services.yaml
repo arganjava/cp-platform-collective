@@ -1,7 +1,0 @@
-services:
-  web:
-    command: npx next dev --hostname 0.0.0.0 --port $PORT
-    port: 3000
-    portal:
-      title: CP Platform
-      description: Architect's Project Binder — project management platform for Collective Perspectives.

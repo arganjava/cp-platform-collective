@@ -51,7 +51,84 @@ Auth, the Postgres database, and avatar storage all run on Supabase. To enable t
 4. In **Authentication → URL Configuration**, add your site URL plus redirect URLs so `/auth/callback` is reachable (needed for Google sign-in and email confirmation).
 5. Optional: enable the **Google** provider in Authentication → Providers and add your OAuth client credentials.
 
-Auth routes: `/login` (Google sign-in, restricted to @collectivep.com accounts) and `/auth/callback` (OAuth exchange). Signed-out users are redirected to `/login` by `src/middleware.ts`; after sign-in they return to their intended path. Non-workspace Google accounts are signed out and blocked at the edge, in the auth callback, and in the app shell. The Zustand store hydrates from Supabase on app load and every mutation persists back through `src/lib/supabase/data.ts`.
+Auth routes: `/login` (Google sign-in **or** email/password, restricted to @collectivep.com accounts) and `/auth/callback` (OAuth exchange). Signed-out users are redirected to `/login` by `src/middleware.ts`; after sign-in they return to their intended path. Non-workspace accounts are signed out and blocked at the edge, in the auth callback, and in the app shell. The Zustand store hydrates from Supabase on app load and every mutation persists back through `src/lib/supabase/data.ts`.
+
+### Email/password admin sign-in (no Google)
+
+For staff without an `@collectivep.com` Google account — and for deterministic automated testing (Playwright) — run [`supabase/admin-user.sql`](supabase/admin-user.sql) once in the Supabase SQL editor. It provisions a password-based `admin@collectivep.com` account (email pre-confirmed, so no inbox step), lets the existing trigger create the team profile, and promotes it to `admin`.
+
+Then sign in at `/login` → **Sign in with email**:
+
+```
+email:    admin@collectivep.com
+password: CPAdmin2026!
+```
+
+Change the password afterwards (Dashboard → Authentication → Users, or edit the constant in the script and re-run). The email/password form posts directly from the browser, so it does **not** depend on the Supabase Site URL / redirect URL configuration that Google OAuth needs — useful in preview environments where the host changes per session.
+
+### CRUD troubleshooting
+
+If the app loads but creating/editing/deleting projects, tasks, or sales doesn't stick (rows vanish on refresh), the usual cause is row-level security: the tables exist but the `*_all` policies from `setup.sql` were never applied to that Supabase project. Re-run [`supabase/setup.sql`](supabase/setup.sql) in the SQL editor. Since the app writes optimistically, a rejected write now records a message on the store and shows a dismissible **Sync issue** banner in the app shell with the exact Supabase error (e.g. `permission denied for table tasks`) — use that to confirm the fix.
+
+## End-to-end tests (Playwright)
+
+Playwright drives the real UI against a running app, signing in with the provisioned admin account (run [`supabase/admin-user.sql`](supabase/admin-user.sql) first).
+
+Prereqs: install the browser once (plus OS libraries on Linux containers — the headless shell needs `libglib-2.0` and friends, which bare images often lack), and have the app reachable (the Freebuff preview, or `npm run dev` locally):
+
+```bash
+npx playwright install chromium
+npx playwright install-deps chromium   # Linux only; requires root (apt-get)
+```
+
+Run against a local dev server:
+
+```bash
+npm run e2e
+```
+
+Run against the Freebuff preview (or any deployed URL):
+
+```bash
+E2E_BASE_URL=https://<preview-host> npm run e2e
+```
+
+Credentials default to `admin@collectivep.com` / `CPAdmin2026!`; override with `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` if you rotated the password. The suite covers auth (signed-out redirect, email/password sign-in) and create → edit → delete on Projects, Tasks, and Sales. Each test cleans up after itself; the HTML report lands in `playwright-report/`.
+
+### GitHub Actions (pull requests)
+
+[`.github/workflows/e2e.yml`](.github/workflows/e2e.yml) runs on every PR:
+
+- **E2E (Chromium)** — builds the app and runs the full browser suite; gates the PR.
+- **Supabase integration (live CRUD)** — runs `npm run test:integration` against your real project; gates the PR.
+
+Add these repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | your project URL (public) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon key (public) |
+| `E2E_ADMIN_EMAIL` | `admin@collectivep.com` (or your admin) |
+| `E2E_ADMIN_PASSWORD` | the admin password from `supabase/admin-user.sql` |
+
+The integration job needs a real, provisioned admin user — until `supabase/admin-user.sql` has run successfully, that job fails with a clear message (which is the signal that the provisioning step is still pending). If you see `Database error querying schema` on sign-in even though the user exists in Authentication → Users, that's the direct-SQL insert issue: the row is missing the empty-string token columns (NULL breaks GoTrue's scan) and/or the `auth.identities` row (the dashboard shows **Providers: blank** when it's missing). **Re-run `supabase/admin-user.sql`** — it repairs both in place (tokens + email identity) and rotates the password, so the account can actually sign in.
+
+## Live API integration tests
+
+The app has no REST endpoints of its own — the browser talks to Supabase directly through `src/lib/supabase/data.ts`. The integration suite runs that **real data layer** against your live Supabase project with the admin session, verifying schema, row-level security, and the full CRUD round-trip exactly as the app experiences it:
+
+```bash
+npm run test:integration
+```
+
+Prereqs: the env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — read from `.env.local`/`.env` or the environment) and the admin account from `supabase/admin-user.sql`. It covers:
+
+- `fetchTeamData` loads users/projects/tasks/sales/notifications
+- **RLS sanity check** — an anonymous client sees zero project rows (catches a project with RLS accidentally disabled)
+- Projects, Tasks, Sales: create → read → update → delete round-trips (including FK constraints: tasks/sales attach to a real project, assignee/owner to a real profile)
+- Notifications: insert → mark-read
+
+Every test cleans up the rows it creates. Interpretation: a `permission denied` / `new row violates row-level security policy` error means the `*_all` policies from `supabase/setup.sql` are missing from that project — re-run it; a passing anon-query assertion means RLS is correctly enforced.
 
 ```bash
 npm run build

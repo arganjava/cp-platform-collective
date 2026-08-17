@@ -4,6 +4,7 @@ import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Loader2, AlertCircle } from "lucide-react";
 
@@ -13,11 +14,16 @@ function LoginForm() {
   const error = searchParams.get("error");
 
   const [loading, setLoading] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(
     error === "not-allowed"
       ? "That Google account isn't part of the Collective Perspectives workspace. Sign in with an @collectivep.com email."
       : null
   );
+
+  const returnTo = searchParams.get("returnTo") || "/";
 
   async function handleGoogleSignIn() {
     setErrorMessage(null);
@@ -27,7 +33,9 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          // `next` is honoured by /auth/callback so the user lands back on the
+          // exact page they were trying to reach, on this preview's origin.
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
         },
       });
       if (error) throw error;
@@ -36,6 +44,27 @@ function LoginForm() {
         err instanceof Error ? err.message : "Google sign-in failed. Please try again."
       );
       setLoading(false);
+    }
+  }
+
+  async function handleEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSigningIn(true);
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+      router.push(returnTo);
+      router.refresh();
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Sign-in failed. Please check your credentials and try again."
+      );
+      setSigningIn(false);
     }
   }
 
@@ -161,6 +190,57 @@ function LoginForm() {
               </>
             )}
           </Button>
+
+          <div className="relative my-6">
+            <div className="absolute inset-x-0 top-1/2 h-px bg-border" aria-hidden="true" />
+            <span className="relative mx-auto block w-fit bg-background px-3 font-mono text-xs uppercase tracking-[0.2em] text-subtle-foreground">
+              or
+            </span>
+          </div>
+
+          <form onSubmit={handleEmailSignIn} className="space-y-4" aria-label="Sign in with email and password">
+            <div>
+              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-foreground">
+                Workspace email
+              </label>
+              <Input
+                id="login-email"
+                type="email"
+                autoComplete="username"
+                placeholder="you@collectivep.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-foreground">
+                Password
+              </label>
+              <Input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" size="lg" className="w-full" disabled={signingIn}>
+              {signingIn ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in with email"
+              )}
+            </Button>
+            <p className="text-xs leading-5 text-subtle-foreground">
+              For admin and staff accounts provisioned with a password — no Google sign-in required.
+            </p>
+          </form>
 
           <div className="mt-6 border border-border bg-secondary px-4 py-3">
             <p className="text-xs leading-5 text-muted-foreground">

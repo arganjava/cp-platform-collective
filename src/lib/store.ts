@@ -24,9 +24,18 @@ import {
   updateProfileRow,
 } from "./supabase/data";
 
-/** Fire-and-forget persistence: keep the UI snappy, log failures loudly. */
+/**
+ * Fire-and-forget persistence: keep the UI snappy, but surface failures so
+ * the user never sees a phantom row that silently vanishes on refresh.
+ * Errors are logged loudly and recorded on the store for the app shell to
+ * render as a dismissible banner.
+ */
 function persist(promise: Promise<unknown>) {
-  promise.catch((err) => console.error("Supabase write failed:", err));
+  promise.catch((err) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Supabase write failed:", err);
+    useStore.getState().setError(message);
+  });
 }
 
 interface AppState {
@@ -44,6 +53,7 @@ interface AppState {
   sidebarCollapsed: boolean;
   searchQuery: string;
   selectedProjectId: string | null;
+  lastError: string | null;
 
   // Hydration
   initialize: (data: {
@@ -61,6 +71,8 @@ interface AppState {
   toggleSidebar: () => void;
   setSearchQuery: (query: string) => void;
   setSelectedProject: (id: string | null) => void;
+  setError: (message: string) => void;
+  clearError: () => void;
 
   // Task actions
   addTask: (task: Task) => void;
@@ -107,6 +119,7 @@ const initialDataState = {
   currentUserId: null as string | null,
   loading: true,
   initialized: false,
+  lastError: null as string | null,
 };
 
 export const useStore = create<AppState>((set, get) => ({
@@ -136,6 +149,8 @@ export const useStore = create<AppState>((set, get) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedProject: (id) => set({ selectedProjectId: id }),
+  setError: (message) => set({ lastError: message }),
+  clearError: () => set({ lastError: null }),
 
   // Task actions
   addTask: (task) => {

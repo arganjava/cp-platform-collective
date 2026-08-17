@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useStore } from "@/lib/store";
 import { cn, formatDate, generateId } from "@/lib/utils";
+import type { Sale } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageFrame, PageHeader, SheetSummary, SummaryMetric, ContentGrid, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Plus,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 const saleTypeConfig = {
@@ -24,7 +27,7 @@ const saleTypeConfig = {
 };
 
 export default function SalesPage() {
-  const { sales, projects, addSale, searchQuery } = useStore();
+  const { sales, projects, addSale, updateSale, deleteSale, searchQuery } = useStore();
   const [filterType, setFilterType] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
   const [showNewSale, setShowNewSale] = useState(false);
@@ -35,6 +38,15 @@ export default function SalesPage() {
     type: "commission" as "commission" | "artwork" | "workshop" | "sponsorship" | "grant",
     notes: "",
   });
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editSale, setEditSale] = useState<{
+    projectId: string;
+    amount: string;
+    clientName: string;
+    type: Sale["type"];
+    date: string;
+    notes: string;
+  }>({ projectId: "", amount: "", clientName: "", type: "commission", date: "", notes: "" });
 
   const query = searchQuery.trim().toLowerCase();
   const filteredSales = sales
@@ -75,10 +87,11 @@ export default function SalesPage() {
   }).filter((r) => r.total > 0);
 
   function handleCreateSale() {
-    if (!newSale.clientName || !newSale.amount) return;
+    const projectId = newSale.projectId || projects[0]?.id;
+    if (!newSale.clientName || !newSale.amount || !projectId) return;
     addSale({
-      id: `sale-${generateId()}`,
-      projectId: newSale.projectId || projects[0]?.id || "proj-1",
+      id: generateId(),
+      projectId,
       amount: parseFloat(newSale.amount),
       clientName: newSale.clientName,
       type: newSale.type,
@@ -88,6 +101,37 @@ export default function SalesPage() {
     });
     setNewSale({ projectId: "", amount: "", clientName: "", type: "commission", notes: "" });
     setShowNewSale(false);
+  }
+
+  function openEditSale(sale: Sale) {
+    setEditingSaleId(sale.id);
+    setEditSale({
+      projectId: sale.projectId,
+      amount: String(sale.amount),
+      clientName: sale.clientName,
+      type: sale.type,
+      date: sale.date,
+      notes: sale.notes,
+    });
+  }
+
+  function handleSaveSale() {
+    if (!editingSaleId || !editSale.clientName.trim() || !editSale.amount || !editSale.projectId) return;
+    updateSale(editingSaleId, {
+      projectId: editSale.projectId,
+      amount: parseFloat(editSale.amount),
+      clientName: editSale.clientName.trim(),
+      type: editSale.type,
+      date: editSale.date,
+      notes: editSale.notes,
+    });
+    setEditingSaleId(null);
+  }
+
+  function handleDeleteSale(sale: Sale) {
+    if (window.confirm(`Delete the sale from "${sale.clientName}"? This cannot be undone.`)) {
+      deleteSale(sale.id);
+    }
   }
 
   return (
@@ -203,6 +247,7 @@ export default function SalesPage() {
                   <th className="text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Amount</th>
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Date</th>
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Notes</th>
+                  <th className="w-24 text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,6 +274,26 @@ export default function SalesPage() {
                       <td className="py-3 px-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                       <td className="py-3 px-4">
                         <span className="text-sm text-subtle-foreground truncate max-w-[280px] block">{sale.notes}</span>
+                      </td>
+                      <td className="py-2 px-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            aria-label={`Edit sale from ${sale.clientName}`}
+                            onClick={() => openEditSale(sale)}
+                            className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Delete sale from ${sale.clientName}`}
+                            onClick={() => handleDeleteSale(sale)}
+                            className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -286,7 +351,57 @@ export default function SalesPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowNewSale(false)}>Cancel</Button>
-              <Button onClick={handleCreateSale}>Log Sale</Button>
+              <Button onClick={handleCreateSale} disabled={!newSale.clientName.trim() || !newSale.amount || projects.length === 0}>Log Sale</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Sale Dialog */}
+      <Dialog open={editingSaleId !== null} onOpenChange={(open) => { if (!open) setEditingSaleId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Sale</DialogTitle>
+            <DialogDescription>Update the revenue entry.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Client Name</label>
+              <Input placeholder="e.g., National Arts Council" value={editSale.clientName} onChange={(e) => setEditSale({ ...editSale, clientName: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Amount ($)</label>
+                <Input type="number" placeholder="0.00" value={editSale.amount} onChange={(e) => setEditSale({ ...editSale, amount: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Type</label>
+                <Select value={editSale.type} onChange={(e) => setEditSale({ ...editSale, type: e.target.value as Sale["type"] })}>
+                  {Object.entries(saleTypeConfig).map(([key, val]) => (
+                    <option key={key} value={key}>{val.label}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Project</label>
+              <Select value={editSale.projectId} onChange={(e) => setEditSale({ ...editSale, projectId: e.target.value })}>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Date</label>
+              <Input type="date" value={editSale.date} onChange={(e) => setEditSale({ ...editSale, date: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Notes</label>
+              <Textarea placeholder="Additional details..." value={editSale.notes} onChange={(e) => setEditSale({ ...editSale, notes: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditingSaleId(null)}>Cancel</Button>
+              <Button onClick={handleSaveSale} disabled={!editSale.clientName.trim() || !editSale.amount || !editSale.projectId}>Save changes</Button>
             </div>
           </div>
         </DialogContent>

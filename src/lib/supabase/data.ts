@@ -38,7 +38,7 @@ export function fromProfileRow(r: ProfileRow): User {
   };
 }
 
-function fromProjectRow(r: ProjectRow): Project {
+export function fromProjectRow(r: ProjectRow): Project {
   return {
     id: r.id,
     title: r.title,
@@ -53,7 +53,7 @@ function fromProjectRow(r: ProjectRow): Project {
   };
 }
 
-function fromTaskRow(r: TaskRow): Task {
+export function fromTaskRow(r: TaskRow): Task {
   return {
     id: r.id,
     projectId: r.project_id ?? "",
@@ -70,7 +70,7 @@ function fromTaskRow(r: TaskRow): Task {
   };
 }
 
-function fromSaleRow(r: SaleRow): Sale {
+export function fromSaleRow(r: SaleRow): Sale {
   return {
     id: r.id,
     projectId: r.project_id ?? "",
@@ -83,7 +83,7 @@ function fromSaleRow(r: SaleRow): Sale {
   };
 }
 
-function fromNotificationRow(r: NotificationRow): Notification {
+export function fromNotificationRow(r: NotificationRow): Notification {
   return {
     id: r.id,
     userId: r.user_id ?? "",
@@ -97,7 +97,7 @@ function fromNotificationRow(r: NotificationRow): Notification {
 
 /* ─────────────────────── app type → DB columns ─────────────────────── */
 
-function projectColumns(p: Partial<Project>): Record<string, unknown> {
+export function projectColumns(p: Partial<Project>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (p.id !== undefined) cols.id = p.id;
   if (p.title !== undefined) cols.title = p.title;
@@ -111,7 +111,7 @@ function projectColumns(p: Partial<Project>): Record<string, unknown> {
   return cols;
 }
 
-function taskColumns(t: Partial<Task>): Record<string, unknown> {
+export function taskColumns(t: Partial<Task>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (t.id !== undefined) cols.id = t.id;
   if (t.projectId !== undefined) cols.project_id = t.projectId || null;
@@ -127,7 +127,7 @@ function taskColumns(t: Partial<Task>): Record<string, unknown> {
   return cols;
 }
 
-function saleColumns(s: Partial<Sale>): Record<string, unknown> {
+export function saleColumns(s: Partial<Sale>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (s.id !== undefined) cols.id = s.id;
   if (s.projectId !== undefined) cols.project_id = s.projectId || null;
@@ -139,7 +139,7 @@ function saleColumns(s: Partial<Sale>): Record<string, unknown> {
   return cols;
 }
 
-function notificationColumns(n: Partial<Notification>): Record<string, unknown> {
+export function notificationColumns(n: Partial<Notification>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (n.id !== undefined) cols.id = n.id;
   if (n.userId !== undefined) cols.user_id = n.userId || null;
@@ -150,7 +150,7 @@ function notificationColumns(n: Partial<Notification>): Record<string, unknown> 
   return cols;
 }
 
-function profileColumns(u: Partial<User>): Record<string, unknown> {
+export function profileColumns(u: Partial<User>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (u.id !== undefined) cols.id = u.id;
   if (u.name !== undefined) cols.name = u.name;

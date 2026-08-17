@@ -11,7 +11,7 @@ import { isAllowedWorkspaceEmail } from "@/lib/supabase/email-policy";
 import { ensureProfile, fetchTeamData } from "@/lib/supabase/data";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 
 type ShellStatus = "loading" | "unconfigured" | "error" | "ready";
 
@@ -19,6 +19,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const initialize = useStore((s) => s.initialize);
+  const lastError = useStore((s) => s.lastError);
+  const clearError = useStore((s) => s.clearError);
   const [status, setStatus] = useState<ShellStatus>("loading");
   const [error, setError] = useState<string | null>(null);
 
@@ -151,6 +153,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className={cn("min-h-screen transition-[margin] duration-200 ease-out", sidebarCollapsed ? "md:ml-[68px]" : "md:ml-[240px]")}>
         <TopBar />
+        {lastError && (
+          <div role="alert" className="flex items-start gap-3 border-b border-destructive/40 bg-accent px-4 py-3 sm:px-6 lg:px-8">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-accent-foreground">Sync issue — changes may not be saved</p>
+              <p className="mt-0.5 break-words text-sm leading-5 text-accent-foreground/90">{lastError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={clearError}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center text-accent-foreground transition-colors hover:bg-accent/70"
+              aria-label="Dismiss sync error"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
         <main className="px-4 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</main>
       </div>
     </div>

@@ -3,12 +3,14 @@
 import React, { useState } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
+import type { Task } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Plus,
@@ -17,6 +19,8 @@ import {
   Clock,
   AlertCircle,
   Eye,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 const priorityVariant: Record<string, "neutral" | "warning" | "accent" | "danger"> = {
@@ -34,7 +38,7 @@ const statusConfig = {
 };
 
 export default function TasksPage() {
-  const { tasks, projects, users, getUserById, updateTaskStatus, addTask, searchQuery } = useStore();
+  const { tasks, projects, users, currentUserId, getUserById, updateTaskStatus, updateTask, deleteTask, addTask, searchQuery } = useStore();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"dueDate" | "priority" | "project">("dueDate");
@@ -42,6 +46,24 @@ export default function TasksPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskProject, setNewTaskProject] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    title: string;
+    description: string;
+    projectId: string;
+    status: Task["status"];
+    priority: Task["priority"];
+    assigneeId: string;
+    dueDate: string;
+  }>({
+    title: "",
+    description: "",
+    projectId: "",
+    status: "todo",
+    priority: "medium",
+    assigneeId: "",
+    dueDate: "",
+  });
 
   const query = searchQuery.trim().toLowerCase();
   const filteredTasks = tasks
@@ -66,15 +88,16 @@ export default function TasksPage() {
     });
 
   function handleCreateTask() {
-    if (!newTaskTitle.trim()) return;
+    const projectId = newTaskProject || projects[0]?.id;
+    if (!newTaskTitle.trim() || !projectId) return;
     addTask({
-      id: `task-${generateId()}`,
-      projectId: newTaskProject || projects[0]?.id || "proj-1",
+      id: generateId(),
+      projectId,
       title: newTaskTitle,
       description: "",
       status: "todo",
       priority: newTaskPriority,
-      assigneeId: "user-1",
+      assigneeId: currentUserId,
       startDate: new Date().toISOString().split("T")[0],
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
       tags: [],
@@ -83,6 +106,39 @@ export default function TasksPage() {
     });
     setNewTaskTitle("");
     setShowNewTask(false);
+  }
+
+  function openEditTask(task: Task) {
+    setEditingTaskId(task.id);
+    setEditForm({
+      title: task.title,
+      description: task.description,
+      projectId: task.projectId,
+      status: task.status,
+      priority: task.priority,
+      assigneeId: task.assigneeId ?? "",
+      dueDate: task.dueDate,
+    });
+  }
+
+  function handleSaveTask() {
+    if (!editingTaskId || !editForm.title.trim() || !editForm.projectId) return;
+    updateTask(editingTaskId, {
+      title: editForm.title.trim(),
+      description: editForm.description,
+      projectId: editForm.projectId,
+      status: editForm.status,
+      priority: editForm.priority,
+      assigneeId: editForm.assigneeId || null,
+      dueDate: editForm.dueDate,
+    });
+    setEditingTaskId(null);
+  }
+
+  function handleDeleteTask(task: Task) {
+    if (window.confirm(`Delete "${task.title}"? This cannot be undone.`)) {
+      deleteTask(task.id);
+    }
   }
 
   return (
@@ -152,6 +208,7 @@ export default function TasksPage() {
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Priority</th>
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Assignee</th>
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Due</th>
+                  <th className="w-24 text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -220,6 +277,26 @@ export default function TasksPage() {
                           </span>
                         </div>
                       </td>
+                      <td className="py-2 px-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            aria-label={`Edit ${task.title}`}
+                            onClick={() => openEditTask(task)}
+                            className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${task.title}`}
+                            onClick={() => handleDeleteTask(task)}
+                            className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -273,7 +350,74 @@ export default function TasksPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowNewTask(false)}>Cancel</Button>
-              <Button onClick={handleCreateTask}>Create Task</Button>
+              <Button onClick={handleCreateTask} disabled={!newTaskTitle.trim() || projects.length === 0}>Create Task</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={editingTaskId !== null} onOpenChange={(open) => { if (!open) setEditingTaskId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>Update the task details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Title</label>
+              <Input placeholder="Task title" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <Textarea placeholder="Optional details..." value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Project</label>
+                <Select value={editForm.projectId} onChange={(e) => setEditForm({ ...editForm, projectId: e.target.value })}>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Status</label>
+                <Select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as Task["status"] })}>
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="review">Review</option>
+                  <option value="done">Done</option>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Priority</label>
+                <Select value={editForm.priority} onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Task["priority"] })}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Assignee</label>
+                <Select value={editForm.assigneeId} onChange={(e) => setEditForm({ ...editForm, assigneeId: e.target.value })}>
+                  <option value="">Unassigned</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Due date</label>
+              <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditingTaskId(null)}>Cancel</Button>
+              <Button onClick={handleSaveTask} disabled={!editForm.title.trim() || !editForm.projectId}>Save changes</Button>
             </div>
           </div>
         </DialogContent>

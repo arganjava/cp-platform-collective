@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
+import type { Project, Task } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,8 @@ import {
   Plus,
   LayoutGrid,
   List,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 const statusConfig = {
@@ -27,7 +30,7 @@ const statusConfig = {
 };
 
 export default function ProjectsPage() {
-  const { projects, tasks, users, getUserById, updateTaskStatus, addTask, addProject, searchQuery } = useStore();
+  const { projects, tasks, users, currentUserId, getUserById, updateTaskStatus, addTask, deleteTask, addProject, updateProject, deleteProject, searchQuery } = useStore();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [view, setView] = useState<"board" | "list">("board");
   const [showNewTask, setShowNewTask] = useState(false);
@@ -40,6 +43,13 @@ export default function ProjectsPage() {
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editProject, setEditProject] = useState<{
+    title: string;
+    description: string;
+    status: Project["status"];
+    color: string;
+  }>({ title: "", description: "", status: "active", color: "var(--primary)" });
 
   const activeProjects = projects.filter((p) => p.status === "active");
   const displayedTasks = selectedProject
@@ -63,10 +73,11 @@ export default function ProjectsPage() {
   };
 
   function handleCreateTask() {
-    if (!newTaskTitle.trim()) return;
+    const projectId = newTaskProject || selectedProject || projects[0]?.id;
+    if (!newTaskTitle.trim() || !projectId) return;
     const task = {
-      id: `task-${generateId()}`,
-      projectId: newTaskProject || (selectedProject || projects[0]?.id || "proj-1"),
+      id: generateId(),
+      projectId,
       title: newTaskTitle,
       description: "",
       status: "todo" as const,
@@ -84,15 +95,15 @@ export default function ProjectsPage() {
   }
 
   function handleCreateProject() {
-    if (!newProjectTitle.trim()) return;
+    if (!newProjectTitle.trim() || !currentUserId) return;
     const project = {
-      id: `proj-${generateId()}`,
+      id: generateId(),
       title: newProjectTitle,
       description: newProjectDesc,
       status: "active" as const,
       color: ["var(--primary)", "var(--brand)", "var(--muted-foreground)", "var(--destructive)"][Math.floor(Math.random() * 4)],
-      ownerId: "user-1",
-      memberIds: ["user-1"],
+      ownerId: currentUserId,
+      memberIds: [currentUserId],
       startDate: new Date().toISOString().split("T")[0],
       endDate: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
       createdAt: new Date().toISOString(),
@@ -127,6 +138,40 @@ export default function ProjectsPage() {
     urgent: "danger",
   };
 
+  function openEditProject(project: Project) {
+    setEditingProjectId(project.id);
+    setEditProject({
+      title: project.title,
+      description: project.description,
+      status: project.status,
+      color: project.color,
+    });
+  }
+
+  function handleSaveProject() {
+    if (!editingProjectId || !editProject.title.trim()) return;
+    updateProject(editingProjectId, {
+      title: editProject.title.trim(),
+      description: editProject.description,
+      status: editProject.status,
+      color: editProject.color,
+    });
+    setEditingProjectId(null);
+  }
+
+  function handleDeleteProject(project: Project) {
+    if (window.confirm(`Delete "${project.title}" and all of its tasks and sales? This cannot be undone.`)) {
+      if (selectedProject === project.id) setSelectedProject(null);
+      deleteProject(project.id);
+    }
+  }
+
+  function handleDeleteTask(task: Task) {
+    if (window.confirm(`Delete "${task.title}"? This cannot be undone.`)) {
+      deleteTask(task.id);
+    }
+  }
+
   return (
     <>
       <PageFrame>
@@ -148,17 +193,34 @@ export default function ProjectsPage() {
             All Projects
           </button>
           {activeProjects.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProject(p.id)}
-              className={cn(
-                "px-4 py-2 text-sm font-medium transition-all cursor-pointer flex items-center gap-2",
-                selectedProject === p.id ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
-              )}
-            >
-              <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
-              {p.title}
-            </button>
+            <div key={p.id} className="flex items-center">
+              <button
+                onClick={() => setSelectedProject(p.id)}
+                className={cn(
+                  "min-h-10 px-4 py-2 text-sm font-medium transition-all cursor-pointer flex items-center gap-2",
+                  selectedProject === p.id ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
+                )}
+              >
+                <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
+                {p.title}
+              </button>
+              <button
+                type="button"
+                aria-label={`Edit ${p.title}`}
+                onClick={() => openEditProject(p)}
+                className="flex h-10 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete ${p.title}`}
+                onClick={() => handleDeleteProject(p)}
+                className="flex h-10 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           ))}
           <Tabs className="ml-auto" value={view} onValueChange={(v) => setView(v as "board" | "list")}>
             <TabsList>
@@ -207,10 +269,18 @@ export default function ProjectsPage() {
                           draggable
                           onDragStart={() => handleDragStart(task.id)}
                           className={cn(
-                            "kanban-card group cursor-grab border border-border bg-card p-3.5 active:cursor-grabbing",
+                            "kanban-card group relative cursor-grab border border-border bg-card p-3.5 active:cursor-grabbing",
                             draggedTask === task.id && "opacity-50"
                           )}
                         >
+                          <button
+                            type="button"
+                            aria-label={`Delete ${task.title}`}
+                            onClick={() => handleDeleteTask(task)}
+                            className="absolute right-2 top-2 hidden h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive group-hover:flex"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
                           {/* Project tag */}
                           {project && (
                             <div className="flex items-center gap-1.5 mb-2">
@@ -274,6 +344,7 @@ export default function ProjectsPage() {
                     <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Priority</th>
                     <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Assignee</th>
                     <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Due Date</th>
+                    <th className="w-24 text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -319,6 +390,18 @@ export default function ProjectsPage() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">{formatDate(task.dueDate)}</td>
+                        <td className="py-2 px-4">
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              aria-label={`Delete ${task.title}`}
+                              onClick={() => handleDeleteTask(task)}
+                              className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -408,7 +491,51 @@ export default function ProjectsPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowNewProject(false)}>Cancel</Button>
-              <Button onClick={handleCreateProject}>Create Project</Button>
+              <Button onClick={handleCreateProject} disabled={!newProjectTitle.trim() || !currentUserId}>Create Project</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Project Dialog */}
+      <Dialog open={editingProjectId !== null} onOpenChange={(open) => { if (!open) setEditingProjectId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription>Update the project details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Project Name</label>
+              <Input placeholder="e.g., DARE Festival 2027" value={editProject.title} onChange={(e) => setEditProject({ ...editProject, title: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <Textarea placeholder="Brief description of the project..." value={editProject.description} onChange={(e) => setEditProject({ ...editProject, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Status</label>
+                <Select value={editProject.status} onChange={(e) => setEditProject({ ...editProject, status: e.target.value as Project["status"] })}>
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                  <option value="archived">Archived</option>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Colour</label>
+                <Select value={editProject.color} onChange={(e) => setEditProject({ ...editProject, color: e.target.value })}>
+                  <option value="var(--primary)">Primary</option>
+                  <option value="var(--brand)">Brand</option>
+                  <option value="var(--muted-foreground)">Neutral</option>
+                  <option value="var(--destructive)">Coral</option>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditingProjectId(null)}>Cancel</Button>
+              <Button onClick={handleSaveProject} disabled={!editProject.title.trim()}>Save changes</Button>
             </div>
           </div>
         </DialogContent>

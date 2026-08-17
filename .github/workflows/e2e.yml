@@ -1,0 +1,116 @@
+name: E2E & integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Required GitHub Actions secrets (repo → Settings → Secrets and variables →
+# Actions → Repository secrets):
+#   NEXT_PUBLIC_SUPABASE_URL       — Supabase project URL (public, safe to expose)
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  — Supabase anon/public key (public, safe to expose)
+#
+# Optional (the suites fall back to the supabase/admin-user.sql defaults):
+#   E2E_ADMIN_EMAIL                — defaults to admin@collectivep.com
+#   E2E_ADMIN_PASSWORD             — defaults to CPAdmin2026!
+#
+# Without the two NEXT_PUBLIC_* secrets the app builds unconfigured and the
+# suites time out silently, so each job fails fast with a clear message instead.
+
+jobs:
+  # ── Gate: full browser suite on Chromium ───────────────────────────────
+  e2e-chromium:
+    name: E2E (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        run: |
+          missing=0
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "::error::GitHub Actions secret NEXT_PUBLIC_SUPABASE_URL is missing."
+            missing=1
+          fi
+          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::GitHub Actions secret NEXT_PUBLIC_SUPABASE_ANON_KEY is missing."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Add them under Settings → Secrets and variables → Actions → Repository secrets, then re-run this job."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium + OS libraries
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the app
+        run: npm run build
+
+      - name: Run e2e suite
+        run: npm run e2e
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-chromium
+          path: playwright-report/
+          retention-days: 7
+
+  # ── Gate: live CRUD round-trips against the real Supabase project ─────
+  integration:
+    name: Supabase integration (live CRUD)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        run: |
+          missing=0
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "::error::GitHub Actions secret NEXT_PUBLIC_SUPABASE_URL is missing."
+            missing=1
+          fi
+          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::GitHub Actions secret NEXT_PUBLIC_SUPABASE_ANON_KEY is missing."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Add them under Settings → Secrets and variables → Actions → Repository secrets, then re-run this job."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run live integration tests (create → read → update → delete)
+        run: npm run test:integration
