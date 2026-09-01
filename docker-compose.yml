@@ -1,0 +1,12 @@
+services:
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cp_platform_app_1
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
