@@ -41,6 +41,10 @@ export default function TasksPage() {
   const { tasks, projects, users, currentUserId, getUserById, updateTaskStatus, updateTask, deleteTask, addTask, searchQuery } = useStore();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterProject, setFilterProject] = useState<string>("all");
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
+  const [filterDeadlineFrom, setFilterDeadlineFrom] = useState<string>("");
+  const [filterDeadlineTo, setFilterDeadlineTo] = useState<string>("");
   const [sortBy, setSortBy] = useState<"dueDate" | "priority" | "project">("dueDate");
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -76,6 +80,22 @@ export default function TasksPage() {
       }
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+      if (filterProject !== "all" && t.projectId !== filterProject) return false;
+      if (filterAssignee !== "all" && t.assigneeId !== filterAssignee) return false;
+      
+      // Filter by deadline range
+      if (filterDeadlineFrom || filterDeadlineTo) {
+        const taskDate = new Date(t.dueDate).getTime();
+        if (filterDeadlineFrom) {
+          const fromDate = new Date(filterDeadlineFrom).getTime();
+          if (taskDate < fromDate) return false;
+        }
+        if (filterDeadlineTo) {
+          const toDate = new Date(filterDeadlineTo).getTime();
+          if (taskDate > toDate) return false;
+        }
+      }
+      
       return true;
     })
     .sort((a, b) => {
@@ -177,6 +197,28 @@ export default function TasksPage() {
         {/* Filters */}
         <Toolbar>
           <Select
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+          >
+            <option value="all">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={filterAssignee}
+            onChange={(e) => setFilterAssignee(e.target.value)}
+          >
+            <option value="all">All Assignees</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </Select>
+          <Select
             value={filterPriority}
             onChange={(e) => setFilterPriority(e.target.value)}
           >
@@ -186,6 +228,24 @@ export default function TasksPage() {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </Select>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-muted-foreground">From:</label>
+            <Input
+              type="date"
+              value={filterDeadlineFrom}
+              onChange={(e) => setFilterDeadlineFrom(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-muted-foreground">To:</label>
+            <Input
+              type="date"
+              value={filterDeadlineTo}
+              onChange={(e) => setFilterDeadlineTo(e.target.value)}
+              className="w-40"
+            />
+          </div>
           <Select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as "dueDate" | "priority" | "project")}

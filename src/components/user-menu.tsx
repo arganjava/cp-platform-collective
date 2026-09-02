@@ -151,11 +151,11 @@ export function UserMenu() {
               type="button"
               onClick={() => {
                 setMenuOpen(false);
-                setProfileOpen(true);
+                router.push("/profile");
               }}
               className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
             >
-              <User className="h-4 w-4" aria-hidden="true" /> Profile
+              <User className="h-4 w-4" aria-hidden="true" /> Profile & Password
             </button>
             <button
               type="button"

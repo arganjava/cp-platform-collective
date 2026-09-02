@@ -33,8 +33,9 @@ export function fromProfileRow(r: ProfileRow): User {
     name: r.name,
     email: r.email,
     avatarColor: r.avatar_color ?? "var(--primary)",
-    role: (r.role as User["role"]) ?? "member",
+    role: (r.role as User["role"]) ?? "guest",
     avatarUrl: r.avatar_url ?? undefined,
+    deletedAt: r.deleted_at ?? null,
   };
 }
 
@@ -158,6 +159,7 @@ export function profileColumns(u: Partial<User>): Record<string, unknown> {
   if (u.avatarColor !== undefined) cols.avatar_color = u.avatarColor;
   if (u.role !== undefined) cols.role = u.role;
   if (u.avatarUrl !== undefined) cols.avatar_url = u.avatarUrl || null;
+  if (u.deletedAt !== undefined) cols.deleted_at = u.deletedAt || null;
   return cols;
 }
 
@@ -174,7 +176,7 @@ export interface TeamData {
 export async function fetchTeamData(): Promise<TeamData> {
   const supabase = getSupabase();
   const [profiles, projects, tasks, sales, notifications] = await Promise.all([
-    supabase.from("profiles").select("*").order("name"),
+    supabase.from("profiles").select("*").is("deleted_at", null).order("name"),
     supabase.from("projects").select("*").order("created_at"),
     supabase.from("tasks").select("*").order("sort_order", { ascending: true }).order("created_at"),
     supabase.from("sales").select("*").order("date", { ascending: false }),
@@ -238,7 +240,7 @@ export async function ensureProfile(authUser: {
       auth_user_id: authUser.id,
       name,
       email: authUser.email ?? "",
-      role: "member",
+      role: "guest",
       avatar_color: "var(--primary)",
     })
     .select()
@@ -248,6 +250,13 @@ export async function ensureProfile(authUser: {
 }
 
 /* ─────────────────────────── Mutations ─────────────────────────── */
+
+export async function insertProfileRow(user: User) {
+  const { error } = await getSupabase()
+    .from("profiles")
+    .insert(profileColumns(user));
+  if (error) throw error;
+}
 
 export async function insertProject(project: Project) {
   const { error } = await getSupabase()

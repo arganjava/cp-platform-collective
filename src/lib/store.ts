@@ -22,7 +22,9 @@ import {
   updateNotificationRow,
   updateAllNotificationsRead,
   updateProfileRow,
+  insertProfileRow,
 } from "./supabase/data";
+import { generateId } from "./utils";
 
 /**
  * Fire-and-forget persistence: keep the UI snappy, but surface failures so
@@ -93,7 +95,9 @@ interface AppState {
   deleteSale: (id: string) => void;
 
   // User actions
+  addUser: (user: User) => void;
   updateUser: (id: string, updates: Partial<User>) => void;
+  deleteUser: (id: string) => void;
 
   // Notification actions
   markNotificationRead: (id: string) => void;
@@ -225,11 +229,24 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // User actions
+  addUser: (user) => {
+    set((s) => ({ users: [...s.users, user] }));
+    persist(insertProfileRow(user));
+  },
   updateUser: (id, updates) => {
     set((s) => ({
       users: s.users.map((u) => (u.id === id ? { ...u, ...updates } : u)),
     }));
     persist(updateProfileRow(id, updates));
+  },
+  deleteUser: (id) => {
+    // Soft delete - set deletedAt timestamp
+    set((s) => ({
+      users: s.users.map((u) =>
+        u.id === id ? { ...u, deletedAt: new Date().toISOString() } : u
+      ),
+    }));
+    persist(updateProfileRow(id, { deletedAt: new Date().toISOString() }));
   },
 
   // Notification actions

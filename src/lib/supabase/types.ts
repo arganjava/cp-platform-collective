@@ -14,6 +14,7 @@ export interface ProfileRow {
   role: string;
   avatar_url: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface ProjectRow {

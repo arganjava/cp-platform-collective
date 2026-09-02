@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
-import { Menu, LayoutDashboard, FolderKanban, CheckSquare, GanttChart, DollarSign, BarChart3, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Menu, LayoutDashboard, FolderKanban, CheckSquare, GanttChart, DollarSign, BarChart3, ChevronLeft, ChevronRight, X, Users } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, sheet: "01" },
@@ -20,7 +20,27 @@ export function Sidebar() {
   const pathname = usePathname();
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
+  const currentUser = useStore((s) => s.users.find((u) => u.id === s.currentUserId));
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Filter navigation items based on user role
+  const visibleNavItems = navItems.filter((item) => {
+    // Guests cannot see Sales menu
+    if (item.href === "/sales" && currentUser?.role === "guest") {
+      return false;
+    }
+    return true;
+  });
+
+  // Add Users menu for admins only
+  if (currentUser?.role === "admin") {
+    visibleNavItems.push({
+      href: "/users",
+      label: "Users",
+      icon: Users,
+      sheet: "07",
+    });
+  }
 
   return (
     <>
@@ -63,7 +83,7 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             return (
               <Link

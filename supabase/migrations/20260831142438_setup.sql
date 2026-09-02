@@ -20,10 +20,9 @@ create table if not exists public.profiles (
   name          text not null,
   email         text not null,
   avatar_color  text,
-  role          text not null default 'guest',
+  role          text not null default 'member',
   avatar_url    text,
-  created_at    timestamptz not null default now(),
-  deleted_at    timestamptz
+  created_at    timestamptz not null default now()
 );
 
 create table if not exists public.projects (
@@ -77,8 +76,7 @@ create table if not exists public.notifications (
 
 -- ─────────────────────────── Indexes ───────────────────────────
 
-create index if not exists idx_profiles_email        on public.profiles (email) where deleted_at is null;
-create index if not exists idx_profiles_active       on public.profiles (id) where deleted_at is null;
+create index if not exists idx_profiles_email        on public.profiles (email);
 create index if not exists idx_projects_owner        on public.projects (owner_id);
 create index if not exists idx_tasks_project         on public.tasks (project_id);
 create index if not exists idx_tasks_assignee        on public.tasks (assignee_id);
@@ -101,7 +99,7 @@ alter table public.notifications enable row level security;
 -- Profiles
 drop policy if exists "profiles_select_team" on public.profiles;
 create policy "profiles_select_team" on public.profiles
-  for select to authenticated using (deleted_at is null);
+  for select to authenticated using (true);
 
 drop policy if exists "profiles_insert_self" on public.profiles;
 create policy "profiles_insert_self" on public.profiles
@@ -115,9 +113,8 @@ drop policy if exists "profiles_update_self" on public.profiles;
 create policy "profiles_update_self" on public.profiles
   for update to authenticated
   using (
-    (auth_user_id = auth.uid()
-      or (auth_user_id is null and email = auth.jwt() ->> 'email'))
-    and deleted_at is null
+    auth_user_id = auth.uid()
+    or (auth_user_id is null and email = auth.jwt() ->> 'email')
   )
   with check (
     (auth_user_id = auth.uid()
@@ -200,7 +197,7 @@ begin
     ),
     coalesce(new.email, ''),
     'var(--primary)',
-    'guest'
+    'member'
   )
   on conflict (auth_user_id) do nothing;
   return new;

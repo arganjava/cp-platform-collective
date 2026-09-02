@@ -75,6 +75,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirect);
   }
 
+  // Check role-based access for protected routes
+  if (user && pathname === "/sales") {
+    // Get user profile to check role
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (profile?.role === "guest") {
+      // Redirect guests away from /sales
+      const redirect = request.nextUrl.clone();
+      redirect.pathname = "/";
+      redirect.search = "";
+      return NextResponse.redirect(redirect);
+    }
+  }
+
   return supabaseResponse;
 }
 
