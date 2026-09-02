@@ -25,6 +25,11 @@ import {
   ChevronDown,
   Upload,
   Check,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 
 const AVATAR_COLORS = [
@@ -53,6 +58,17 @@ export function UserMenu() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
   const currentUser = getUserById(currentUserId);
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
@@ -63,6 +79,14 @@ export function UserMenu() {
       setAvatarColor(currentUser.avatarColor || "var(--primary)");
       setAvatarUrl(currentUser.avatarUrl);
       setError(null);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+      setPasswordError(null);
+      setPasswordSuccess(null);
     }
   }, [profileOpen, currentUser]);
 
@@ -113,6 +137,74 @@ export function UserMenu() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function handleChangePassword(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!currentUser?.email) {
+      setPasswordError("User email not found.");
+      return;
+    }
+    if (!currentPassword) {
+      setPasswordError("Please enter your current password.");
+      return;
+    }
+    if (!newPassword) {
+      setPasswordError("Please enter a new password.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirm password do not match.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError("New password cannot be the same as your current password.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    try {
+      const supabase = getSupabase();
+
+      // 1. Verify current password by authenticating against Supabase
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: currentUser.email,
+        password: currentPassword,
+      });
+
+      if (signInErr) {
+        setPasswordError("Current password is incorrect. Please try again.");
+        setPasswordSaving(false);
+        return;
+      }
+
+      // 2. Update password in Supabase
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateErr) {
+        setPasswordError(updateErr.message || "Failed to update password.");
+        setPasswordSaving(false);
+        return;
+      }
+
+      setPasswordSuccess("Password updated successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : "Failed to change password.");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -244,6 +336,139 @@ export function UserMenu() {
                     {avatarColor === color && <Check className="h-4 w-4 text-primary-foreground" aria-hidden="true" />}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Change Password Section */}
+            <div className="border-t border-border pt-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Lock className="h-4 w-4 text-foreground" aria-hidden="true" />
+                <h3 className="text-sm font-semibold text-foreground">Change Password</h3>
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Update your account password using your current credentials with Supabase.
+              </p>
+
+              <div className="space-y-3">
+                {/* Current Password */}
+                <div>
+                  <label htmlFor="profile-current-password" className="mb-1.5 block text-xs font-medium text-foreground">
+                    Current password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="profile-current-password"
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => {
+                        setCurrentPassword(e.target.value);
+                        setPasswordError(null);
+                        setPasswordSuccess(null);
+                      }}
+                      placeholder="Enter current password"
+                      className="pr-10"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      id="toggle-current-password-visibility"
+                      aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label htmlFor="profile-new-password" className="mb-1.5 block text-xs font-medium text-foreground">
+                    New password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="profile-new-password"
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        setPasswordError(null);
+                        setPasswordSuccess(null);
+                      }}
+                      placeholder="Minimum 6 characters"
+                      className="pr-10"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      id="toggle-new-password-visibility"
+                      aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label htmlFor="profile-confirm-password" className="mb-1.5 block text-xs font-medium text-foreground">
+                    Confirm password
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="profile-confirm-password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        setPasswordError(null);
+                        setPasswordSuccess(null);
+                      }}
+                      placeholder="Re-enter new password"
+                      className="pr-10"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      id="toggle-confirm-password-visibility"
+                      aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password Feedback */}
+                {passwordError && (
+                  <div className="flex items-start gap-2 border border-destructive/20 bg-destructive/10 p-2.5 text-xs text-destructive">
+                    <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div className="flex items-start gap-2 border border-brand/20 bg-brand/10 p-2.5 text-xs text-foreground">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand" aria-hidden="true" />
+                    <span>{passwordSuccess}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    id="update-password-btn"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleChangePassword()}
+                    disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+                  >
+                    {passwordSaving ? "Updating password…" : "Update password"}
+                  </Button>
+                </div>
               </div>
             </div>
 

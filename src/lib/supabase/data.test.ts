@@ -260,7 +260,7 @@ describe("row → app type mappers", () => {
     };
     expect(fromProfileRow(row)).toMatchObject({
       avatarColor: "var(--primary)",
-      role: "member",
+      role: "guest",
     });
   });
 });
