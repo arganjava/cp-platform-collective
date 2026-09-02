@@ -5,22 +5,41 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
-import { Menu, LayoutDashboard, FolderKanban, CheckSquare, GanttChart, DollarSign, BarChart3, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Menu, LayoutDashboard, FolderKanban, CheckSquare, GanttChart, DollarSign, BarChart3, Users, ChevronLeft, ChevronRight, X } from "lucide-react";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  sheet: string;
+  adminOnly?: boolean;
+}
+
+const allNavItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, sheet: "01" },
   { href: "/projects", label: "Projects", icon: FolderKanban, sheet: "02" },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, sheet: "03" },
   { href: "/gantt", label: "Timeline", icon: GanttChart, sheet: "04" },
-  { href: "/sales", label: "Sales", icon: DollarSign, sheet: "05" },
+  { href: "/sales", label: "Sales", icon: DollarSign, sheet: "05", adminOnly: true },
   { href: "/reports", label: "Reports", icon: BarChart3, sheet: "06" },
+  { href: "/users", label: "Users", icon: Users, sheet: "07", adminOnly: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const sidebarCollapsed = useStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
+  const currentUserId = useStore((s) => s.currentUserId);
+  const getUserById = useStore((s) => s.getUserById);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const currentUser = getUserById(currentUserId);
+  const isGuest = currentUser?.role === "guest";
+
+  const visibleNavItems = allNavItems.filter((item) => {
+    if (isGuest && item.adminOnly) return false;
+    return true;
+  });
 
   return (
     <>
@@ -63,7 +82,7 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             return (
               <Link

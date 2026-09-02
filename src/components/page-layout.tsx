@@ -40,24 +40,24 @@ export function TitleBlock({ title, description, actions, meta, className }: Tit
   );
 }
 
-export function SheetSummary({ className, children }: { className?: string; children: React.ReactNode }) {
+export function SheetSummary({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("grid grid-cols-2 divide-x divide-y-0 divide-border border-y border-border sm:grid-cols-4", className)}>
+    <div className={cn("grid grid-cols-2 divide-x divide-y-0 divide-border border-y border-border sm:grid-cols-4", className)} {...props}>
       {children}
     </div>
   );
 }
 
-interface SummaryMetricProps {
+interface SummaryMetricProps extends React.HTMLAttributes<HTMLDivElement> {
   value: React.ReactNode;
   label: string;
   indicator?: React.ReactNode;
   className?: string;
 }
 
-export function SummaryMetric({ value, label, indicator, className }: SummaryMetricProps) {
+export function SummaryMetric({ value, label, indicator, className, ...props }: SummaryMetricProps) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 px-3 py-4 first:pl-3 sm:px-6 sm:py-5", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1 px-3 py-4 first:pl-3 sm:px-6 sm:py-5", className)} {...props}>
       <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-baseline sm:gap-2">
         <span className="font-heading text-2xl font-bold tracking-tight text-foreground tabular">{value}</span>
         {indicator}
@@ -67,20 +67,20 @@ export function SummaryMetric({ value, label, indicator, className }: SummaryMet
   );
 }
 
-export function ContentGrid({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("grid min-w-0 gap-6 xl:grid-cols-2", className)}>{children}</div>;
+export function ContentGrid({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("grid min-w-0 gap-6 xl:grid-cols-2", className)} {...props}>{children}</div>;
 }
 
-export function Toolbar({ className, children }: { className?: string; children: React.ReactNode }) {
+export function Toolbar({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex flex-col gap-3 border border-border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-center", className)}>
+    <div className={cn("flex flex-col gap-3 border border-border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-center", className)} {...props}>
       {children}
     </div>
   );
 }
 
-export function Section({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <section className={cn("min-w-0 space-y-4", className)}>{children}</section>;
+export function Section({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) {
+  return <section className={cn("min-w-0 space-y-4", className)} {...props}>{children}</section>;
 }
 
 // Backward-compatible aliases for pages still using old names.

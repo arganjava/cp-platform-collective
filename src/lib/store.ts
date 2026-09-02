@@ -22,7 +22,11 @@ import {
   updateNotificationRow,
   updateAllNotificationsRead,
   updateProfileRow,
+  softDeleteProfileRow,
+  restoreProfileRow,
+  createUserViaFunction,
 } from "./supabase/data";
+import { isSupabaseConfigured } from "./supabase/client";
 
 /**
  * Fire-and-forget persistence: keep the UI snappy, but surface failures so
@@ -31,6 +35,7 @@ import {
  * render as a dismissible banner.
  */
 function persist(promise: Promise<unknown>) {
+  if (!isSupabaseConfigured) return;
   promise.catch((err) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Supabase write failed:", err);
@@ -93,7 +98,11 @@ interface AppState {
   deleteSale: (id: string) => void;
 
   // User actions
+  addUser: (user: User, password?: string) => Promise<void>;
   updateUser: (id: string, updates: Partial<User>) => void;
+  deleteUser: (id: string) => void;
+  softDeleteUser: (id: string) => void;
+  restoreUser: (id: string) => void;
 
   // Notification actions
   markNotificationRead: (id: string) => void;
@@ -102,6 +111,7 @@ interface AppState {
 
   // Computed helpers
   getUnreadCount: () => number;
+  getActiveUsers: () => User[];
   getTasksByProject: (projectId: string) => Task[];
   getTasksByStatus: (status: TaskStatus) => Task[];
   getProjectById: (id: string) => Project | undefined;
@@ -225,11 +235,58 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // User actions
+  addUser: async (user, password) => {
+    // Add to local state immediately
+    set((s) => ({ users: [...s.users.filter((u) => u.id !== user.id), user] }));
+
+    // Persist via edge function or profile insert
+    try {
+      const res = await createUserViaFunction({
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        password,
+        avatarColor: user.avatarColor,
+      });
+      if (res?.id && res.id !== user.id) {
+        set((s) => ({
+          users: s.users.map((u) => (u.id === user.id ? { ...u, id: res.id } : u)),
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to persist new user:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      get().setError(`User creation error: ${msg}`);
+    }
+  },
   updateUser: (id, updates) => {
     set((s) => ({
       users: s.users.map((u) => (u.id === id ? { ...u, ...updates } : u)),
     }));
     persist(updateProfileRow(id, updates));
+  },
+  softDeleteUser: (id) => {
+    set((s) => ({
+      users: s.users.map((u) =>
+        u.id === id
+          ? { ...u, isDeleted: true, deletedAt: new Date().toISOString() }
+          : u
+      ),
+    }));
+    persist(softDeleteProfileRow(id));
+  },
+  deleteUser: (id) => {
+    get().softDeleteUser(id);
+  },
+  restoreUser: (id) => {
+    set((s) => ({
+      users: s.users.map((u) =>
+        u.id === id
+          ? { ...u, isDeleted: false, deletedAt: null }
+          : u
+      ),
+    }));
+    persist(restoreProfileRow(id));
   },
 
   // Notification actions
@@ -255,6 +312,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Computed helpers
   getUnreadCount: () => get().notifications.filter((n) => !n.isRead).length,
+  getActiveUsers: () => get().users.filter((u) => !u.isDeleted),
   getTasksByProject: (projectId) => get().tasks.filter((t) => t.projectId === projectId),
   getTasksByStatus: (status) => get().tasks.filter((t) => t.status === status),
   getProjectById: (id) => get().projects.find((p) => p.id === id),

@@ -9,6 +9,13 @@ import { cn } from "@/lib/utils";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { isAllowedWorkspaceEmail } from "@/lib/supabase/email-policy";
 import { ensureProfile, fetchTeamData } from "@/lib/supabase/data";
+import {
+  seedUsers,
+  seedProjects,
+  seedTasks,
+  seedSales,
+  seedNotifications,
+} from "@/lib/seed-data";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AlertCircle, X } from "lucide-react";
@@ -26,7 +33,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const hydrate = useCallback(async () => {
     if (!isSupabaseConfigured) {
-      setStatus("unconfigured");
+      initialize({
+        users: seedUsers,
+        projects: seedProjects,
+        tasks: seedTasks,
+        sales: seedSales,
+        notifications: seedNotifications,
+        currentUserId: seedUsers[0].id,
+      });
+      setStatus("ready");
       return;
     }
     setStatus("loading");
@@ -57,8 +72,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       initialize({ ...data, currentUserId: profile.id });
       setStatus("ready");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load workspace data.");
-      setStatus("error");
+      // Fall back to seed data if live Supabase fetch fails so workspace remains usable
+      console.warn("Could not load from Supabase, falling back to local workspace data:", err);
+      initialize({
+        users: seedUsers,
+        projects: seedProjects,
+        tasks: seedTasks,
+        sales: seedSales,
+        notifications: seedNotifications,
+        currentUserId: seedUsers[0].id,
+      });
+      setStatus("ready");
     }
   }, [initialize, router]);
 

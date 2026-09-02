@@ -1,0 +1,6 @@
+{
+  "name": "CP Platform — Collective Perspectives",
+  "description": "Internal project management platform for Collective Perspectives. Redefining Ability. Reimagining Possibility.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

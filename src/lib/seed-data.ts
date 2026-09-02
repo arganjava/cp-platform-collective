@@ -1,14 +1,14 @@
 import type { User, Project, Task, Sale, Notification } from "./types";
 
 export const seedUsers: User[] = [
-  { id: "user-1", name: "Vincent Lim", email: "vincent@collectivep.com", avatarColor: "var(--primary)", role: "admin" },
-  { id: "user-2", name: "Michael Chua", email: "michael@collectivep.com", avatarColor: "var(--brand)", role: "admin" },
-  { id: "user-3", name: "Lim Lee Lee", email: "leelee@collectivep.com", avatarColor: "var(--muted-foreground)", role: "manager" },
-  { id: "user-4", name: "Douglas Danapal", email: "douglas@collectivep.com", avatarColor: "var(--destructive)", role: "manager" },
-  { id: "user-5", name: "Abu Sahl (Iqbal)", email: "iqbal@collectivep.com", avatarColor: "var(--primary)", role: "member" },
-  { id: "user-6", name: "Ryan Putra", email: "ryan@collectivep.com", avatarColor: "var(--brand)", role: "member" },
-  { id: "user-7", name: "Stephanie Fam", email: "stephanie@collectivep.com", avatarColor: "var(--muted-foreground)", role: "member" },
-  { id: "user-8", name: "Jeffrey Lim", email: "jeffrey@collectivep.com", avatarColor: "var(--destructive)", role: "member" },
+  { id: "user-1", name: "Vincent Lim", email: "vincent@collectivep.com", avatarColor: "var(--primary)", role: "admin", isDeleted: false },
+  { id: "user-2", name: "Michael Chua", email: "michael@collectivep.com", avatarColor: "var(--brand)", role: "admin", isDeleted: false },
+  { id: "user-3", name: "Lim Lee Lee", email: "leelee@collectivep.com", avatarColor: "var(--muted-foreground)", role: "guest", isDeleted: false },
+  { id: "user-4", name: "Douglas Danapal", email: "douglas@collectivep.com", avatarColor: "var(--destructive)", role: "guest", isDeleted: false },
+  { id: "user-5", name: "Abu Sahl (Iqbal)", email: "iqbal@collectivep.com", avatarColor: "var(--primary)", role: "guest", isDeleted: false },
+  { id: "user-6", name: "Ryan Putra", email: "ryan@collectivep.com", avatarColor: "var(--brand)", role: "guest", isDeleted: false },
+  { id: "user-7", name: "Stephanie Fam", email: "stephanie@collectivep.com", avatarColor: "var(--muted-foreground)", role: "guest", isDeleted: false },
+  { id: "user-8", name: "Jeffrey Lim", email: "jeffrey@collectivep.com", avatarColor: "var(--destructive)", role: "guest", isDeleted: false },
 ];
 
 export const seedProjects: Project[] = [

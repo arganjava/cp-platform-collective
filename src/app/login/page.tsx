@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { isAllowedWorkspaceEmail } from "@/lib/supabase/email-policy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,11 +20,51 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(
     error === "not-allowed"
-      ? "That Google account isn't part of the Collective Perspectives workspace. Sign in with an @collectivep.com email."
+      ? "That account isn't part of the Collective Perspectives workspace. Sign in with an @collectivep.com email."
       : null
   );
 
-  const returnTo = searchParams.get("returnTo") || "/";
+  const rawReturnTo = searchParams.get("returnTo");
+  const returnTo =
+    rawReturnTo && rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//") && rawReturnTo !== "/login"
+      ? rawReturnTo
+      : "/";
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const supabase = getSupabase();
+
+      // Check if the user is already authenticated
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user && isAllowedWorkspaceEmail(session.user.email)) {
+          window.location.href = returnTo;
+        }
+      });
+
+      // Listen for auth state changes
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          if (isAllowedWorkspaceEmail(session.user.email)) {
+            window.location.href = returnTo;
+          } else {
+            supabase.auth.signOut();
+            setErrorMessage(
+              "That account isn't part of the Collective Perspectives workspace. Sign in with an @collectivep.com email."
+            );
+          }
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch (err) {
+      console.warn("Auth initialization error:", err);
+    }
+  }, [returnTo]);
 
   async function handleGoogleSignIn() {
     setErrorMessage(null);
@@ -33,8 +74,6 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          // `next` is honoured by /auth/callback so the user lands back on the
-          // exact page they were trying to reach, on this preview's origin.
           redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
         },
       });
@@ -53,13 +92,23 @@ function LoginForm() {
     setSigningIn(true);
     try {
       const supabase = getSupabase();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       if (error) throw error;
-      router.push(returnTo);
-      router.refresh();
+      if (!data.user) {
+        throw new Error("Sign-in succeeded but user details were not received.");
+      }
+      if (!isAllowedWorkspaceEmail(data.user.email)) {
+        await supabase.auth.signOut();
+        setErrorMessage(
+          "That account isn't part of the Collective Perspectives workspace. Please use an @collectivep.com email."
+        );
+        setSigningIn(false);
+        return;
+      }
+      window.location.href = returnTo;
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Sign-in failed. Please check your credentials and try again."
@@ -87,14 +136,18 @@ function LoginForm() {
           <div className="border border-border bg-card p-6">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-brand" aria-hidden="true" />
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h2 className="font-heading text-lg font-bold tracking-tight">Supabase is not configured yet</h2>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Add <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-                  <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to your
-                  environment (project Keys / API keys), then run <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs">supabase/setup.sql</code> in
-                  your Supabase SQL editor to create the schema, storage bucket, and seed data.
+                  You can explore the full workspace in interactive demo mode, or connect Supabase with{" "}
+                  <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+                  <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>.
                 </p>
+                <div className="pt-2">
+                  <Button type="button" size="lg" className="w-full" onClick={() => router.push("/")}>
+                    Enter Workspace (Demo Mode)
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { getSupabase } from "./client";
+import { getSupabase, isSupabaseConfigured } from "./client";
 import type {
   ProfileRow,
   ProjectRow,
@@ -28,13 +28,17 @@ function unwrap<T>(result: RowResult<T>, label: string): T {
 /* ─────────────────────────── Row → app type ─────────────────────────── */
 
 export function fromProfileRow(r: ProfileRow): User {
+  const role: User["role"] = r.role === "admin" ? "admin" : "guest";
   return {
     id: r.id,
     name: r.name,
     email: r.email,
     avatarColor: r.avatar_color ?? "var(--primary)",
-    role: (r.role as User["role"]) ?? "member",
+    role,
     avatarUrl: r.avatar_url ?? undefined,
+    isDeleted: Boolean(r.is_deleted || r.deleted_at),
+    deletedAt: r.deleted_at ?? null,
+    createdAt: r.created_at ?? new Date().toISOString(),
   };
 }
 
@@ -158,6 +162,8 @@ export function profileColumns(u: Partial<User>): Record<string, unknown> {
   if (u.avatarColor !== undefined) cols.avatar_color = u.avatarColor;
   if (u.role !== undefined) cols.role = u.role;
   if (u.avatarUrl !== undefined) cols.avatar_url = u.avatarUrl || null;
+  if (u.isDeleted !== undefined) cols.is_deleted = u.isDeleted;
+  if (u.deletedAt !== undefined) cols.deleted_at = u.deletedAt;
   return cols;
 }
 
@@ -341,11 +347,88 @@ export async function updateProfileRow(id: string, updates: Partial<User>) {
   if (error) throw error;
 }
 
+export async function insertProfileRow(user: User) {
+  const { error } = await getSupabase()
+    .from("profiles")
+    .insert(profileColumns(user));
+  if (error) throw error;
+}
+
+export async function softDeleteProfileRow(id: string) {
+  const { error } = await getSupabase()
+    .from("profiles")
+    .update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function restoreProfileRow(id: string) {
+  const { error } = await getSupabase()
+    .from("profiles")
+    .update({
+      is_deleted: false,
+      deleted_at: null,
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function createUserViaFunction(params: {
+  name: string;
+  email: string;
+  role: User["role"];
+  password?: string;
+  avatarColor?: string;
+}): Promise<{ id: string; authUserId?: string }> {
+  if (!isSupabaseConfigured) {
+    return { id: `user-${Date.now()}` };
+  }
+
+  const supabase = getSupabase();
+  try {
+    // Attempt invoking the Edge Function first
+    const { data, error } = await supabase.functions.invoke("create-user", {
+      body: params,
+    });
+    if (!error && data?.user?.id) {
+      return { id: data.user.id, authUserId: data.user.auth_user_id || data.user.id };
+    }
+  } catch (err) {
+    console.warn("Edge function create-user invoke returned error or not deployed yet, falling back to direct profile creation:", err);
+  }
+
+  // Direct table insert fallback if edge function is still pending deployment
+  const newId = crypto.randomUUID ? crypto.randomUUID() : `user-${Date.now()}`;
+  const { data: inserted, error: insertErr } = await supabase
+    .from("profiles")
+    .insert({
+      id: newId,
+      name: params.name,
+      email: params.email,
+      role: params.role,
+      avatar_color: params.avatarColor || "var(--primary)",
+      is_deleted: false,
+    })
+    .select()
+    .single();
+
+  if (insertErr) {
+    throw new Error(`Failed to create user: ${insertErr.message}`);
+  }
+  return { id: inserted.id };
+}
+
 /* ─────────────────────────── Storage ─────────────────────────── */
 
 export const AVATAR_BUCKET = "avatars";
 
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
+  if (!isSupabaseConfigured) {
+    return URL.createObjectURL(file);
+  }
   const supabase = getSupabase();
   const ext = (file.name.split(".").pop() || "png").toLowerCase();
   const path = `${userId}.${ext}`;

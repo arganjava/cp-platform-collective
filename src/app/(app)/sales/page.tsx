@@ -12,10 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import Link from "next/link";
 import {
   Plus,
   Pencil,
   Trash2,
+  ShieldAlert,
+  ArrowLeft,
 } from "lucide-react";
 
 const saleTypeConfig = {
@@ -27,7 +30,10 @@ const saleTypeConfig = {
 };
 
 export default function SalesPage() {
-  const { sales, projects, addSale, updateSale, deleteSale, searchQuery } = useStore();
+  const { sales, projects, addSale, updateSale, deleteSale, searchQuery, currentUserId, getUserById } = useStore();
+  const currentUser = getUserById(currentUserId);
+  const isGuest = currentUser?.role === "guest";
+
   const [filterType, setFilterType] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
   const [showNewSale, setShowNewSale] = useState(false);
@@ -47,6 +53,36 @@ export default function SalesPage() {
     date: string;
     notes: string;
   }>({ projectId: "", amount: "", clientName: "", type: "commission", date: "", notes: "" });
+
+  if (isGuest) {
+    return (
+      <PageFrame id="sales-access-denied-frame">
+        <PageHeader
+          title="Sales & Revenue"
+          description="Track sales, revenue streams, and financial records."
+        />
+        <Card className="border border-border p-8 text-center" id="card-guest-restricted">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-4">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <h2 className="font-heading text-xl font-bold text-foreground mb-2">
+            Access Restricted (Guest Role)
+          </h2>
+          <p className="max-w-md mx-auto text-sm text-muted-foreground mb-6">
+            Your current role is set to <strong>Guest</strong>. Financial records and the Sales module are strictly restricted to Workspace Administrators.
+          </p>
+          <div className="flex justify-center">
+            <Link href="/">
+              <Button variant="default" className="flex items-center gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                <span>Return to Dashboard</span>
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </PageFrame>
+    );
+  }
 
   const query = searchQuery.trim().toLowerCase();
   const filteredSales = sales

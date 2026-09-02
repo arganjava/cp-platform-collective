@@ -135,7 +135,7 @@ export function UserMenu() {
         </Avatar>
         <span className="hidden text-left sm:block">
           <span className="block text-sm font-semibold leading-tight text-foreground">{currentUser?.name || "User"}</span>
-          <span className="block text-xs capitalize leading-tight text-subtle-foreground">{currentUser?.role || "member"}</span>
+          <span className="block text-xs capitalize leading-tight text-subtle-foreground">{currentUser?.role || "guest"}</span>
         </span>
         <ChevronDown className="h-4 w-4 text-subtle-foreground" aria-hidden="true" />
       </button>
@@ -221,7 +221,7 @@ export function UserMenu() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Role</label>
-                <p className="flex h-10 items-center border border-border bg-secondary px-3 text-sm capitalize text-muted-foreground">{currentUser?.role || "member"}</p>
+                <p className="flex h-10 items-center border border-border bg-secondary px-3 text-sm capitalize text-muted-foreground">{currentUser?.role || "guest"}</p>
               </div>
             </div>
 
