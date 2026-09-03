@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { updateProfileRow } from "@/lib/supabase/data";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
 import type { User, UserRole } from "@/lib/types";
+import { validateEmailForRole } from "@/lib/supabase/email-policy";
 import { PageFrame, PageHeader, SheetSummary, SummaryMetric, Toolbar } from "@/components/page-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +21,8 @@ import {
   UserCheck,
   UserX,
   Shield,
+  ShieldAlert,
+  ArrowLeft,
   User as UserIcon,
   Pencil,
   Trash2,
@@ -69,20 +74,22 @@ export default function UsersPage() {
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
-    role: "guest" as UserRole,
+    role: "member" as UserRole,
     password: "",
     avatarColor: "var(--primary)",
   });
 
   // Edit User State
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState<{
     name: string;
     role: UserRole;
     avatarColor: string;
   }>({
     name: "",
-    role: "guest",
+    role: "member",
     avatarColor: "var(--primary)",
   });
 
@@ -103,15 +110,19 @@ export default function UsersPage() {
       return true;
     })
     .sort((a, b) => {
-      // Sort active first, then admins, then by name
+      // Sort active first, then admins, members, guests, then by name
       if (Boolean(a.isDeleted) !== Boolean(b.isDeleted)) return a.isDeleted ? 1 : -1;
-      if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
+      if (a.role !== b.role) {
+        const order: Record<UserRole, number> = { admin: 0, member: 1, guest: 2 };
+        return order[a.role] - order[b.role];
+      }
       return a.name.localeCompare(b.name);
     });
 
   const totalUsers = users.length;
   const activeCount = users.filter((u) => !u.isDeleted).length;
   const adminCount = users.filter((u) => !u.isDeleted && u.role === "admin").length;
+  const memberCount = users.filter((u) => !u.isDeleted && u.role === "member").length;
   const guestCount = users.filter((u) => !u.isDeleted && u.role === "guest").length;
   const deletedCount = users.filter((u) => u.isDeleted).length;
 
@@ -131,14 +142,25 @@ export default function UsersPage() {
       setFormError("Please enter a valid email address.");
       return;
     }
+
+    const emailCheck = validateEmailForRole(email, newUser.role);
+    if (!emailCheck.valid) {
+      setFormError(emailCheck.error || "Invalid email address for selected role.");
+      return;
+    }
+
     if (!password || password.length < 6) {
       setFormError("Initial password must be at least 6 characters.");
       return;
     }
 
-    const existing = users.find((u) => u.email.toLowerCase() === email && !u.isDeleted);
+    const existing = users.find((u) => u.email.trim().toLowerCase() === email);
     if (existing) {
-      setFormError("A user with this email address already exists.");
+      if (existing.isDeleted) {
+        setFormError("A user profile with this email address already exists in the archive. Please restore it or use another email.");
+      } else {
+        setFormError("A user profile with this email address already exists.");
+      }
       return;
     }
 
@@ -159,7 +181,7 @@ export default function UsersPage() {
       setNewUser({
         name: "",
         email: "",
-        role: "guest",
+        role: "member",
         password: "",
         avatarColor: "var(--primary)",
       });
@@ -173,27 +195,93 @@ export default function UsersPage() {
 
   function handleOpenEdit(user: User) {
     setEditingUserId(user.id);
+    setEditError(null);
+    setIsSavingEdit(false);
     setEditForm({
       name: user.name,
-      role: user.role === "admin" ? "admin" : "guest",
+      role: user.role,
       avatarColor: user.avatarColor || "var(--primary)",
     });
   }
 
-  function handleSaveEdit() {
+  async function handleSaveEdit() {
     if (!editingUserId || !editForm.name.trim()) return;
-    updateUser(editingUserId, {
-      name: editForm.name.trim(),
-      role: editForm.role,
-      avatarColor: editForm.avatarColor,
-    });
-    setEditingUserId(null);
+    setEditError(null);
+    const targetUser = users.find((u) => u.id === editingUserId);
+    if (!targetUser) return;
+
+    const emailDomain = targetUser.email.split("@").pop()?.toLowerCase();
+    const hasCollectiveEmail = emailDomain === "collectivep.com";
+
+    // Strict domain check: Non-@collectivep.com accounts CANNOT be made Admin
+    if (editForm.role === "admin" && !hasCollectiveEmail) {
+      setEditError("Accounts with non-@collectivep.com emails cannot be assigned the Admin role. The Admin role requires an email address with the @collectivep.com domain.");
+      return;
+    }
+
+    if (editForm.role === "member" && !hasCollectiveEmail) {
+      setEditError("Accounts with non-@collectivep.com emails cannot be assigned the Member role. The Member role requires an email address with the @collectivep.com domain.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      await updateProfileRow(editingUserId, {
+        name: editForm.name.trim(),
+        role: editForm.role,
+        avatarColor: editForm.avatarColor,
+      });
+
+      // Update local store immediately
+      updateUser(editingUserId, {
+        name: editForm.name.trim(),
+        role: editForm.role,
+        avatarColor: editForm.avatarColor,
+      });
+
+      setEditingUserId(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update team member details.");
+    } finally {
+      setIsSavingEdit(false);
+    }
   }
 
   function handleConfirmSoftDelete() {
     if (!deletingUser) return;
     softDeleteUser(deletingUser.id);
     setDeletingUser(null);
+  }
+
+  if (!isAdmin) {
+    const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : "Guest";
+    return (
+      <PageFrame id="users-access-denied-frame">
+        <PageHeader
+          title="Team & Users"
+          description="Manage workspace team members, credentials, and roles."
+        />
+        <Card className="border border-border p-8 text-center" id="card-users-restricted">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-4">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <h2 className="font-heading text-xl font-bold text-foreground mb-2">
+            Access Restricted
+          </h2>
+          <p className="max-w-md mx-auto text-sm text-muted-foreground mb-6">
+            Your current role is set to <strong>{roleLabel}</strong>. User directory administration and credential management are strictly restricted to Workspace Administrators.
+          </p>
+          <div className="flex justify-center">
+            <Link href="/">
+              <Button variant="default" className="flex items-center gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                <span>Return to Dashboard</span>
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </PageFrame>
+    );
   }
 
   return (
@@ -233,8 +321,9 @@ export default function UsersPage() {
 
       {/* Metrics Summary */}
       <SheetSummary id="users-metric-summary">
-        <SummaryMetric label="Active Members" value={activeCount} />
+        <SummaryMetric label="Active Users" value={activeCount} />
         <SummaryMetric label="Administrators" value={adminCount} />
+        <SummaryMetric label="Members" value={memberCount} />
         <SummaryMetric label="Guests" value={guestCount} />
         <SummaryMetric label="Deactivated" value={deletedCount} />
       </SheetSummary>
@@ -262,11 +351,12 @@ export default function UsersPage() {
               aria-label="Filter by role"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="w-32"
+              className="w-36"
             >
               <option value="all">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="guest">Guest</option>
+              <option value="admin">Administrators</option>
+              <option value="member">Members</option>
+              <option value="guest">Guests</option>
             </Select>
           </div>
 
@@ -378,10 +468,15 @@ export default function UsersPage() {
                       </td>
 
                       <td className="px-4 py-3.5">
-                        {isUserAdmin ? (
+                        {user.role === "admin" ? (
                           <Badge variant="positive" className="inline-flex items-center gap-1 font-medium">
                             <Shield className="h-3 w-3" />
                             <span>Admin</span>
+                          </Badge>
+                        ) : user.role === "member" ? (
+                          <Badge variant="accent" className="inline-flex items-center gap-1 font-medium">
+                            <UserCheck className="h-3 w-3" />
+                            <span>Member</span>
                           </Badge>
                         ) : (
                           <Badge variant="neutral" className="inline-flex items-center gap-1 font-medium">
@@ -513,9 +608,25 @@ export default function UsersPage() {
                 onChange={(e) => setNewUser({ ...newUser, role: e.target.value as UserRole })}
                 className="w-full"
               >
-                <option value="guest">Guest — Access to Projects, Tasks & Timeline (Sales Hidden)</option>
-                <option value="admin">Admin — Full Access to All Modules & Settings</option>
+                <option value="member">Member — Internal (Must use @collectivep.com)</option>
+                <option value="admin">Admin — Full Access (Must use @collectivep.com)</option>
+                <option value="guest">Guest — Outside (Can use @collectivep.com, @gmail.com, @yahoo.com, etc.)</option>
               </Select>
+              {newUser.role === "admin" && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <strong>Admin:</strong> Full access to all modules including Users, Reports, and Sales. Email domain must be <strong>@collectivep.com</strong>.
+                </p>
+              )}
+              {newUser.role === "member" && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <strong>Member:</strong> Internal team access to Projects, Tasks & Timeline. Access to /users, /reports, and /sales is restricted. Email domain must be <strong>@collectivep.com</strong>.
+                </p>
+              )}
+              {newUser.role === "guest" && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <strong>Guest:</strong> Outside partner access to Projects, Tasks & Timeline. Access to /users, /reports, and /sales is restricted. Can use <strong>any email domain</strong> (@collectivep.com, @gmail.com, @yahoo.com, etc.).
+                </p>
+              )}
             </div>
 
             <div>
@@ -589,65 +700,130 @@ export default function UsersPage() {
             <DialogDescription>Update user name, role, or visual settings.</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
-            <div>
-              <label htmlFor="edit-user-name" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                Full Name
-              </label>
-              <Input
-                id="edit-user-name"
-                value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              />
-            </div>
+          {(() => {
+            const editingUserObj = users.find((u) => u.id === editingUserId);
+            const editingUserEmail = editingUserObj?.email || "";
+            const editingUserDomain = editingUserEmail.split("@").pop()?.toLowerCase() || "";
+            const isEditingUserCollective = editingUserDomain === "collectivep.com";
 
-            <div>
-              <label htmlFor="edit-user-role" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                Role
-              </label>
-              <Select
-                id="edit-user-role"
-                value={editForm.role}
-                onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-                className="w-full"
-              >
-                <option value="guest">Guest (Restricted from Sales)</option>
-                <option value="admin">Admin (Full Access)</option>
-              </Select>
-            </div>
+            return (
+              <div className="space-y-4 pt-2">
+                {editError && (
+                  <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive flex items-start gap-2">
+                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{editError}</span>
+                  </div>
+                )}
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                Avatar Colour
-              </label>
-              <div className="flex items-center gap-2">
-                {AVATAR_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    aria-label={`Select colour ${color}`}
-                    onClick={() => setEditForm({ ...editForm, avatarColor: color })}
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full border transition-transform",
-                      editForm.avatarColor === color ? "border-foreground ring-2 ring-primary ring-offset-2" : "border-border hover:scale-105"
+                <div>
+                  <label htmlFor="edit-user-name" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                    Full Name
+                  </label>
+                  <Input
+                    id="edit-user-name"
+                    value={editForm.name}
+                    onChange={(e) => {
+                      setEditError(null);
+                      setEditForm({ ...editForm, name: e.target.value });
+                    }}
+                    placeholder="e.g. Alex Johnson"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                    Email Address
+                  </label>
+                  <div className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/50 border border-border text-sm">
+                    <div className="flex items-center gap-2 truncate">
+                      <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="font-mono text-xs text-foreground truncate">{editingUserEmail || "No email"}</span>
+                    </div>
+                    {isEditingUserCollective ? (
+                      <Badge variant="accent" className="text-[10px] shrink-0 font-medium">@collectivep.com</Badge>
+                    ) : (
+                      <Badge variant="neutral" className="text-[10px] shrink-0 font-medium">External Domain</Badge>
                     )}
-                    style={{ backgroundColor: color }}
-                  >
-                    {editForm.avatarColor === color && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
-                  </button>
-                ))}
-              </div>
-            </div>
+                  </div>
+                </div>
 
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-              <Button type="button" variant="outline" onClick={() => setEditingUserId(null)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleSaveEdit} disabled={!editForm.name.trim()}>
-                Save Changes
-              </Button>
-            </div>
-          </div>
+                <div>
+                  <label htmlFor="edit-user-role" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                    Role
+                  </label>
+                  <Select
+                    id="edit-user-role"
+                    value={editForm.role}
+                    onChange={(e) => {
+                      setEditError(null);
+                      setEditForm({ ...editForm, role: e.target.value as UserRole });
+                    }}
+                    className="w-full"
+                  >
+                    {isEditingUserCollective ? (
+                      <>
+                        <option value="admin">Admin — Full Access (All modules & settings)</option>
+                        <option value="member">Member — Internal (Projects, Tasks & Timeline)</option>
+                        <option value="guest">Guest — Outside Partner (Projects, Tasks & Timeline)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="guest">Guest — Outside Partner (Any email domain)</option>
+                        <option value="admin" disabled>Admin — Restricted (Requires @collectivep.com email)</option>
+                        <option value="member" disabled>Member — Restricted (Requires @collectivep.com email)</option>
+                      </>
+                    )}
+                  </Select>
+
+                  {isEditingUserCollective ? (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      Email domain <strong>@collectivep.com</strong> verified. This account can be assigned the <strong>Admin</strong>, <strong>Member</strong>, or <strong>Guest</strong> role.
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                      Email is not from the @collectivep.com domain ({editingUserEmail}). This account <strong>cannot be assigned the Admin role</strong>.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                    Avatar Colour
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {AVATAR_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-label={`Select colour ${color}`}
+                        onClick={() => setEditForm({ ...editForm, avatarColor: color })}
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full border transition-transform",
+                          editForm.avatarColor === color ? "border-foreground ring-2 ring-primary ring-offset-2" : "border-border hover:scale-105"
+                        )}
+                        style={{ backgroundColor: color }}
+                      >
+                        {editForm.avatarColor === color && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
+                  <Button type="button" variant="outline" onClick={() => setEditingUserId(null)} disabled={isSavingEdit}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    disabled={!editForm.name.trim() || isSavingEdit || (editForm.role === "admin" && !isEditingUserCollective)}
+                  >
+                    {isSavingEdit ? "Saving…" : "Save Changes"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

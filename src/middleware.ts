@@ -37,8 +37,9 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname === "/login" || pathname.startsWith("/auth");
 
-  // Workspace policy: only @collectivep.com accounts may use the app.
-  if (user && !isAllowedWorkspaceEmail(user.email)) {
+  // Workspace policy: @collectivep.com accounts or authorized guests may use the app.
+  const userRole = user?.user_metadata?.role as string | undefined;
+  if (user && !isAllowedWorkspaceEmail(user.email, userRole)) {
     try {
       await supabase.auth.signOut();
     } catch {
@@ -54,6 +55,22 @@ export async function middleware(request: NextRequest) {
       redirect.cookies.set(cookie);
     }
     return redirect;
+  }
+
+  // Admin-only route guard: /users, /reports, /sales are restricted from members & guests
+  const isAdminOnlyRoute =
+    pathname === "/users" ||
+    pathname.startsWith("/users/") ||
+    pathname === "/reports" ||
+    pathname.startsWith("/reports/") ||
+    pathname === "/sales" ||
+    pathname.startsWith("/sales/");
+
+  if (user && isAdminOnlyRoute && userRole && userRole !== "admin") {
+    const redirect = request.nextUrl.clone();
+    redirect.pathname = "/";
+    redirect.search = "";
+    return NextResponse.redirect(redirect);
   }
 
   // Signed out users can only reach auth routes.

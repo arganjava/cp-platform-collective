@@ -36,8 +36,19 @@ function LoginForm() {
       const supabase = getSupabase();
 
       // Check if the user is already authenticated
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user && isAllowedWorkspaceEmail(session.user.email)) {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session?.user) return;
+        const role = session.user.user_metadata?.role as string | undefined;
+        let allowed = isAllowedWorkspaceEmail(session.user.email, role);
+        if (!allowed && session.user.id) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .or(`auth_user_id.eq.${session.user.id},email.eq.${session.user.email}`)
+            .maybeSingle();
+          if (profile?.role === "guest") allowed = true;
+        }
+        if (allowed) {
           window.location.href = returnTo;
         }
       });
@@ -45,14 +56,24 @@ function LoginForm() {
       // Listen for auth state changes
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((event, session) => {
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
-          if (isAllowedWorkspaceEmail(session.user.email)) {
+          const role = session.user.user_metadata?.role as string | undefined;
+          let allowed = isAllowedWorkspaceEmail(session.user.email, role);
+          if (!allowed && session.user.id) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role")
+              .or(`auth_user_id.eq.${session.user.id},email.eq.${session.user.email}`)
+              .maybeSingle();
+            if (profile?.role === "guest") allowed = true;
+          }
+          if (allowed) {
             window.location.href = returnTo;
           } else {
             supabase.auth.signOut();
             setErrorMessage(
-              "That account isn't part of the Collective Perspectives workspace. Sign in with an @collectivep.com email."
+              "That account isn't authorized for the Collective Perspectives workspace. Sign in with an @collectivep.com email or contact your administrator."
             );
           }
         }
@@ -100,10 +121,21 @@ function LoginForm() {
       if (!data.user) {
         throw new Error("Sign-in succeeded but user details were not received.");
       }
-      if (!isAllowedWorkspaceEmail(data.user.email)) {
+      const role = data.user.user_metadata?.role as string | undefined;
+      let allowed = isAllowedWorkspaceEmail(data.user.email, role);
+      if (!allowed && data.user.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .or(`auth_user_id.eq.${data.user.id},email.eq.${data.user.email}`)
+          .maybeSingle();
+        if (profile?.role === "guest") allowed = true;
+      }
+
+      if (!allowed) {
         await supabase.auth.signOut();
         setErrorMessage(
-          "That account isn't part of the Collective Perspectives workspace. Please use an @collectivep.com email."
+          "That account isn't authorized for the Collective Perspectives workspace. Please use an @collectivep.com email or an authorized guest account."
         );
         setSigningIn(false);
         return;

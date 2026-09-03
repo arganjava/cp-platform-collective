@@ -1,7 +1,7 @@
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type TaskStatus = "todo" | "in_progress" | "review" | "done";
 export type ProjectStatus = "draft" | "active" | "completed" | "archived";
-export type UserRole = "admin" | "guest";
+export type UserRole = "admin" | "member" | "guest";
 export type NotificationType = "assignment" | "mention" | "deadline" | "update" | "comment";
 export type SaleType = "commission" | "artwork" | "workshop" | "sponsorship" | "grant";
 

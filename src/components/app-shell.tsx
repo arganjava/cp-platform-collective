@@ -57,8 +57,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         router.replace("/login");
         return;
       }
-      if (!isAllowedWorkspaceEmail(user.email)) {
-        // Non-workspace Google account — revoke and bounce back to login.
+      const userRole = user.user_metadata?.role as string | undefined;
+      let allowed = isAllowedWorkspaceEmail(user.email, userRole);
+      if (!allowed && user.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
+          .maybeSingle();
+        if (profile?.role === "guest") allowed = true;
+      }
+
+      if (!allowed) {
+        // Non-workspace account — revoke and bounce back to login.
         try {
           await supabase.auth.signOut();
         } catch {

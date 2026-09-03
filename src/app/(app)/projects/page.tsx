@@ -31,6 +31,9 @@ const statusConfig = {
 
 export default function ProjectsPage() {
   const { projects, tasks, users, currentUserId, getUserById, updateTaskStatus, addTask, deleteTask, addProject, updateProject, deleteProject, searchQuery } = useStore();
+  const currentUser = getUserById(currentUserId);
+  const isAdmin = currentUser?.role === "admin";
+
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [view, setView] = useState<"board" | "list">("board");
   const [showNewTask, setShowNewTask] = useState(false);
@@ -95,7 +98,7 @@ export default function ProjectsPage() {
   }
 
   function handleCreateProject() {
-    if (!newProjectTitle.trim() || !currentUserId) return;
+    if (!isAdmin || !newProjectTitle.trim() || !currentUserId) return;
     const project = {
       id: generateId(),
       title: newProjectTitle,
@@ -139,6 +142,7 @@ export default function ProjectsPage() {
   };
 
   function openEditProject(project: Project) {
+    if (!isAdmin) return;
     setEditingProjectId(project.id);
     setEditProject({
       title: project.title,
@@ -149,7 +153,7 @@ export default function ProjectsPage() {
   }
 
   function handleSaveProject() {
-    if (!editingProjectId || !editProject.title.trim()) return;
+    if (!isAdmin || !editingProjectId || !editProject.title.trim()) return;
     updateProject(editingProjectId, {
       title: editProject.title.trim(),
       description: editProject.description,
@@ -160,6 +164,7 @@ export default function ProjectsPage() {
   }
 
   function handleDeleteProject(project: Project) {
+    if (!isAdmin) return;
     if (window.confirm(`Delete "${project.title}" and all of its tasks and sales? This cannot be undone.`)) {
       if (selectedProject === project.id) setSelectedProject(null);
       deleteProject(project.id);
@@ -179,7 +184,27 @@ export default function ProjectsPage() {
         <PageHeader
           title="Projects"
           description="Manage and track all projects across the team"
-          actions={<><Button variant="outline" size="sm" onClick={() => setShowNewProject(true)}><Plus className="w-4 h-4" /> New Project</Button><Button size="sm" onClick={() => setShowNewTask(true)}><Plus className="w-4 h-4" /> New Task</Button></>}
+          actions={
+            <>
+              {isAdmin && (
+                <Button
+                  id="btn-create-project"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowNewProject(true)}
+                >
+                  <Plus className="w-4 h-4 mr-1.5" /> Create Project
+                </Button>
+              )}
+              <Button
+                id="btn-create-task"
+                size="sm"
+                onClick={() => setShowNewTask(true)}
+              >
+                <Plus className="w-4 h-4 mr-1.5" /> New Task
+              </Button>
+            </>
+          }
         />
         {/* Project chips + search */}
         <Toolbar className="gap-3">
@@ -204,22 +229,26 @@ export default function ProjectsPage() {
                 <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
                 {p.title}
               </button>
-              <button
-                type="button"
-                aria-label={`Edit ${p.title}`}
-                onClick={() => openEditProject(p)}
-                className="flex h-10 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <Pencil className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete ${p.title}`}
-                onClick={() => handleDeleteProject(p)}
-                className="flex h-10 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={`Edit ${p.title}`}
+                    onClick={() => openEditProject(p)}
+                    className="flex h-10 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${p.title}`}
+                    onClick={() => handleDeleteProject(p)}
+                    className="flex h-10 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </>
+              )}
             </div>
           ))}
           <Tabs className="ml-auto" value={view} onValueChange={(v) => setView(v as "board" | "list")}>

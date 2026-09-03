@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
+import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -76,7 +79,10 @@ function taskIntersectsRange(task: { startDate: string; dueDate: string }, range
 }
 
 export default function ReportsPage() {
-  const { projects, tasks, sales, users, getUserById, searchQuery } = useStore();
+  const { projects, tasks, sales, users, getUserById, searchQuery, currentUserId } = useStore();
+  const currentUser = getUserById(currentUserId);
+  const isAdmin = currentUser?.role === "admin";
+
   const [activeTab, setActiveTab] = useState("overview");
   const [period, setPeriod] = useState<ReportPeriod>("all");
   const [projectId, setProjectId] = useState("all");
@@ -220,6 +226,37 @@ export default function ReportsPage() {
 
   const completionLabel = filteredTasks.length > 0 ? `${completedTasks}/${filteredTasks.length}` : "0";
   const reportStatus = `${projectLabel} · ${range.label} · ${filteredSales.length} sales entries, ${filteredTasks.length} tasks`;
+
+  if (!isAdmin) {
+    const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : "Guest";
+    return (
+      <PageFrame id="reports-access-denied-frame">
+        <PageHeader
+          title="Reports & Analytics"
+          description="Financial performance, task throughput, and delivery insights across projects."
+        />
+        <Card className="border border-border p-8 text-center" id="card-reports-restricted">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-4">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <h2 className="font-heading text-xl font-bold text-foreground mb-2">
+            Access Restricted
+          </h2>
+          <p className="max-w-md mx-auto text-sm text-muted-foreground mb-6">
+            Your current role is set to <strong>{roleLabel}</strong>. Analytics, financial summaries, and performance reports are strictly restricted to Workspace Administrators.
+          </p>
+          <div className="flex justify-center">
+            <Link href="/">
+              <Button variant="default" className="flex items-center gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                <span>Return to Dashboard</span>
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </PageFrame>
+    );
+  }
 
   return (
     <PageFrame className="print-content">

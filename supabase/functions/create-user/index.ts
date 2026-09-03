@@ -17,7 +17,7 @@ interface CreateUserPayload {
   email: string;
   password?: string;
   name: string;
-  role?: "admin" | "guest";
+  role?: "admin" | "member" | "guest";
   avatarColor?: string;
   avatar_color?: string;
 }
@@ -93,8 +93,41 @@ serve(async (req: Request) => {
     const trimmedName = name.trim();
     const resolvedAvatarColor = avatar_color || avatarColor || "var(--primary)";
 
-    // Role validation: only 'admin' and 'guest' are valid
-    const validatedRole: "admin" | "guest" = role === "admin" ? "admin" : "guest";
+    // Role validation: 'admin', 'member', and 'guest' are valid
+    const validatedRole: "admin" | "member" | "guest" =
+      role === "admin" ? "admin" : role === "member" ? "member" : "guest";
+
+    const emailDomain = normalizedEmail.split("@").pop();
+    if ((validatedRole === "admin" || validatedRole === "member") && emailDomain !== "collectivep.com") {
+      return new Response(
+        JSON.stringify({
+          error: `${validatedRole === "admin" ? "Administrator" : "Member"} accounts must use an @collectivep.com email address.`,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 1. Strict check: profiles.email MUST be unique
+    const { data: existingProfileByEmail } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, is_deleted")
+      .ilike("email", normalizedEmail)
+      .maybeSingle();
+
+    if (existingProfileByEmail) {
+      return new Response(
+        JSON.stringify({
+          error: existingProfileByEmail.is_deleted
+            ? `A user profile with email ${normalizedEmail} already exists in the archive. Please restore it or use another email.`
+            : `A user profile with email ${normalizedEmail} already exists.`,
+          code: "PROFILE_EMAIL_EXISTS",
+        }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // Generate or use provided password
     const initialPassword =
@@ -102,7 +135,7 @@ serve(async (req: Request) => {
         ? password
         : `CP${Math.random().toString(36).slice(-8)}!`;
 
-    // 1. Create or retrieve the auth user in Supabase Auth
+    // 2. Create or retrieve the auth user in Supabase Auth
     let authUserId: string | null = null;
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: normalizedEmail,
@@ -134,7 +167,6 @@ serve(async (req: Request) => {
         );
         if (existingUser) {
           authUserId = existingUser.id;
-          // Optionally update password/metadata if provided
           if (password && password.length >= 6) {
             await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
               password,
@@ -152,31 +184,7 @@ serve(async (req: Request) => {
       authUserId = authData.user.id;
     }
 
-    // 2. Safe profile lookup, update or insert in public.profiles
-    let existingProfile = null;
-
-    if (authUserId) {
-      const { data: byAuthId } = await supabaseAdmin
-        .from("profiles")
-        .select("*")
-        .eq("auth_user_id", authUserId)
-        .maybeSingle();
-      if (byAuthId) {
-        existingProfile = byAuthId;
-      }
-    }
-
-    if (!existingProfile) {
-      const { data: byEmail } = await supabaseAdmin
-        .from("profiles")
-        .select("*")
-        .ilike("email", normalizedEmail)
-        .maybeSingle();
-      if (byEmail) {
-        existingProfile = byEmail;
-      }
-    }
-
+    // 3. Insert new profile into public.profiles (never overwrite existing)
     const profileData: Record<string, unknown> = {
       name: trimmedName,
       email: normalizedEmail,
@@ -190,44 +198,33 @@ serve(async (req: Request) => {
       profileData.auth_user_id = authUserId;
     }
 
-    let finalProfile = null;
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from("profiles")
+      .insert(profileData)
+      .select()
+      .maybeSingle();
 
-    if (existingProfile) {
-      const { data: updated, error: updateError } = await supabaseAdmin
-        .from("profiles")
-        .update(profileData)
-        .eq("id", existingProfile.id)
-        .select()
-        .maybeSingle();
-
-      if (updateError) {
-        throw updateError;
+    if (insertError) {
+      if (
+        insertError.code === "23505" ||
+        insertError.message?.toLowerCase().includes("unique") ||
+        insertError.message?.toLowerCase().includes("duplicate")
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: `A user profile with email ${normalizedEmail} already exists.`,
+            code: "PROFILE_EMAIL_EXISTS",
+          }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
       }
-      finalProfile = updated || { ...existingProfile, ...profileData };
-    } else {
-      const { data: inserted, error: insertError } = await supabaseAdmin
-        .from("profiles")
-        .insert(profileData)
-        .select()
-        .maybeSingle();
-
-      if (insertError) {
-        // Fallback: If table trigger or concurrent request inserted the row, fetch it
-        const { data: fallbackProfile } = await supabaseAdmin
-          .from("profiles")
-          .select("*")
-          .ilike("email", normalizedEmail)
-          .maybeSingle();
-
-        if (fallbackProfile) {
-          finalProfile = fallbackProfile;
-        } else {
-          throw insertError;
-        }
-      } else {
-        finalProfile = inserted;
-      }
+      throw insertError;
     }
+
+    const finalProfile = inserted;
 
     return new Response(
       JSON.stringify({

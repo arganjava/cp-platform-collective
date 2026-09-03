@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   updateNotificationRow: vi.fn(async () => {}),
   updateAllNotificationsRead: vi.fn(async () => {}),
   updateProfileRow: vi.fn(async () => {}),
+  createUserViaFunction: vi.fn(async () => ({ id: "u-created" })),
 }));
 
 vi.mock("./supabase/data", () => mocks);
@@ -204,6 +205,57 @@ describe("user actions", () => {
     useStore.getState().updateUser("u-1", { name: "Vincent L." });
     expect(useStore.getState().users[0].name).toBe("Vincent L.");
     expect(mocks.updateProfileRow).toHaveBeenCalledWith("u-1", { name: "Vincent L." });
+  });
+
+  it("addUser persists and appends user if email is unique", async () => {
+    useStore.getState().initialize({
+      users: [user],
+      projects: [],
+      tasks: [],
+      sales: [],
+      notifications: [],
+      currentUserId: "u-1",
+    });
+    const newUser: User = {
+      id: "u-new",
+      name: "Alice Wang",
+      email: "alice@collectivep.com",
+      avatarColor: "var(--accent)",
+      role: "member",
+    };
+    await useStore.getState().addUser(newUser, "SecurePass123!");
+    expect(useStore.getState().users.some((u) => u.email === "alice@collectivep.com")).toBe(true);
+    expect(mocks.createUserViaFunction).toHaveBeenCalledWith({
+      name: "Alice Wang",
+      email: "alice@collectivep.com",
+      role: "member",
+      password: "SecurePass123!",
+      avatarColor: "var(--accent)",
+    });
+  });
+
+  it("addUser throws an error and refuses to add if email already exists", async () => {
+    useStore.getState().initialize({
+      users: [user],
+      projects: [],
+      tasks: [],
+      sales: [],
+      notifications: [],
+      currentUserId: "u-1",
+    });
+    const duplicateUser: User = {
+      id: "u-dup",
+      name: "Vincent Imposter",
+      email: "vincent@COLLECTIVEP.com", // case-insensitive check
+      avatarColor: "var(--primary)",
+      role: "guest",
+    };
+
+    await expect(useStore.getState().addUser(duplicateUser, "password123")).rejects.toThrow(
+      "A user profile with this email address already exists."
+    );
+    expect(useStore.getState().users.length).toBe(1);
+    expect(useStore.getState().lastError).toBe("A user profile with this email address already exists.");
   });
 });
 

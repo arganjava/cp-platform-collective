@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import type {
   User,
+  UserRole,
   Project,
   Task,
   Sale,
@@ -28,7 +29,7 @@ function unwrap<T>(result: RowResult<T>, label: string): T {
 /* ─────────────────────────── Row → app type ─────────────────────────── */
 
 export function fromProfileRow(r: ProfileRow): User {
-  const role: User["role"] = r.role === "admin" ? "admin" : "guest";
+  const role: User["role"] = r.role === "admin" ? "admin" : r.role === "member" ? "member" : "guest";
   return {
     id: r.id,
     name: r.name,
@@ -339,7 +340,52 @@ export async function updateAllNotificationsRead(userId: string) {
   if (error) throw error;
 }
 
+export async function updateUserViaFunction(payload: {
+  id: string;
+  name?: string;
+  role?: UserRole;
+  avatarColor?: string;
+  avatarUrl?: string;
+}): Promise<User | null> {
+  const res = await fetch("/api/users/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to update user profile");
+  }
+  return data.user ? fromProfileRow(data.user as ProfileRow) : null;
+}
+
 export async function updateProfileRow(id: string, updates: Partial<User>) {
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          name: updates.name,
+          role: updates.role,
+          avatarColor: updates.avatarColor,
+          avatar_color: updates.avatarColor,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update profile");
+      }
+      return;
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes("collectivep.com") || err.message.includes("Admin") || err.message.includes("Member"))) {
+        throw err;
+      }
+      console.warn("API user update failed, falling back to direct Supabase client:", err);
+    }
+  }
+
   const { error } = await getSupabase()
     .from("profiles")
     .update(profileColumns(updates))
@@ -383,20 +429,81 @@ export async function createUserViaFunction(params: {
   password?: string;
   avatarColor?: string;
 }): Promise<{ id: string; authUserId?: string }> {
+  const normalizedEmail = params.email.trim().toLowerCase();
+
+  // 1. Try Next.js server route /api/users/create first (runs with admin privileges)
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/users/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create user");
+      }
+      if (data.user?.id) {
+        return { id: data.user.id, authUserId: data.authUserId || data.user.auth_user_id || data.user.id };
+      }
+    } catch (apiErr) {
+      // If error is related to unique email or domain restriction, throw immediately
+      if (
+        apiErr instanceof Error &&
+        (apiErr.message.toLowerCase().includes("already exists") ||
+          apiErr.message.toLowerCase().includes("unique") ||
+          apiErr.message.toLowerCase().includes("collectivep.com"))
+      ) {
+        throw apiErr;
+      }
+      console.warn("API user create failed, checking Supabase client fallback:", apiErr);
+    }
+  }
+
   if (!isSupabaseConfigured) {
     return { id: `user-${Date.now()}` };
   }
 
   const supabase = getSupabase();
+
+  // 2. Strict check: profiles.email MUST be unique in database
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("id, email, is_deleted")
+    .ilike("email", normalizedEmail)
+    .maybeSingle();
+
+  if (existingProfile) {
+    throw new Error(
+      existingProfile.is_deleted
+        ? `A user profile with email ${normalizedEmail} already exists in the archive. Please restore it or use another email.`
+        : `A user profile with email ${normalizedEmail} already exists.`
+    );
+  }
+
   try {
-    // Attempt invoking the Edge Function first
+    // Attempt invoking the Edge Function
     const { data, error } = await supabase.functions.invoke("create-user", {
       body: params,
     });
-    if (!error && data?.user?.id) {
+    if (error) {
+      throw error;
+    }
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+    if (data?.user?.id) {
       return { id: data.user.id, authUserId: data.user.auth_user_id || data.user.id };
     }
   } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.toLowerCase().includes("already exists") ||
+        err.message.toLowerCase().includes("unique") ||
+        err.message.toLowerCase().includes("collectivep.com"))
+    ) {
+      throw err;
+    }
     console.warn("Edge function create-user invoke returned error or not deployed yet, falling back to direct profile creation:", err);
   }
 
@@ -407,7 +514,7 @@ export async function createUserViaFunction(params: {
     .insert({
       id: newId,
       name: params.name,
-      email: params.email,
+      email: normalizedEmail,
       role: params.role,
       avatar_color: params.avatarColor || "var(--primary)",
       is_deleted: false,
@@ -416,6 +523,13 @@ export async function createUserViaFunction(params: {
     .single();
 
   if (insertErr) {
+    if (
+      insertErr.code === "23505" ||
+      insertErr.message?.toLowerCase().includes("unique") ||
+      insertErr.message?.toLowerCase().includes("duplicate")
+    ) {
+      throw new Error(`A user profile with email ${normalizedEmail} already exists.`);
+    }
     throw new Error(`Failed to create user: ${insertErr.message}`);
   }
   return { id: inserted.id };

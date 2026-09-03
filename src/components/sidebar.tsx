@@ -21,7 +21,7 @@ const allNavItems: NavItem[] = [
   { href: "/tasks", label: "Tasks", icon: CheckSquare, sheet: "03" },
   { href: "/gantt", label: "Timeline", icon: GanttChart, sheet: "04" },
   { href: "/sales", label: "Sales", icon: DollarSign, sheet: "05", adminOnly: true },
-  { href: "/reports", label: "Reports", icon: BarChart3, sheet: "06" },
+  { href: "/reports", label: "Reports", icon: BarChart3, sheet: "06", adminOnly: true },
   { href: "/users", label: "Users", icon: Users, sheet: "07", adminOnly: true },
 ];
 
@@ -34,10 +34,10 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const currentUser = getUserById(currentUserId);
-  const isGuest = currentUser?.role === "guest";
+  const isAdmin = currentUser?.role === "admin";
 
   const visibleNavItems = allNavItems.filter((item) => {
-    if (isGuest && item.adminOnly) return false;
+    if (!isAdmin && item.adminOnly) return false;
     return true;
   });
 

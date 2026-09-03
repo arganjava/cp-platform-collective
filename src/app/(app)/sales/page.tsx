@@ -32,7 +32,7 @@ const saleTypeConfig = {
 export default function SalesPage() {
   const { sales, projects, addSale, updateSale, deleteSale, searchQuery, currentUserId, getUserById } = useStore();
   const currentUser = getUserById(currentUserId);
-  const isGuest = currentUser?.role === "guest";
+  const isAdmin = currentUser?.role === "admin";
 
   const [filterType, setFilterType] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
@@ -54,22 +54,23 @@ export default function SalesPage() {
     notes: string;
   }>({ projectId: "", amount: "", clientName: "", type: "commission", date: "", notes: "" });
 
-  if (isGuest) {
+  if (!isAdmin) {
+    const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : "Guest";
     return (
       <PageFrame id="sales-access-denied-frame">
         <PageHeader
           title="Sales & Revenue"
           description="Track sales, revenue streams, and financial records."
         />
-        <Card className="border border-border p-8 text-center" id="card-guest-restricted">
+        <Card className="border border-border p-8 text-center" id="card-sales-restricted">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-4">
             <ShieldAlert className="h-6 w-6" />
           </div>
           <h2 className="font-heading text-xl font-bold text-foreground mb-2">
-            Access Restricted (Guest Role)
+            Access Restricted
           </h2>
           <p className="max-w-md mx-auto text-sm text-muted-foreground mb-6">
-            Your current role is set to <strong>Guest</strong>. Financial records and the Sales module are strictly restricted to Workspace Administrators.
+            Your current role is set to <strong>{roleLabel}</strong>. Financial records and the Sales module are strictly restricted to Workspace Administrators.
           </p>
           <div className="flex justify-center">
             <Link href="/">

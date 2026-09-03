@@ -236,10 +236,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   // User actions
   addUser: async (user, password) => {
-    // Add to local state immediately
-    set((s) => ({ users: [...s.users.filter((u) => u.id !== user.id), user] }));
+    const normalizedEmail = user.email.trim().toLowerCase();
+    const existing = get().users.find((u) => u.email.trim().toLowerCase() === normalizedEmail);
+    if (existing) {
+      const errorMsg = existing.isDeleted
+        ? "A user profile with this email address already exists in the archive."
+        : "A user profile with this email address already exists.";
+      get().setError(errorMsg);
+      throw new Error(errorMsg);
+    }
 
-    // Persist via edge function or profile insert
+    // Persist via API / edge function or profile insert
     try {
       const res = await createUserViaFunction({
         name: user.name,
@@ -248,15 +255,20 @@ export const useStore = create<AppState>((set, get) => ({
         password,
         avatarColor: user.avatarColor,
       });
-      if (res?.id && res.id !== user.id) {
-        set((s) => ({
-          users: s.users.map((u) => (u.id === user.id ? { ...u, id: res.id } : u)),
-        }));
-      }
+
+      const finalUser: User = {
+        ...user,
+        id: res?.id || user.id,
+      };
+
+      set((s) => ({
+        users: [...s.users.filter((u) => u.id !== finalUser.id), finalUser],
+      }));
     } catch (err) {
       console.error("Failed to persist new user:", err);
       const msg = err instanceof Error ? err.message : String(err);
       get().setError(`User creation error: ${msg}`);
+      throw err;
     }
   },
   updateUser: (id, updates) => {

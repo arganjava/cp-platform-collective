@@ -19,7 +19,18 @@ export async function GET(request: Request) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!isAllowedWorkspaceEmail(user?.email)) {
+      const role = user?.user_metadata?.role as string | undefined;
+      let allowed = isAllowedWorkspaceEmail(user?.email, role);
+      if (!allowed && user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
+          .maybeSingle();
+        if (profile?.role === "guest") allowed = true;
+      }
+
+      if (!allowed) {
         // Non-workspace Google account — revoke the session and bounce back.
         await supabase.auth.signOut();
         return NextResponse.redirect(`${origin}/login?error=not-allowed`);

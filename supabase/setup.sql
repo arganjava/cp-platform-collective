@@ -30,6 +30,7 @@ create table if not exists public.profiles (
 -- Ensure columns exist if table was already created earlier
 alter table public.profiles add column if not exists is_deleted boolean not null default false;
 alter table public.profiles add column if not exists deleted_at timestamptz;
+create unique index if not exists idx_profiles_email_unique on public.profiles (lower(trim(email)));
 
 create table if not exists public.projects (
   id          uuid primary key default gen_random_uuid(),

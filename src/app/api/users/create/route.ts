@@ -33,7 +33,16 @@ export async function POST(req: NextRequest) {
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
     const resolvedAvatarColor = avatar_color || avatarColor || "var(--primary)";
-    const validatedRole: "admin" | "guest" = role === "admin" ? "admin" : "guest";
+    const validatedRole: "admin" | "member" | "guest" =
+      role === "admin" ? "admin" : role === "member" ? "member" : "guest";
+
+    const emailDomain = normalizedEmail.split("@").pop();
+    if ((validatedRole === "admin" || validatedRole === "member") && emailDomain !== "collectivep.com") {
+      return NextResponse.json(
+        { error: `${validatedRole === "admin" ? "Administrator" : "Member"} accounts must use an @collectivep.com email address.` },
+        { status: 400 }
+      );
+    }
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -42,6 +51,29 @@ export async function POST(req: NextRequest) {
       const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
+
+      // 1. Strict check: profiles.email MUST be unique
+      const { data: existingProfileByEmail, error: checkEmailError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email, is_deleted")
+        .ilike("email", normalizedEmail)
+        .maybeSingle();
+
+      if (checkEmailError) {
+        console.error("Error checking existing profile email:", checkEmailError);
+      }
+
+      if (existingProfileByEmail) {
+        return NextResponse.json(
+          {
+            error: existingProfileByEmail.is_deleted
+              ? `A user profile with email ${normalizedEmail} already exists in the archive. Please restore it or use another email.`
+              : `A user profile with email ${normalizedEmail} already exists.`,
+            code: "PROFILE_EMAIL_EXISTS",
+          },
+          { status: 409 }
+        );
+      }
 
       let authUserId: string | null = null;
       const initialPassword = password && password.length >= 6 ? password : `CP${Math.random().toString(36).slice(-8)}!`;
@@ -85,31 +117,7 @@ export async function POST(req: NextRequest) {
         authUserId = authData.user.id;
       }
 
-      // Safe profile lookup, update or insert in public.profiles
-      let existingProfile = null;
-
-      if (authUserId) {
-        const { data: byAuthId } = await supabaseAdmin
-          .from("profiles")
-          .select("*")
-          .eq("auth_user_id", authUserId)
-          .maybeSingle();
-        if (byAuthId) {
-          existingProfile = byAuthId;
-        }
-      }
-
-      if (!existingProfile) {
-        const { data: byEmail } = await supabaseAdmin
-          .from("profiles")
-          .select("*")
-          .ilike("email", normalizedEmail)
-          .maybeSingle();
-        if (byEmail) {
-          existingProfile = byEmail;
-        }
-      }
-
+      // 2. Insert new profile into public.profiles (never overwrite existing)
       const profileData: Record<string, unknown> = {
         name: trimmedName,
         email: normalizedEmail,
@@ -123,47 +131,32 @@ export async function POST(req: NextRequest) {
         profileData.auth_user_id = authUserId;
       }
 
-      let finalProfile = null;
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from("profiles")
+        .insert(profileData)
+        .select()
+        .maybeSingle();
 
-      if (existingProfile) {
-        const { data: updated, error: updateError } = await supabaseAdmin
-          .from("profiles")
-          .update(profileData)
-          .eq("id", existingProfile.id)
-          .select()
-          .maybeSingle();
-
-        if (updateError) {
-          throw updateError;
+      if (insertError) {
+        if (
+          insertError.code === "23505" ||
+          insertError.message?.toLowerCase().includes("unique") ||
+          insertError.message?.toLowerCase().includes("duplicate")
+        ) {
+          return NextResponse.json(
+            {
+              error: `A user profile with email ${normalizedEmail} already exists.`,
+              code: "PROFILE_EMAIL_EXISTS",
+            },
+            { status: 409 }
+          );
         }
-        finalProfile = updated || { ...existingProfile, ...profileData };
-      } else {
-        const { data: inserted, error: insertError } = await supabaseAdmin
-          .from("profiles")
-          .insert(profileData)
-          .select()
-          .maybeSingle();
-
-        if (insertError) {
-          const { data: fallbackProfile } = await supabaseAdmin
-            .from("profiles")
-            .select("*")
-            .ilike("email", normalizedEmail)
-            .maybeSingle();
-
-          if (fallbackProfile) {
-            finalProfile = fallbackProfile;
-          } else {
-            throw insertError;
-          }
-        } else {
-          finalProfile = inserted;
-        }
+        throw insertError;
       }
 
       return NextResponse.json({
         success: true,
-        user: finalProfile,
+        user: inserted,
         authUserId,
       });
     }
