@@ -184,7 +184,10 @@ serve(async (req: Request) => {
       authUserId = authData.user.id;
     }
 
-    // 3. Insert new profile into public.profiles (never overwrite existing)
+    // 3. Insert or update the profile in public.profiles.
+    // Note: When auth.admin.createUser succeeds for an @collectivep.com account,
+    // the DB trigger on_auth_user_created automatically creates a profile row.
+    // We update that row with the requested role and avatarColor, or insert if no trigger fired.
     const profileData: Record<string, unknown> = {
       name: trimmedName,
       email: normalizedEmail,
@@ -198,33 +201,59 @@ serve(async (req: Request) => {
       profileData.auth_user_id = authUserId;
     }
 
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from("profiles")
-      .insert(profileData)
-      .select()
-      .maybeSingle();
+    let finalProfile = null;
 
-    if (insertError) {
-      if (
-        insertError.code === "23505" ||
-        insertError.message?.toLowerCase().includes("unique") ||
-        insertError.message?.toLowerCase().includes("duplicate")
-      ) {
-        return new Response(
-          JSON.stringify({
-            error: `A user profile with email ${normalizedEmail} already exists.`,
-            code: "PROFILE_EMAIL_EXISTS",
-          }),
-          {
-            status: 409,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
+    if (authUserId) {
+      const { data: byAuthId } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("auth_user_id", authUserId)
+        .maybeSingle();
+
+      if (byAuthId) {
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update(profileData)
+          .eq("id", byAuthId.id)
+          .select()
+          .maybeSingle();
+
+        if (updateError) {
+          throw updateError;
+        }
+        finalProfile = updated || { ...byAuthId, ...profileData };
       }
-      throw insertError;
     }
 
-    const finalProfile = inserted;
+    if (!finalProfile) {
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from("profiles")
+        .insert(profileData)
+        .select()
+        .maybeSingle();
+
+      if (insertError) {
+        if (
+          insertError.code === "23505" ||
+          insertError.message?.toLowerCase().includes("unique") ||
+          insertError.message?.toLowerCase().includes("duplicate")
+        ) {
+          return new Response(
+            JSON.stringify({
+              error: `A user profile with email ${normalizedEmail} already exists.`,
+              code: "PROFILE_EMAIL_EXISTS",
+            }),
+            {
+              status: 409,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+        throw insertError;
+      }
+
+      finalProfile = inserted;
+    }
 
     return new Response(
       JSON.stringify({

@@ -434,9 +434,21 @@ export async function createUserViaFunction(params: {
   // 1. Try Next.js server route /api/users/create first (runs with admin privileges)
   if (typeof window !== "undefined") {
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sessionData } = await getSupabase().auth.getSession();
+          if (sessionData?.session?.access_token) {
+            headers["Authorization"] = `Bearer ${sessionData.session.access_token}`;
+          }
+        } catch {
+          // ignore session retrieval error
+        }
+      }
+
       const res = await fetch("/api/users/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(params),
       });
       const data = await res.json();
@@ -487,15 +499,60 @@ export async function createUserViaFunction(params: {
       body: params,
     });
     if (error) {
-      throw error;
+      let extractedMsg = error.message;
+      const errRecord = error as { context?: { json?: () => Promise<{ error?: string; message?: string }> } };
+      if (errRecord.context && typeof errRecord.context.json === "function") {
+        try {
+          const errBody = await errRecord.context.json();
+          if (errBody?.error) extractedMsg = errBody.error;
+          else if (errBody?.message) extractedMsg = errBody.message;
+        } catch {
+          // ignore
+        }
+      }
+
+      // Check if profile was actually created by the trigger despite the edge function insert collision
+      const { data: profileAfter } = await supabase
+        .from("profiles")
+        .select("*")
+        .ilike("email", normalizedEmail)
+        .maybeSingle();
+
+      if (profileAfter) {
+        return { id: profileAfter.id, authUserId: profileAfter.auth_user_id || profileAfter.id };
+      }
+
+      throw new Error(extractedMsg);
     }
     if (data?.error) {
+      // Check if profile was actually created by the trigger despite the edge function insert collision
+      const { data: profileAfter } = await supabase
+        .from("profiles")
+        .select("*")
+        .ilike("email", normalizedEmail)
+        .maybeSingle();
+
+      if (profileAfter) {
+        return { id: profileAfter.id, authUserId: profileAfter.auth_user_id || profileAfter.id };
+      }
+
       throw new Error(data.error);
     }
     if (data?.user?.id) {
       return { id: data.user.id, authUserId: data.user.auth_user_id || data.user.id };
     }
   } catch (err) {
+    // Check if profile exists now (recovery for duplicate collision)
+    const { data: profileAfter } = await supabase
+      .from("profiles")
+      .select("*")
+      .ilike("email", normalizedEmail)
+      .maybeSingle();
+
+    if (profileAfter) {
+      return { id: profileAfter.id, authUserId: profileAfter.auth_user_id || profileAfter.id };
+    }
+
     if (
       err instanceof Error &&
       (err.message.toLowerCase().includes("already exists") ||

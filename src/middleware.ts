@@ -36,6 +36,12 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname === "/login" || pathname.startsWith("/auth");
+  const isApiRoute = pathname.startsWith("/api");
+
+  // API routes handle their own authentication and return JSON, not HTML redirects
+  if (isApiRoute) {
+    return supabaseResponse;
+  }
 
   // Workspace policy: @collectivep.com accounts or authorized guests may use the app.
   const userRole = user?.user_metadata?.role as string | undefined;
