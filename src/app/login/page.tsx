@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import { isAllowedWorkspaceEmail } from "@/lib/supabase/email-policy";
+import { isAllowedWorkspaceEmail, isWorkspaceEmail } from "@/lib/supabase/email-policy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -18,17 +18,44 @@ function LoginForm() {
   const [signingIn, setSigningIn] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(
-    error === "not-allowed"
-      ? "That account isn't part of the Collective Perspectives workspace. Sign in with an @collectivep.com email."
-      : null
-  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(() => {
+    if (error === "not-allowed") {
+      return "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator.";
+    }
+    if (error === "oauth-failed" || error === "exchange-failed") {
+      return "Google sign-in failed or was cancelled. Please try again.";
+    }
+    if (error === "no-email") {
+      return "No email address was provided by Google. Please try again.";
+    }
+    return null;
+  });
 
   const rawReturnTo = searchParams.get("returnTo");
   const returnTo =
     rawReturnTo && rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//") && rawReturnTo !== "/login"
       ? rawReturnTo
       : "/";
+
+  async function checkIsAllowedUser(
+    supabase: any,
+    user: { id: string; email?: string | null; user_metadata?: any }
+  ): Promise<boolean> {
+    const role = user.user_metadata?.role as string | undefined;
+    if (role === "admin" || role === "member" || role === "guest" || isWorkspaceEmail(user.email)) {
+      return true;
+    }
+    if (!user.email) return false;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role, is_deleted, deleted_at")
+      .or(`auth_user_id.eq.${user.id},email.ilike.${user.email.trim()}`)
+      .eq("is_deleted", false)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    return Boolean(profile);
+  }
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -38,16 +65,7 @@ function LoginForm() {
       // Check if the user is already authenticated
       supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (!session?.user) return;
-        const role = session.user.user_metadata?.role as string | undefined;
-        let allowed = isAllowedWorkspaceEmail(session.user.email, role);
-        if (!allowed && session.user.id) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .or(`auth_user_id.eq.${session.user.id},email.eq.${session.user.email}`)
-            .maybeSingle();
-          if (profile?.role === "guest") allowed = true;
-        }
+        const allowed = await checkIsAllowedUser(supabase, session.user);
         if (allowed) {
           window.location.href = returnTo;
         }
@@ -58,22 +76,13 @@ function LoginForm() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
-          const role = session.user.user_metadata?.role as string | undefined;
-          let allowed = isAllowedWorkspaceEmail(session.user.email, role);
-          if (!allowed && session.user.id) {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("role")
-              .or(`auth_user_id.eq.${session.user.id},email.eq.${session.user.email}`)
-              .maybeSingle();
-            if (profile?.role === "guest") allowed = true;
-          }
+          const allowed = await checkIsAllowedUser(supabase, session.user);
           if (allowed) {
             window.location.href = returnTo;
           } else {
             supabase.auth.signOut();
             setErrorMessage(
-              "That account isn't authorized for the Collective Perspectives workspace. Sign in with an @collectivep.com email or contact your administrator."
+              "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator."
             );
           }
         }
@@ -121,21 +130,12 @@ function LoginForm() {
       if (!data.user) {
         throw new Error("Sign-in succeeded but user details were not received.");
       }
-      const role = data.user.user_metadata?.role as string | undefined;
-      let allowed = isAllowedWorkspaceEmail(data.user.email, role);
-      if (!allowed && data.user.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .or(`auth_user_id.eq.${data.user.id},email.eq.${data.user.email}`)
-          .maybeSingle();
-        if (profile?.role === "guest") allowed = true;
-      }
+      const allowed = await checkIsAllowedUser(supabase, data.user);
 
       if (!allowed) {
         await supabase.auth.signOut();
         setErrorMessage(
-          "That account isn't authorized for the Collective Perspectives workspace. Please use an @collectivep.com email or an authorized guest account."
+          "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator."
         );
         setSigningIn(false);
         return;

@@ -56,7 +56,7 @@ export function isAllowedWorkspaceEmail(
   userRole?: string | null
 ): boolean {
   if (!email) return false;
-  if (userRole === "guest") return true;
+  if (userRole === "guest" || userRole === "member" || userRole === "admin") return true;
   return isWorkspaceEmail(email);
 }
 
