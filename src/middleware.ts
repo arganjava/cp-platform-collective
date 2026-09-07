@@ -63,44 +63,56 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Workspace policy: Accounts must have an active profile in public.profiles,
-  // or be an @collectivep.com workspace account or have an authorized role.
+  // Workspace policy: Accounts must have an active profile in public.profiles.
+  // Deactivated accounts (is_deleted === true or deleted_at !== null) are forced to sign out.
   let userRole = user?.user_metadata?.role as string | undefined;
   if (user && user.email) {
-    let isAllowed = false;
-    if (userRole === "admin" || userRole === "member" || userRole === "guest" || isWorkspaceEmail(user.email)) {
-      isAllowed = true;
-    } else {
-      // Check if user exists in table profiles.email
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, role, is_deleted, deleted_at")
-        .ilike("email", user.email.trim())
-        .eq("is_deleted", false)
-        .is("deleted_at", null)
-        .maybeSingle();
+    const normalizedEmail = user.email.trim().toLowerCase();
 
-      if (profile) {
-        isAllowed = true;
-        if (!userRole && profile.role) {
-          userRole = profile.role;
+    // Query profiles for the current user
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role, is_deleted, deleted_at")
+      .or(`auth_user_id.eq.${user.id},email.ilike.${normalizedEmail}`)
+      .maybeSingle();
+
+    if (profile) {
+      // If profile is soft-deleted / deactivated, force logout immediately
+      if (profile.is_deleted === true || profile.deleted_at !== null) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Proceed with the redirect even if the revocation call fails.
         }
+        const loginUrl = new URL("/login?error=deactivated", origin);
+        const redirect = NextResponse.redirect(loginUrl);
+        for (const cookie of supabaseResponse.cookies.getAll()) {
+          redirect.cookies.set(cookie);
+        }
+        return redirect;
       }
-    }
 
-    if (!isAllowed) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Proceed with the redirect even if the revocation call fails.
+      if (!userRole && profile.role) {
+        userRole = profile.role;
       }
-      const loginUrl = new URL("/login?error=not-allowed", origin);
-      const redirect = NextResponse.redirect(loginUrl);
-      // Carry the cleared session cookies from supabaseResponse onto the redirect.
-      for (const cookie of supabaseResponse.cookies.getAll()) {
-        redirect.cookies.set(cookie);
+    } else {
+      // Profile not found in database profiles table — verify workspace domain / role
+      const isWorkspace = isWorkspaceEmail(user.email);
+      const hasValidRole = userRole === "admin" || userRole === "member" || userRole === "guest";
+
+      if (!isWorkspace && !hasValidRole) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Proceed with the redirect even if the revocation call fails.
+        }
+        const loginUrl = new URL("/login?error=not-allowed", origin);
+        const redirect = NextResponse.redirect(loginUrl);
+        for (const cookie of supabaseResponse.cookies.getAll()) {
+          redirect.cookies.set(cookie);
+        }
+        return redirect;
       }
-      return redirect;
     }
   }
 

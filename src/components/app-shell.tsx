@@ -57,15 +57,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         router.replace("/login");
         return;
       }
+
+      // Check if user is soft-deleted / deactivated
+      const { data: profileCheck } = await supabase
+        .from("profiles")
+        .select("id, role, is_deleted, deleted_at")
+        .or(`auth_user_id.eq.${user.id},email.ilike.${user.email || ""}`)
+        .maybeSingle();
+
+      if (profileCheck?.is_deleted === true || profileCheck?.deleted_at !== null) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Continue to redirect
+        }
+        router.replace("/login?error=deactivated");
+        return;
+      }
+
       const userRole = user.user_metadata?.role as string | undefined;
       let allowed = isAllowedWorkspaceEmail(user.email, userRole);
       if (!allowed && user.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
-          .maybeSingle();
-        if (profile?.role === "guest") allowed = true;
+        if (profileCheck?.role === "guest") {
+          allowed = true;
+        } else {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
+            .maybeSingle();
+          if (profile?.role === "guest") allowed = true;
+        }
       }
 
       if (!allowed) {
@@ -83,6 +105,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       initialize({ ...data, currentUserId: profile.id });
       setStatus("ready");
     } catch (err) {
+      if (err instanceof Error && err.message === "ACCOUNT_DEACTIVATED") {
+        try {
+          const supabase = getSupabase();
+          await supabase.auth.signOut();
+        } catch {
+          // Proceed with redirect
+        }
+        router.replace("/login?error=deactivated");
+        return;
+      }
       // Fall back to seed data if live Supabase fetch fails so workspace remains usable
       console.warn("Could not load from Supabase, falling back to local workspace data:", err);
       initialize({

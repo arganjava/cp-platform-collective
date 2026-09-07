@@ -215,7 +215,13 @@ export async function ensureProfile(authUser: {
     .select("*")
     .eq("auth_user_id", authUser.id)
     .maybeSingle();
-  if (byAuth.data) return fromProfileRow(byAuth.data as ProfileRow);
+  if (byAuth.data) {
+    const row = byAuth.data as ProfileRow;
+    if (row.is_deleted === true || row.deleted_at !== null) {
+      throw new Error("ACCOUNT_DEACTIVATED");
+    }
+    return fromProfileRow(row);
+  }
 
   if (authUser.email) {
     const byEmail = await supabase
@@ -225,6 +231,9 @@ export async function ensureProfile(authUser: {
       .maybeSingle();
     if (byEmail.data) {
       const existing = byEmail.data as ProfileRow;
+      if (existing.is_deleted === true || existing.deleted_at !== null) {
+        throw new Error("ACCOUNT_DEACTIVATED");
+      }
       await supabase
         .from("profiles")
         .update({ auth_user_id: authUser.id })

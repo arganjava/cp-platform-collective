@@ -19,6 +19,9 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(() => {
+    if (error === "deactivated") {
+      return "This account has been deactivated. Please contact your administrator.";
+    }
     if (error === "not-allowed") {
       return "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator.";
     }
@@ -37,24 +40,84 @@ function LoginForm() {
       ? rawReturnTo
       : "/";
 
-  async function checkIsAllowedUser(
+  async function checkUserAccountStatus(
     supabase: any,
-    user: { id: string; email?: string | null; user_metadata?: any }
-  ): Promise<boolean> {
+    user: { id: string; email?: string | null; user_metadata?: any },
+    accessToken?: string
+  ): Promise<{ allowed: boolean; isDeleted: boolean; errorReason?: string }> {
+    if (!user) return { allowed: false, isDeleted: false };
+    const normalizedEmail = (user.email || "").trim().toLowerCase();
+
+    // 1. Direct query against profiles table
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, role, is_deleted, deleted_at")
+        .or(`auth_user_id.eq.${user.id},email.ilike.${normalizedEmail}`)
+        .maybeSingle();
+
+      if (profile) {
+        if (profile.is_deleted === true || profile.deleted_at !== null) {
+          return {
+            allowed: false,
+            isDeleted: true,
+            errorReason: "This account has been deactivated. Please contact your administrator.",
+          };
+        }
+        return { allowed: true, isDeleted: false };
+      }
+    } catch (directErr) {
+      console.warn("Direct profile query check failed:", directErr);
+    }
+
+    // 2. Server-side check via /api/auth/check-status (admin fallback bypasses any RLS constraints)
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
+      const res = await fetch("/api/auth/check-status", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email: normalizedEmail, userId: user.id }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.is_deleted) {
+          return {
+            allowed: false,
+            isDeleted: true,
+            errorReason: result.message || "This account has been deactivated. Please contact your administrator.",
+          };
+        }
+        if (result.allowed) {
+          return { allowed: true, isDeleted: false };
+        }
+        if (result.not_found) {
+          return {
+            allowed: false,
+            isDeleted: false,
+            errorReason:
+              "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator.",
+          };
+        }
+      }
+    } catch (apiErr) {
+      console.warn("API profile status check failed:", apiErr);
+    }
+
+    // 3. Fallback: role metadata / workspace domain check
     const role = user.user_metadata?.role as string | undefined;
     if (role === "admin" || role === "member" || role === "guest" || isWorkspaceEmail(user.email)) {
-      return true;
+      return { allowed: true, isDeleted: false };
     }
-    if (!user.email) return false;
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, role, is_deleted, deleted_at")
-      .or(`auth_user_id.eq.${user.id},email.ilike.${user.email.trim()}`)
-      .eq("is_deleted", false)
-      .is("deleted_at", null)
-      .maybeSingle();
 
-    return Boolean(profile);
+    return {
+      allowed: false,
+      isDeleted: false,
+      errorReason:
+        "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator.",
+    };
   }
 
   useEffect(() => {
@@ -65,8 +128,14 @@ function LoginForm() {
       // Check if the user is already authenticated
       supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (!session?.user) return;
-        const allowed = await checkIsAllowedUser(supabase, session.user);
-        if (allowed) {
+        const status = await checkUserAccountStatus(supabase, session.user, session.access_token);
+        if (status.isDeleted) {
+          await supabase.auth.signOut();
+          setErrorMessage(status.errorReason || "This account has been deactivated. Please contact your administrator.");
+          router.replace("/login?error=deactivated");
+          return;
+        }
+        if (status.allowed) {
           window.location.href = returnTo;
         }
       });
@@ -76,13 +145,20 @@ function LoginForm() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
-          const allowed = await checkIsAllowedUser(supabase, session.user);
-          if (allowed) {
+          const status = await checkUserAccountStatus(supabase, session.user, session.access_token);
+          if (status.isDeleted) {
+            await supabase.auth.signOut();
+            setErrorMessage(status.errorReason || "This account has been deactivated. Please contact your administrator.");
+            router.replace("/login?error=deactivated");
+            return;
+          }
+          if (status.allowed) {
             window.location.href = returnTo;
           } else {
-            supabase.auth.signOut();
+            await supabase.auth.signOut();
             setErrorMessage(
-              "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator."
+              status.errorReason ||
+                "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator."
             );
           }
         }
@@ -94,7 +170,7 @@ function LoginForm() {
     } catch (err) {
       console.warn("Auth initialization error:", err);
     }
-  }, [returnTo]);
+  }, [returnTo, router]);
 
   async function handleGoogleSignIn() {
     setErrorMessage(null);
@@ -130,16 +206,30 @@ function LoginForm() {
       if (!data.user) {
         throw new Error("Sign-in succeeded but user details were not received.");
       }
-      const allowed = await checkIsAllowedUser(supabase, data.user);
 
-      if (!allowed) {
+      // Check profiles.is_deleted after success login
+      const status = await checkUserAccountStatus(supabase, data.user, data.session?.access_token);
+
+      if (status.isDeleted) {
         await supabase.auth.signOut();
         setErrorMessage(
-          "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator."
+          status.errorReason || "This account has been deactivated. Please contact your administrator."
+        );
+        setSigningIn(false);
+        router.replace("/login?error=deactivated");
+        return;
+      }
+
+      if (!status.allowed) {
+        await supabase.auth.signOut();
+        setErrorMessage(
+          status.errorReason ||
+            "That account is not registered in the team profiles. Only users registered in the system can sign in. Please contact your administrator."
         );
         setSigningIn(false);
         return;
       }
+
       window.location.href = returnTo;
     } catch (err) {
       setErrorMessage(

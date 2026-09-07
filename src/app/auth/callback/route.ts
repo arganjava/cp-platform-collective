@@ -103,8 +103,6 @@ export async function GET(request: Request) {
       .from("profiles")
       .select("id, auth_user_id, email, role, name, avatar_color, avatar_url, is_deleted, deleted_at")
       .or(`email.ilike.${normalizedEmail},auth_user_id.eq.${user.id}`)
-      .eq("is_deleted", false)
-      .is("deleted_at", null)
       .maybeSingle();
 
     if (userClientProfile) {
@@ -129,8 +127,6 @@ export async function GET(request: Request) {
               .from("profiles")
               .select("id, auth_user_id, email, role, name, avatar_color, avatar_url, is_deleted, deleted_at")
               .ilike("email", normalizedEmail)
-              .eq("is_deleted", false)
-              .is("deleted_at", null)
               .maybeSingle();
             if (adminFoundProfile) {
               matchingProfile = adminFoundProfile;
@@ -148,6 +144,16 @@ export async function GET(request: Request) {
       await supabase.auth.signOut();
       const redirectUrl = new URL("/login", origin);
       redirectUrl.searchParams.set("error", "not-allowed");
+      return NextResponse.redirect(redirectUrl.toString());
+    }
+
+    // 7. Check if account is deactivated: profiles.is_deleted === true or deleted_at is not null
+    const isProfileDeleted = Boolean(matchingProfile.is_deleted === true || matchingProfile.deleted_at !== null);
+    if (isProfileDeleted) {
+      console.warn(`User ${normalizedEmail} signed in successfully but profile is_deleted=true. Forcing logout.`);
+      await supabase.auth.signOut();
+      const redirectUrl = new URL("/login", origin);
+      redirectUrl.searchParams.set("error", "deactivated");
       return NextResponse.redirect(redirectUrl.toString());
     }
 
