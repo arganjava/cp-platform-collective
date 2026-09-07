@@ -92,9 +92,7 @@ export async function middleware(request: NextRequest) {
         return redirect;
       }
 
-      if (!userRole && profile.role) {
-        userRole = profile.role;
-      }
+      userRole = profile.role;
     } else {
       // Profile not found in database profiles table — verify workspace domain / role
       const isWorkspace = isWorkspaceEmail(user.email);
