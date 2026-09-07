@@ -361,29 +361,35 @@ export async function updateUserViaFunction(payload: {
 
 export async function updateProfileRow(id: string, updates: Partial<User>) {
   if (typeof window !== "undefined") {
+    let token: string | undefined;
     try {
-      const res = await fetch("/api/users/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          name: updates.name,
-          role: updates.role,
-          avatarColor: updates.avatarColor,
-          avatar_color: updates.avatarColor,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update profile");
-      }
-      return;
-    } catch (err) {
-      if (err instanceof Error && (err.message.includes("collectivep.com") || err.message.includes("Admin") || err.message.includes("Member"))) {
-        throw err;
-      }
-      console.warn("API user update failed, falling back to direct Supabase client:", err);
+      const { data: sessionData } = await getSupabase().auth.getSession();
+      token = sessionData?.session?.access_token;
+    } catch {
+      // ignore session read errors
     }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch("/api/users/update", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        id,
+        name: updates.name,
+        role: updates.role,
+        avatarColor: updates.avatarColor,
+        avatar_color: updates.avatarColor,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to update profile");
+    }
+    return;
   }
 
   const { error } = await getSupabase()
@@ -401,6 +407,36 @@ export async function insertProfileRow(user: User) {
 }
 
 export async function softDeleteProfileRow(id: string) {
+  if (typeof window !== "undefined") {
+    let token: string | undefined;
+    try {
+      const { data: sessionData } = await getSupabase().auth.getSession();
+      token = sessionData?.session?.access_token;
+    } catch {
+      // ignore session read errors
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch("/api/users/update", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        id,
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to archive profile");
+    }
+    return;
+  }
+
   const { error } = await getSupabase()
     .from("profiles")
     .update({
@@ -412,6 +448,36 @@ export async function softDeleteProfileRow(id: string) {
 }
 
 export async function restoreProfileRow(id: string) {
+  if (typeof window !== "undefined") {
+    let token: string | undefined;
+    try {
+      const { data: sessionData } = await getSupabase().auth.getSession();
+      token = sessionData?.session?.access_token;
+    } catch {
+      // ignore session read errors
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch("/api/users/update", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        id,
+        is_deleted: false,
+        deleted_at: null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to restore profile");
+    }
+    return;
+  }
+
   const { error } = await getSupabase()
     .from("profiles")
     .update({

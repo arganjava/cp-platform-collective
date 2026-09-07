@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
-import { updateProfileRow } from "@/lib/supabase/data";
+import { updateProfileRow, softDeleteProfileRow, restoreProfileRow } from "@/lib/supabase/data";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
 import type { User, UserRole } from "@/lib/types";
 import { validateEmailForRole } from "@/lib/supabase/email-policy";
@@ -95,6 +95,9 @@ export default function UsersPage() {
 
   // Delete Confirmation State
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [restoringUserId, setRestoringUserId] = useState<string | null>(null);
 
   const query = (localSearch || globalSearchQuery).trim().toLowerCase();
 
@@ -247,10 +250,41 @@ export default function UsersPage() {
     }
   }
 
-  function handleConfirmSoftDelete() {
+  function handleOpenDelete(user: User) {
+    setDeletingUser(user);
+    setDeleteError(null);
+    setIsDeleting(false);
+  }
+
+  async function handleConfirmSoftDelete() {
     if (!deletingUser) return;
-    softDeleteUser(deletingUser.id);
-    setDeletingUser(null);
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await softDeleteProfileRow(deletingUser.id);
+      softDeleteUser(deletingUser.id, true);
+      setDeletingUser(null);
+    } catch (err) {
+      console.error("Failed to deactivate user:", err);
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to deactivate team member."
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  async function handleRestoreUser(userId: string) {
+    setRestoringUserId(userId);
+    try {
+      await restoreProfileRow(userId);
+      restoreUser(userId, true);
+    } catch (err) {
+      console.error("Failed to restore user:", err);
+      alert(err instanceof Error ? err.message : "Failed to restore user account.");
+    } finally {
+      setRestoringUserId(null);
+    }
   }
 
   if (!isAdmin) {
@@ -507,13 +541,13 @@ export default function UsersPage() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              disabled={!isAdmin}
-                              onClick={() => restoreUser(user.id)}
+                              disabled={!isAdmin || restoringUserId === user.id}
+                              onClick={() => handleRestoreUser(user.id)}
                               className="h-8 gap-1 text-xs"
                               title="Restore user account"
                             >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                              <span>Restore</span>
+                              <RotateCcw className={cn("h-3.5 w-3.5", restoringUserId === user.id && "animate-spin")} />
+                              <span>{restoringUserId === user.id ? "Restoring..." : "Restore"}</span>
                             </Button>
                           ) : (
                             <>
@@ -534,7 +568,7 @@ export default function UsersPage() {
                                 variant="ghost"
                                 size="sm"
                                 disabled={!isAdmin || isCurrent}
-                                onClick={() => setDeletingUser(user)}
+                                onClick={() => handleOpenDelete(user)}
                                 className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
                                 title={isCurrent ? "You cannot delete your own account" : "Deactivate (soft delete) user"}
                               >
@@ -828,7 +862,7 @@ export default function UsersPage() {
       </Dialog>
 
       {/* Soft Delete Confirmation Dialog */}
-      <Dialog open={deletingUser !== null} onOpenChange={(open) => !open && setDeletingUser(null)}>
+      <Dialog open={deletingUser !== null} onOpenChange={(open) => !open && !isDeleting && setDeletingUser(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Deactivate User Account</DialogTitle>
@@ -838,16 +872,32 @@ export default function UsersPage() {
           </DialogHeader>
 
           <div className="space-y-4 pt-2 text-sm text-muted-foreground">
+            {deleteError && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                {deleteError}
+              </div>
+            )}
+
             <p className="border-l-2 border-destructive pl-3 text-xs">
               <strong>Soft Delete:</strong> This member will be hidden from assignment lists and removed from active roster views. However, their historical contributions, comments, and task references will be safely preserved and can be restored at any time.
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-              <Button type="button" variant="outline" onClick={() => setDeletingUser(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isDeleting}
+                onClick={() => setDeletingUser(null)}
+              >
                 Cancel
               </Button>
-              <Button type="button" variant="destructive" onClick={handleConfirmSoftDelete}>
-                Deactivate Member
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={isDeleting}
+                onClick={handleConfirmSoftDelete}
+              >
+                {isDeleting ? "Deactivating..." : "Deactivate Member"}
               </Button>
             </div>
           </div>

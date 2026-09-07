@@ -99,10 +99,10 @@ interface AppState {
 
   // User actions
   addUser: (user: User, password?: string) => Promise<void>;
-  updateUser: (id: string, updates: Partial<User>) => void;
-  deleteUser: (id: string) => void;
-  softDeleteUser: (id: string) => void;
-  restoreUser: (id: string) => void;
+  updateUser: (id: string, updates: Partial<User>, skipPersist?: boolean) => void;
+  deleteUser: (id: string, skipPersist?: boolean) => void;
+  softDeleteUser: (id: string, skipPersist?: boolean) => void;
+  restoreUser: (id: string, skipPersist?: boolean) => void;
 
   // Notification actions
   markNotificationRead: (id: string) => void;
@@ -271,13 +271,15 @@ export const useStore = create<AppState>((set, get) => ({
       throw err;
     }
   },
-  updateUser: (id, updates) => {
+  updateUser: (id, updates, skipPersist = false) => {
     set((s) => ({
       users: s.users.map((u) => (u.id === id ? { ...u, ...updates } : u)),
     }));
-    persist(updateProfileRow(id, updates));
+    if (!skipPersist) {
+      persist(updateProfileRow(id, updates));
+    }
   },
-  softDeleteUser: (id) => {
+  softDeleteUser: (id, skipPersist = false) => {
     set((s) => ({
       users: s.users.map((u) =>
         u.id === id
@@ -285,12 +287,14 @@ export const useStore = create<AppState>((set, get) => ({
           : u
       ),
     }));
-    persist(softDeleteProfileRow(id));
+    if (!skipPersist) {
+      persist(softDeleteProfileRow(id));
+    }
   },
-  deleteUser: (id) => {
-    get().softDeleteUser(id);
+  deleteUser: (id, skipPersist = false) => {
+    get().softDeleteUser(id, skipPersist);
   },
-  restoreUser: (id) => {
+  restoreUser: (id, skipPersist = false) => {
     set((s) => ({
       users: s.users.map((u) =>
         u.id === id
@@ -298,7 +302,9 @@ export const useStore = create<AppState>((set, get) => ({
           : u
       ),
     }));
-    persist(restoreProfileRow(id));
+    if (!skipPersist) {
+      persist(restoreProfileRow(id));
+    }
   },
 
   // Notification actions
