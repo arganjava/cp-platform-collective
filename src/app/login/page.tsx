@@ -213,7 +213,7 @@ function LoginForm() {
             <span className="text-brand">Reimagining Possibility.</span>
           </h1>
           <p className="mt-4 text-sm leading-6 text-sidebar-foreground">
-            Coordinate projects, track tasks, record revenue, and report on delivery — one binder for the whole team.
+            A single operating source of truth: projects, tasks, revenue, delivery, reporting and team coordination all in one place.
           </p>
         </div>
 
