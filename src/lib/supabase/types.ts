@@ -68,6 +68,19 @@ export interface SaleRow {
   clients?: { name: string } | null;
 }
 
+export interface SaleStageRow {
+  id: string;
+  sale_id: string;
+  status: string;
+  date: string | null;
+  pic_profile_id: string | null;
+  value: number | string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
 export interface NotificationRow {
   id: string;
   user_id: string | null;
@@ -86,6 +99,7 @@ export type Database = {
       tasks: { Row: TaskRow; Insert: Partial<TaskRow>; Update: Partial<TaskRow>; Relationships: [] };
       clients: { Row: ClientRow; Insert: Partial<ClientRow>; Update: Partial<ClientRow>; Relationships: [] };
       sales: { Row: SaleRow; Insert: Partial<SaleRow>; Update: Partial<SaleRow>; Relationships: [] };
+      sale_stages: { Row: SaleStageRow; Insert: Partial<SaleStageRow>; Update: Partial<SaleStageRow>; Relationships: [] };
       notifications: { Row: NotificationRow; Insert: Partial<NotificationRow>; Update: Partial<NotificationRow>; Relationships: [] };
     };
     Views: Record<string, never>;

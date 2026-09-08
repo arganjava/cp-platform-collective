@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useStore } from "@/lib/store";
-import { cn, formatDate, generateId } from "@/lib/utils";
-import type { Sale } from "@/lib/types";
+import { cn, formatDate, generateId, getInitials } from "@/lib/utils";
+import type { Sale, SaleStage, SaleStageStatus } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageFrame, PageHeader, SheetSummary, SummaryMetric, ContentGrid, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,10 @@ import {
   Trash2,
   ShieldAlert,
   ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  Clock,
 } from "lucide-react";
 
 const saleTypeConfig = {
@@ -29,13 +33,75 @@ const saleTypeConfig = {
   grant: { label: "Grant", variant: "neutral" as const, color: "var(--subtle-foreground)" },
 };
 
+const stageStatusStyles: Record<SaleStageStatus, { label: string; badgeClass: string; dotClass: string }> = {
+  Opportunity: {
+    label: "Opportunity",
+    badgeClass: "border border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    dotClass: "bg-blue-500",
+  },
+  Discussion: {
+    label: "Discussion",
+    badgeClass: "border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    dotClass: "bg-amber-500",
+  },
+  Closed: {
+    label: "Closed",
+    badgeClass: "border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    dotClass: "bg-emerald-500",
+  },
+  Lost: {
+    label: "Lost",
+    badgeClass: "border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    dotClass: "bg-rose-500",
+  },
+};
+
+const stageStatusOptions: SaleStageStatus[] = ["Opportunity", "Discussion", "Closed", "Lost"];
+
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return new Intl.DateTimeFormat("en-SG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
 export default function SalesPage() {
-  const { sales, projects, clients, addClient, addSale, updateSale, deleteSale, searchQuery, currentUserId, getUserById, getClientById } = useStore();
+  const {
+    sales,
+    projects,
+    clients,
+    saleStages,
+    addClient,
+    addSale,
+    updateSale,
+    deleteSale,
+    addSaleStage,
+    updateSaleStage,
+    deleteSaleStage,
+    searchQuery,
+    currentUserId,
+    getUserById,
+    getClientById,
+    getActiveUsers,
+  } = useStore();
+
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
+  const activeUsers = getActiveUsers();
 
   const [filterType, setFilterType] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
+  const [filterClient, setFilterClient] = useState<string>("all");
+  const [expandedSaleIds, setExpandedSaleIds] = useState<Record<string, boolean>>({});
+
+  // Sale Modal States
   const [showNewSale, setShowNewSale] = useState(false);
   const [newSale, setNewSale] = useState({
     projectId: "",
@@ -56,12 +122,63 @@ export default function SalesPage() {
     notes: string;
   }>({ projectId: "", amount: "", clientId: "", customClientName: "", type: "commission", date: "", notes: "" });
 
-  const getSaleClientName = (s: Sale) => {
+  // Sale Stage Modal States
+  const [stageModalSaleId, setStageModalSaleId] = useState<string | null>(null);
+  const [newStageForm, setNewStageForm] = useState<{
+    status: SaleStageStatus;
+    date: string;
+    picProfileId: string;
+    value: string;
+  }>({
+    status: "Opportunity",
+    date: "",
+    picProfileId: "",
+    value: "",
+  });
+
+  const [editingStage, setEditingStage] = useState<SaleStage | null>(null);
+  const [editStageForm, setEditStageForm] = useState<{
+    status: SaleStageStatus;
+    date: string;
+    picProfileId: string;
+    value: string;
+  }>({
+    status: "Opportunity",
+    date: "",
+    picProfileId: "",
+    value: "",
+  });
+
+  const getSaleClientName = useCallback((s: Sale) => {
     if (s.clientId) {
       const client = getClientById(s.clientId);
       if (client) return client.name;
     }
     return s.clientName || "Unnamed Client";
+  }, [getClientById]);
+
+  // Build unique client list for filter
+  const clientFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    clients.forEach((c) => {
+      map.set(c.name.toLowerCase(), c.name);
+    });
+    sales.forEach((s) => {
+      const name = getSaleClientName(s);
+      if (name && name !== "Unnamed Client") {
+        map.set(name.toLowerCase(), name);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([key, label]) => ({ value: key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [clients, sales, getSaleClientName]);
+
+  const toggleExpand = (saleId: string) => {
+    setExpandedSaleIds((prev) => ({
+      ...prev,
+      [saleId]: !prev[saleId],
+    }));
   };
 
   if (!isAdmin) {
@@ -69,7 +186,7 @@ export default function SalesPage() {
     return (
       <PageFrame id="sales-access-denied-frame">
         <PageHeader
-          title="Sales & Revenue"
+          title="Pipeline"
           description="Track sales, revenue streams, and financial records."
         />
         <Card className="border border-border p-8 text-center" id="card-sales-restricted">
@@ -80,7 +197,7 @@ export default function SalesPage() {
             Access Restricted
           </h2>
           <p className="max-w-md mx-auto text-sm text-muted-foreground mb-6">
-            Your current role is set to <strong>{roleLabel}</strong>. Financial records and the Sales module are strictly restricted to Workspace Administrators.
+            Your current role is set to <strong>{roleLabel}</strong>. Financial records and the Pipeline module are strictly restricted to Workspace Administrators.
           </p>
           <div className="flex justify-center">
             <Link href="/">
@@ -106,6 +223,7 @@ export default function SalesPage() {
       }
       if (filterType !== "all" && s.type !== filterType) return false;
       if (filterProject !== "all" && s.projectId !== filterProject) return false;
+      if (filterClient !== "all" && clientName.toLowerCase() !== filterClient.toLowerCase()) return false;
       return true;
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -166,8 +284,9 @@ export default function SalesPage() {
 
     if (!finalClientName || !newSale.amount || !projectId) return;
 
+    const newSaleId = generateId();
     addSale({
-      id: generateId(),
+      id: newSaleId,
       projectId,
       amount: parseFloat(newSale.amount),
       clientId: finalClientId,
@@ -246,23 +365,104 @@ export default function SalesPage() {
 
   function handleDeleteSale(sale: Sale) {
     const clientName = getSaleClientName(sale);
-    if (window.confirm(`Delete the sale from "${clientName}"? This cannot be undone.`)) {
+    if (window.confirm(`Delete the pipeline record for "${clientName}"? This cannot be undone.`)) {
       deleteSale(sale.id);
     }
   }
+
+  // Handle Adding Sale Stage
+  function openAddStageModal(sale: Sale) {
+    setStageModalSaleId(sale.id);
+    const now = new Date();
+    const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setNewStageForm({
+      status: "Opportunity",
+      date: localIso,
+      picProfileId: currentUserId || "",
+      value: String(sale.amount),
+    });
+  }
+
+  async function handleSaveNewStage() {
+    if (!stageModalSaleId) return;
+    const nowIso = new Date().toISOString();
+    const stageDate = newStageForm.date ? new Date(newStageForm.date).toISOString() : nowIso;
+    const createdStage: SaleStage = {
+      id: generateId(),
+      saleId: stageModalSaleId,
+      status: newStageForm.status,
+      date: stageDate,
+      picProfileId: newStageForm.picProfileId || null,
+      value: parseFloat(newStageForm.value) || 0,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      createdBy: currentUserId,
+      updatedBy: currentUserId,
+    };
+    await addSaleStage(createdStage);
+    setExpandedSaleIds((prev) => ({ ...prev, [stageModalSaleId]: true }));
+    setStageModalSaleId(null);
+  }
+
+  // Handle Editing Sale Stage
+  function openEditStageModal(stage: SaleStage) {
+    setEditingStage(stage);
+    const stageDate = new Date(stage.date);
+    const localIso = !isNaN(stageDate.getTime())
+      ? new Date(stageDate.getTime() - stageDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16);
+    setEditStageForm({
+      status: stage.status,
+      date: localIso,
+      picProfileId: stage.picProfileId || "",
+      value: String(stage.value),
+    });
+  }
+
+  async function handleSaveEditStage() {
+    if (!editingStage) return;
+    const nowIso = new Date().toISOString();
+    const stageDate = editStageForm.date ? new Date(editStageForm.date).toISOString() : editingStage.date;
+    await updateSaleStage(editingStage.id, {
+      status: editStageForm.status,
+      date: stageDate,
+      picProfileId: editStageForm.picProfileId || null,
+      value: parseFloat(editStageForm.value) || 0,
+      updatedAt: nowIso,
+      updatedBy: currentUserId,
+    });
+    setEditingStage(null);
+  }
+
+  async function handleDeleteStage(stage: SaleStage) {
+    if (window.confirm(`Delete the "${stage.status}" stage? This cannot be undone.`)) {
+      await deleteSaleStage(stage.id);
+    }
+  }
+
+  const targetSaleForNewStage = stageModalSaleId ? sales.find((s) => s.id === stageModalSaleId) : null;
 
   return (
     <>
       <PageFrame>
         {/* Header */}
         <PageHeader
-          title="Sales"
-          description="Track revenue across grants, sponsorships, workshops, and product sales"
-          actions={<Button size="sm" onClick={() => setShowNewSale(true)}><Plus className="w-4 h-4" /> Log Sale</Button>}
+          title="Pipeline"
+          description="Track sales deals, pipeline stages, revenue streams, and clients"
+          actions={
+            <Button size="sm" onClick={() => setShowNewSale(true)}>
+              <Plus className="w-4 h-4" /> Log Pipeline
+            </Button>
+          }
         />
+
         {/* Summary cards */}
         <SheetSummary className="sm:grid-cols-3">
-          <SummaryMetric value={`$${totalRevenue.toLocaleString()}`} label="Total Revenue" indicator={<Badge variant="neutral">{filteredSales.length} entries</Badge>} />
+          <SummaryMetric
+            value={`$${totalRevenue.toLocaleString()}`}
+            label="Total Revenue"
+            indicator={<Badge variant="neutral">{filteredSales.length} deals</Badge>}
+          />
           <SummaryMetric value={`$${Math.round(avgDeal).toLocaleString()}`} label="Average Deal" />
           <SummaryMetric value={revenueByProject.length} label="Revenue Streams" />
         </SheetSummary>
@@ -284,7 +484,7 @@ export default function SalesPage() {
                         <div
                           className="h-full transition-all duration-500"
                           style={{
-                            width: `${(item.total / totalRevenue) * 100}%`,
+                            width: `${totalRevenue > 0 ? (item.total / totalRevenue) * 100 : 0}%`,
                             backgroundColor: item.color,
                           }}
                         />
@@ -316,7 +516,7 @@ export default function SalesPage() {
                         <div
                           className="h-full transition-all duration-500"
                           style={{
-                            width: `${(item.total / totalRevenue) * 100}%`,
+                            width: `${totalRevenue > 0 ? (item.total / totalRevenue) * 100 : 0}%`,
                             backgroundColor: item.project.color,
                           }}
                         />
@@ -333,8 +533,21 @@ export default function SalesPage() {
         {/* Filters */}
         <Toolbar>
           <Select
+            value={filterClient}
+            onChange={(e) => setFilterClient(e.target.value)}
+            aria-label="Filter by Client name"
+          >
+            <option value="all">All Clients</option>
+            {clientFilterOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+          <Select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
+            aria-label="Filter by Type"
           >
             <option value="all">All Types</option>
             {Object.entries(saleTypeConfig).map(([key, val]) => (
@@ -344,6 +557,7 @@ export default function SalesPage() {
           <Select
             value={filterProject}
             onChange={(e) => setFilterProject(e.target.value)}
+            aria-label="Filter by Project"
           >
             <option value="all">All Projects</option>
             {projects.map((p) => (
@@ -352,82 +566,274 @@ export default function SalesPage() {
           </Select>
         </Toolbar>
 
-        {/* Sales table */}
+        {/* Pipeline Table */}
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Client</th>
-                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Project</th>
-                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Type</th>
-                  <th className="text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Amount</th>
-                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Date</th>
-                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Notes</th>
-                  <th className="w-24 text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-4">Actions</th>
+                  <th className="w-10 py-3 pl-4 pr-1 text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider"></th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Client</th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Project</th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Type</th>
+                  <th className="text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Amount</th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Date</th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Stages</th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Notes</th>
+                  <th className="w-36 text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 pr-4 pl-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSales.map((sale) => {
-                  const project = projects.find((p) => p.id === sale.projectId);
-                  const typeConf = saleTypeConfig[sale.type];
-                  const clientName = getSaleClientName(sale);
-                  return (
-                    <tr key={sale.id} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="text-sm font-medium">{clientName}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-2" style={{ backgroundColor: project?.color }} />
-                          <span className="text-sm text-muted-foreground">{project?.title}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge variant={typeConf.variant}>{typeConf.label}</Badge>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="text-sm font-semibold">${sale.amount.toLocaleString()}</span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
-                      <td className="py-3 px-4">
-                        <span className="text-sm text-subtle-foreground truncate max-w-[280px] block">{sale.notes}</span>
-                      </td>
-                      <td className="py-2 px-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            aria-label={`Edit sale from ${clientName}`}
-                            onClick={() => openEditSale(sale)}
-                            className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                          >
-                            <Pencil className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Delete sale from ${clientName}`}
-                            onClick={() => handleDeleteSale(sale)}
-                            className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filteredSales.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                      No pipeline deals match the current filter criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSales.map((sale) => {
+                    const project = projects.find((p) => p.id === sale.projectId);
+                    const typeConf = saleTypeConfig[sale.type];
+                    const clientName = getSaleClientName(sale);
+                    const stages = saleStages
+                      .filter((st) => st.saleId === sale.id)
+                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    const isExpanded = !!expandedSaleIds[sale.id];
+
+                    return (
+                      <React.Fragment key={sale.id}>
+                        <tr
+                          className={cn(
+                            "border-b border-border/50 hover:bg-secondary/40 transition-colors",
+                            isExpanded && "bg-secondary/20"
+                          )}
+                        >
+                          <td className="py-3 pl-4 pr-1">
+                            <button
+                              type="button"
+                              aria-label={isExpanded ? "Collapse sale stages" : "Expand sale stages"}
+                              onClick={() => toggleExpand(sale.id)}
+                              className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </button>
+                          </td>
+                          <td className="py-3 px-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(sale.id)}
+                              className="text-left text-sm font-medium text-foreground hover:text-primary transition-colors block"
+                            >
+                              {clientName}
+                            </button>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: project?.color }} />
+                              <span className="text-sm text-muted-foreground">{project?.title}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <Badge variant={typeConf.variant}>{typeConf.label}</Badge>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span className="text-sm font-semibold tabular-nums">${sale.amount.toLocaleString()}</span>
+                          </td>
+                          <td className="py-3 px-3 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
+                          <td className="py-3 px-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(sale.id)}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border border-border bg-secondary/50 hover:bg-secondary transition-colors"
+                            >
+                              <Layers className="h-3 w-3 text-muted-foreground" />
+                              <span>{stages.length} stage{stages.length === 1 ? "" : "s"}</span>
+                            </button>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="text-sm text-subtle-foreground truncate max-w-[200px] block" title={sale.notes}>
+                              {sale.notes || "-"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4 pl-2">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2 text-xs gap-1"
+                                onClick={() => openAddStageModal(sale)}
+                                title="Add Stage to Pipeline"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>Stage</span>
+                              </Button>
+                              <button
+                                type="button"
+                                aria-label={`Edit pipeline record from ${clientName}`}
+                                onClick={() => openEditSale(sale)}
+                                className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Delete pipeline record from ${clientName}`}
+                                onClick={() => handleDeleteSale(sale)}
+                                className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Subrow for sale stages */}
+                        {isExpanded && (
+                          <tr className="bg-secondary/15 dark:bg-muted/10 border-b border-border">
+                            <td colSpan={9} className="p-0">
+                              <div className="px-6 py-4 space-y-3 bg-secondary/10 dark:bg-muted/5 border-l-4 border-l-primary/60">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Layers className="h-4 w-4 text-primary" />
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                                      Pipeline Stages ({stages.length})
+                                    </h4>
+                                    <span className="text-xs text-muted-foreground">
+                                      &bull; {clientName} &bull; Total Deal: ${sale.amount.toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs gap-1.5"
+                                    onClick={() => openAddStageModal(sale)}
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    <span>Add Stage</span>
+                                  </Button>
+                                </div>
+
+                                {stages.length === 0 ? (
+                                  <div className="p-4 rounded border border-dashed border-border bg-background/60 text-center">
+                                    <p className="text-xs text-muted-foreground">
+                                      No pipeline stages recorded yet for this deal.
+                                    </p>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="mt-1 text-xs text-primary gap-1"
+                                      onClick={() => openAddStageModal(sale)}
+                                    >
+                                      <Plus className="h-3 w-3" /> Log Opportunity, Discussion, Closed, or Lost stage
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="overflow-x-auto border border-border bg-background rounded-md shadow-xs">
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="border-b border-border bg-secondary/30 text-muted-foreground">
+                                          <th className="py-2.5 px-3 text-left font-medium">Stage Status</th>
+                                          <th className="py-2.5 px-3 text-left font-medium">Date & Time</th>
+                                          <th className="py-2.5 px-3 text-left font-medium">PIC (Person in Charge)</th>
+                                          <th className="py-2.5 px-3 text-right font-medium">Stage Value</th>
+                                          <th className="py-2.5 px-3 text-right font-medium">Last Updated</th>
+                                          <th className="py-2.5 px-3 text-right font-medium w-24">Actions</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-border/40">
+                                        {stages.map((st) => {
+                                          const picUser = st.picProfileId ? getUserById(st.picProfileId) : null;
+                                          const statusMeta = stageStatusStyles[st.status] || {
+                                            label: st.status,
+                                            badgeClass: "border-border bg-secondary text-foreground",
+                                            dotClass: "bg-muted-foreground",
+                                          };
+                                          return (
+                                            <tr key={st.id} className="hover:bg-secondary/25 transition-colors">
+                                              <td className="py-2.5 px-3">
+                                                <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-medium", statusMeta.badgeClass)}>
+                                                  <span className={cn("w-1.5 h-1.5 rounded-full", statusMeta.dotClass)} />
+                                                  {statusMeta.label}
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-3 text-muted-foreground">
+                                                <div className="flex items-center gap-1.5">
+                                                  <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+                                                  <span>{formatDateTime(st.date)}</span>
+                                                </div>
+                                              </td>
+                                              <td className="py-2.5 px-3">
+                                                {picUser ? (
+                                                  <div className="flex items-center gap-2">
+                                                    <span
+                                                      className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white flex-shrink-0"
+                                                      style={{ backgroundColor: picUser.avatarColor || "var(--primary)" }}
+                                                    >
+                                                      {getInitials(picUser.name)}
+                                                    </span>
+                                                    <span className="font-medium text-foreground">{picUser.name}</span>
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-muted-foreground italic">Unassigned</span>
+                                                )}
+                                              </td>
+                                              <td className="py-2.5 px-3 text-right font-semibold text-foreground tabular-nums">
+                                                ${Number(st.value).toLocaleString()}
+                                              </td>
+                                              <td className="py-2.5 px-3 text-right text-muted-foreground">
+                                                {formatDate(st.updatedAt || st.createdAt)}
+                                              </td>
+                                              <td className="py-2.5 px-3 text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`Edit ${st.status} stage`}
+                                                    onClick={() => openEditStageModal(st)}
+                                                    className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded transition-colors"
+                                                  >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`Delete ${st.status} stage`}
+                                                    onClick={() => handleDeleteStage(st)}
+                                                    className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent rounded transition-colors"
+                                                  >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </Card>
       </PageFrame>
 
-      {/* New Sale Dialog */}
+      {/* New Pipeline Deal Dialog */}
       <Dialog open={showNewSale} onOpenChange={setShowNewSale}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Log New Sale</DialogTitle>
-            <DialogDescription>Record a new revenue entry</DialogDescription>
+            <DialogTitle>Log New Pipeline</DialogTitle>
+            <DialogDescription>Record a new revenue or deal entry</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
@@ -445,7 +851,7 @@ export default function SalesPage() {
               {(newSale.clientId === "__new__" || (clients.length === 0 && !newSale.clientId)) && (
                 <div className="mt-2">
                   <Input
-                    placeholder="e.g., National Arts Council"
+                    placeholder="e.g., Far East Organization"
                     value={newSale.customClientName}
                     onChange={(e) => setNewSale({ ...newSale, customClientName: e.target.value })}
                     autoFocus
@@ -456,7 +862,12 @@ export default function SalesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Amount ($)</label>
-                <Input type="number" placeholder="0.00" value={newSale.amount} onChange={(e) => setNewSale({ ...newSale, amount: e.target.value })} />
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={newSale.amount}
+                  onChange={(e) => setNewSale({ ...newSale, amount: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Type</label>
@@ -484,7 +895,11 @@ export default function SalesPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Notes</label>
-              <Textarea placeholder="Additional details..." value={newSale.notes} onChange={(e) => setNewSale({ ...newSale, notes: e.target.value })} />
+              <Textarea
+                placeholder="Additional details..."
+                value={newSale.notes}
+                onChange={(e) => setNewSale({ ...newSale, notes: e.target.value })}
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowNewSale(false)}>Cancel</Button>
@@ -497,19 +912,19 @@ export default function SalesPage() {
                   projects.length === 0
                 }
               >
-                Log Sale
+                Log Pipeline
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Sale Dialog */}
+      {/* Edit Pipeline Deal Dialog */}
       <Dialog open={editingSaleId !== null} onOpenChange={(open) => { if (!open) setEditingSaleId(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Sale</DialogTitle>
-            <DialogDescription>Update the revenue entry.</DialogDescription>
+            <DialogTitle>Edit Pipeline</DialogTitle>
+            <DialogDescription>Update deal details.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
@@ -527,7 +942,7 @@ export default function SalesPage() {
               {(editSale.clientId === "__new__" || !editSale.clientId) && (
                 <div className="mt-2">
                   <Input
-                    placeholder="e.g., National Arts Council"
+                    placeholder="e.g., Far East Organization"
                     value={editSale.customClientName}
                     onChange={(e) => setEditSale({ ...editSale, customClientName: e.target.value })}
                     autoFocus
@@ -538,11 +953,19 @@ export default function SalesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Amount ($)</label>
-                <Input type="number" placeholder="0.00" value={editSale.amount} onChange={(e) => setEditSale({ ...editSale, amount: e.target.value })} />
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={editSale.amount}
+                  onChange={(e) => setEditSale({ ...editSale, amount: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Type</label>
-                <Select value={editSale.type} onChange={(e) => setEditSale({ ...editSale, type: e.target.value as Sale["type"] })}>
+                <Select
+                  value={editSale.type}
+                  onChange={(e) => setEditSale({ ...editSale, type: e.target.value as Sale["type"] })}
+                >
                   {Object.entries(saleTypeConfig).map(([key, val]) => (
                     <option key={key} value={key}>{val.label}</option>
                   ))}
@@ -551,7 +974,10 @@ export default function SalesPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Project</label>
-              <Select value={editSale.projectId} onChange={(e) => setEditSale({ ...editSale, projectId: e.target.value })}>
+              <Select
+                value={editSale.projectId}
+                onChange={(e) => setEditSale({ ...editSale, projectId: e.target.value })}
+              >
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
@@ -559,11 +985,19 @@ export default function SalesPage() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Date</label>
-              <Input type="date" value={editSale.date} onChange={(e) => setEditSale({ ...editSale, date: e.target.value })} />
+              <Input
+                type="date"
+                value={editSale.date}
+                onChange={(e) => setEditSale({ ...editSale, date: e.target.value })}
+              />
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Notes</label>
-              <Textarea placeholder="Additional details..." value={editSale.notes} onChange={(e) => setEditSale({ ...editSale, notes: e.target.value })} />
+              <Textarea
+                placeholder="Additional details..."
+                value={editSale.notes}
+                onChange={(e) => setEditSale({ ...editSale, notes: e.target.value })}
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setEditingSaleId(null)}>Cancel</Button>
@@ -577,6 +1011,150 @@ export default function SalesPage() {
                 }
               >
                 Save changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Stage Modal */}
+      <Dialog open={stageModalSaleId !== null} onOpenChange={(open) => { if (!open) setStageModalSaleId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Pipeline Stage</DialogTitle>
+            <DialogDescription>
+              {targetSaleForNewStage ? (
+                <>
+                  Record a stage progression for <strong>{getSaleClientName(targetSaleForNewStage)}</strong> (${targetSaleForNewStage.amount.toLocaleString()})
+                </>
+              ) : (
+                "Add a pipeline stage for this deal."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Stage Status</label>
+              <Select
+                value={newStageForm.status}
+                onChange={(e) => setNewStageForm({ ...newStageForm, status: e.target.value as SaleStageStatus })}
+              >
+                {stageStatusOptions.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Date & Time</label>
+                <Input
+                  type="datetime-local"
+                  value={newStageForm.date}
+                  onChange={(e) => setNewStageForm({ ...newStageForm, date: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Stage Value ($)</label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={newStageForm.value}
+                  onChange={(e) => setNewStageForm({ ...newStageForm, value: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Person in Charge (PIC)</label>
+              <Select
+                value={newStageForm.picProfileId}
+                onChange={(e) => setNewStageForm({ ...newStageForm, picProfileId: e.target.value })}
+              >
+                <option value="">Unassigned (None)</option>
+                {activeUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setStageModalSaleId(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveNewStage}>
+                Add Stage
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Stage Modal */}
+      <Dialog open={editingStage !== null} onOpenChange={(open) => { if (!open) setEditingStage(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Pipeline Stage</DialogTitle>
+            <DialogDescription>Update the stage status, value, date, or assigned PIC.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Stage Status</label>
+              <Select
+                value={editStageForm.status}
+                onChange={(e) => setEditStageForm({ ...editStageForm, status: e.target.value as SaleStageStatus })}
+              >
+                {stageStatusOptions.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Date & Time</label>
+                <Input
+                  type="datetime-local"
+                  value={editStageForm.date}
+                  onChange={(e) => setEditStageForm({ ...editStageForm, date: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Stage Value ($)</label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={editStageForm.value}
+                  onChange={(e) => setEditStageForm({ ...editStageForm, value: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Person in Charge (PIC)</label>
+              <Select
+                value={editStageForm.picProfileId}
+                onChange={(e) => setEditStageForm({ ...editStageForm, picProfileId: e.target.value })}
+              >
+                <option value="">Unassigned (None)</option>
+                {activeUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditingStage(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditStage}>
+                Save Changes
               </Button>
             </div>
           </div>

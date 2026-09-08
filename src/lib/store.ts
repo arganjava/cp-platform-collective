@@ -4,6 +4,7 @@ import type {
   Project,
   Task,
   Sale,
+  SaleStage,
   Notification,
   TaskStatus,
   ProjectStatus,
@@ -19,6 +20,9 @@ import {
   insertSale,
   updateSaleRow,
   deleteSaleRow,
+  insertSaleStage,
+  updateSaleStageRow,
+  deleteSaleStageRow,
   insertClient,
   updateClientRow,
   deleteClientRow,
@@ -53,6 +57,7 @@ interface AppState {
   projects: Project[];
   tasks: Task[];
   sales: Sale[];
+  saleStages: SaleStage[];
   notifications: Notification[];
   clients: Client[];
   currentUserId: string | null;
@@ -71,6 +76,7 @@ interface AppState {
     projects: Project[];
     tasks: Task[];
     sales: Sale[];
+    saleStages?: SaleStage[];
     notifications: Notification[];
     clients?: Client[];
     currentUserId: string | null;
@@ -103,6 +109,11 @@ interface AppState {
   updateSale: (id: string, updates: Partial<Sale>) => void;
   deleteSale: (id: string) => void;
 
+  // SaleStage actions
+  addSaleStage: (stage: SaleStage) => Promise<void>;
+  updateSaleStage: (id: string, updates: Partial<SaleStage>) => Promise<void>;
+  deleteSaleStage: (id: string) => Promise<void>;
+
   // Client actions
   addClient: (client: Client) => Promise<void>;
   updateClient: (id: string, updates: Partial<Client>) => void;
@@ -129,6 +140,7 @@ interface AppState {
   getUserById: (id: string | null) => User | undefined;
   getClientById: (id: string | null | undefined) => Client | undefined;
   getSalesByProject: (projectId: string) => Sale[];
+  getSaleStagesBySaleId: (saleId: string) => SaleStage[];
   getProjectsByStatus: (status: ProjectStatus) => Project[];
 }
 
@@ -137,6 +149,7 @@ const initialDataState = {
   projects: [] as Project[],
   tasks: [] as Task[],
   sales: [] as Sale[],
+  saleStages: [] as SaleStage[],
   notifications: [] as Notification[],
   clients: [] as Client[],
   currentUserId: null as string | null,
@@ -154,12 +167,13 @@ export const useStore = create<AppState>((set, get) => ({
   selectedProjectId: null,
 
   // Hydration
-  initialize: ({ users, projects, tasks, sales, notifications, clients, currentUserId }) =>
+  initialize: ({ users, projects, tasks, sales, saleStages, notifications, clients, currentUserId }) =>
     set({
       users,
       projects,
       tasks,
       sales,
+      saleStages: saleStages ?? [],
       notifications,
       clients: clients ?? [],
       currentUserId,
@@ -244,8 +258,27 @@ export const useStore = create<AppState>((set, get) => ({
     persist(updateSaleRow(id, updates));
   },
   deleteSale: (id) => {
-    set((s) => ({ sales: s.sales.filter((sl) => sl.id !== id) }));
+    set((s) => ({
+      sales: s.sales.filter((sl) => sl.id !== id),
+      saleStages: s.saleStages.filter((st) => st.saleId !== id),
+    }));
     persist(deleteSaleRow(id));
+  },
+
+  // SaleStage actions
+  addSaleStage: async (stage) => {
+    set((s) => ({ saleStages: [...s.saleStages, stage] }));
+    await persist(insertSaleStage(stage));
+  },
+  updateSaleStage: async (id, updates) => {
+    set((s) => ({
+      saleStages: s.saleStages.map((st) => (st.id === id ? { ...st, ...updates } : st)),
+    }));
+    await persist(updateSaleStageRow(id, updates));
+  },
+  deleteSaleStage: async (id) => {
+    set((s) => ({ saleStages: s.saleStages.filter((st) => st.id !== id) }));
+    await persist(deleteSaleStageRow(id));
   },
 
   // Client actions
@@ -377,5 +410,9 @@ export const useStore = create<AppState>((set, get) => ({
     return get().clients.find((c) => c.id === id);
   },
   getSalesByProject: (projectId) => get().sales.filter((s) => s.projectId === projectId),
+  getSaleStagesBySaleId: (saleId) =>
+    get()
+      .saleStages.filter((st) => st.saleId === saleId)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
   getProjectsByStatus: (status) => get().projects.filter((p) => p.status === status),
 }));

@@ -4,6 +4,7 @@ import type {
   ProjectRow,
   TaskRow,
   SaleRow,
+  SaleStageRow,
   NotificationRow,
   ClientRow,
 } from "./types";
@@ -13,6 +14,8 @@ import type {
   Project,
   Task,
   Sale,
+  SaleStage,
+  SaleStageStatus,
   Notification,
   TaskStatus,
   Priority,
@@ -102,6 +105,21 @@ export function fromSaleRow(r: SaleRow): Sale {
   };
 }
 
+export function fromSaleStageRow(r: SaleStageRow): SaleStage {
+  return {
+    id: r.id,
+    saleId: r.sale_id,
+    status: (r.status as SaleStageStatus) || "Opportunity",
+    date: r.date ?? new Date().toISOString(),
+    picProfileId: r.pic_profile_id ?? null,
+    value: Number(r.value) || 0,
+    createdAt: r.created_at ?? new Date().toISOString(),
+    updatedAt: r.updated_at ?? new Date().toISOString(),
+    createdBy: r.created_by ?? null,
+    updatedBy: r.updated_by ?? null,
+  };
+}
+
 export function fromNotificationRow(r: NotificationRow): Notification {
   return {
     id: r.id,
@@ -167,6 +185,21 @@ export function saleColumns(s: Partial<Sale>): Record<string, unknown> {
   return cols;
 }
 
+export function saleStageColumns(s: Partial<SaleStage>): Record<string, unknown> {
+  const cols: Record<string, unknown> = {};
+  if (s.id !== undefined) cols.id = s.id;
+  if (s.saleId !== undefined) cols.sale_id = s.saleId;
+  if (s.status !== undefined) cols.status = s.status;
+  if (s.date !== undefined) cols.date = s.date || new Date().toISOString();
+  if (s.picProfileId !== undefined) cols.pic_profile_id = s.picProfileId || null;
+  if (s.value !== undefined) cols.value = s.value;
+  if (s.createdAt !== undefined) cols.created_at = s.createdAt;
+  if (s.updatedAt !== undefined) cols.updated_at = s.updatedAt;
+  if (s.createdBy !== undefined) cols.created_by = s.createdBy || null;
+  if (s.updatedBy !== undefined) cols.updated_by = s.updatedBy || null;
+  return cols;
+}
+
 export function notificationColumns(n: Partial<Notification>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (n.id !== undefined) cols.id = n.id;
@@ -198,6 +231,7 @@ export interface TeamData {
   projects: Project[];
   tasks: Task[];
   sales: Sale[];
+  saleStages: SaleStage[];
   notifications: Notification[];
   clients: Client[];
 }
@@ -223,15 +257,26 @@ async function fetchClientsSafe(supabase: ReturnType<typeof getSupabase>): Promi
   }
 }
 
+async function fetchSaleStagesSafe(supabase: ReturnType<typeof getSupabase>): Promise<SaleStageRow[]> {
+  try {
+    const res = await supabase.from("sale_stages").select("*").order("date", { ascending: true });
+    if (!res.error && res.data) return res.data as SaleStageRow[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchTeamData(): Promise<TeamData> {
   const supabase = getSupabase();
-  const [profiles, projects, tasks, notifications, salesRows, clientsRows] = await Promise.all([
+  const [profiles, projects, tasks, notifications, salesRows, clientsRows, saleStageRows] = await Promise.all([
     supabase.from("profiles").select("*").order("name"),
     supabase.from("projects").select("*").order("created_at"),
     supabase.from("tasks").select("*").order("sort_order", { ascending: true }).order("created_at"),
     supabase.from("notifications").select("*").order("created_at", { ascending: false }),
     fetchSalesSafe(supabase),
     fetchClientsSafe(supabase),
+    fetchSaleStagesSafe(supabase),
   ]);
 
   return {
@@ -239,6 +284,7 @@ export async function fetchTeamData(): Promise<TeamData> {
     projects: (unwrap(projects, "load projects") as ProjectRow[]).map(fromProjectRow),
     tasks: (unwrap(tasks, "load tasks") as TaskRow[]).map(fromTaskRow),
     sales: salesRows.map(fromSaleRow),
+    saleStages: saleStageRows.map(fromSaleStageRow),
     notifications: (unwrap(notifications, "load notifications") as NotificationRow[]).map(
       fromNotificationRow
     ),
@@ -408,6 +454,28 @@ export async function updateSaleRow(id: string, updates: Partial<Sale>) {
 
 export async function deleteSaleRow(id: string) {
   const { error } = await getSupabase().from("sales").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function insertSaleStage(stage: SaleStage) {
+  const cols = saleStageColumns(stage);
+  const { error } = await getSupabase()
+    .from("sale_stages")
+    .insert(cols);
+  if (error) throw error;
+}
+
+export async function updateSaleStageRow(id: string, updates: Partial<SaleStage>) {
+  const cols = saleStageColumns(updates);
+  const { error } = await getSupabase()
+    .from("sale_stages")
+    .update(cols)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteSaleStageRow(id: string) {
+  const { error } = await getSupabase().from("sale_stages").delete().eq("id", id);
   if (error) throw error;
 }
 

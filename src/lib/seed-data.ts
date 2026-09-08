@@ -1,4 +1,4 @@
-import type { User, Project, Task, Sale, Notification, Client } from "./types";
+import type { User, Project, Task, Sale, Notification, Client, SaleStage } from "./types";
 
 export const seedUsers: User[] = [
   { id: "user-1", name: "Vincent Lim", email: "vincent@collectivep.com", avatarColor: "var(--primary)", role: "admin", isDeleted: false },
@@ -139,4 +139,25 @@ export const seedNotifications: Notification[] = [
   { id: "notif-6", userId: "user-1", message: "Douglas added a comment on accessibility arrangements", type: "comment", isRead: true, relatedId: "task-5", createdAt: "2026-07-19T11:00:00Z" },
   { id: "notif-7", userId: "user-1", message: "Ryan started research on Digital Content Hub platform", type: "update", isRead: true, relatedId: "task-19", createdAt: "2026-07-18T09:00:00Z" },
   { id: "notif-8", userId: "user-1", message: "TBWA workshop contract confirmed — $12,000", type: "update", isRead: true, relatedId: "sale-7", createdAt: "2026-07-01T14:00:00Z" },
+];
+
+export const seedSaleStages: SaleStage[] = [
+  { id: "stage-1-1", saleId: "sale-1", status: "Opportunity", date: "2026-03-01T10:00:00Z", picProfileId: "user-1", value: 15000, createdAt: "2026-03-01T10:00:00Z", updatedAt: "2026-03-01T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+  { id: "stage-1-2", saleId: "sale-1", status: "Discussion", date: "2026-03-20T14:30:00Z", picProfileId: "user-2", value: 15000, createdAt: "2026-03-20T14:30:00Z", updatedAt: "2026-03-20T14:30:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-1-3", saleId: "sale-1", status: "Closed", date: "2026-04-15T09:00:00Z", picProfileId: "user-1", value: 15000, createdAt: "2026-04-15T09:00:00Z", updatedAt: "2026-04-15T09:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+
+  { id: "stage-2-1", saleId: "sale-2", status: "Opportunity", date: "2026-04-05T11:00:00Z", picProfileId: "user-1", value: 10000, createdAt: "2026-04-05T11:00:00Z", updatedAt: "2026-04-05T11:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+  { id: "stage-2-2", saleId: "sale-2", status: "Discussion", date: "2026-04-28T16:00:00Z", picProfileId: "user-1", value: 8500, createdAt: "2026-04-28T16:00:00Z", updatedAt: "2026-04-28T16:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+  { id: "stage-2-3", saleId: "sale-2", status: "Closed", date: "2026-05-20T10:00:00Z", picProfileId: "user-1", value: 8500, createdAt: "2026-05-20T10:00:00Z", updatedAt: "2026-05-20T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+
+  { id: "stage-3-1", saleId: "sale-3", status: "Opportunity", date: "2026-05-10T10:00:00Z", picProfileId: "user-2", value: 5000, createdAt: "2026-05-10T10:00:00Z", updatedAt: "2026-05-10T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-3-2", saleId: "sale-3", status: "Discussion", date: "2026-05-25T15:00:00Z", picProfileId: "user-2", value: 5000, createdAt: "2026-05-25T15:00:00Z", updatedAt: "2026-05-25T15:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-3-3", saleId: "sale-3", status: "Closed", date: "2026-06-10T10:00:00Z", picProfileId: "user-2", value: 5000, createdAt: "2026-06-10T10:00:00Z", updatedAt: "2026-06-10T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+
+  { id: "stage-4-1", saleId: "sale-4", status: "Opportunity", date: "2026-04-12T09:00:00Z", picProfileId: "user-1", value: 3200, createdAt: "2026-04-12T09:00:00Z", updatedAt: "2026-04-12T09:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+  { id: "stage-4-2", saleId: "sale-4", status: "Closed", date: "2026-05-01T10:00:00Z", picProfileId: "user-1", value: 3200, createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+
+  { id: "stage-7-1", saleId: "sale-7", status: "Opportunity", date: "2026-06-01T10:00:00Z", picProfileId: "user-2", value: 15000, createdAt: "2026-06-01T10:00:00Z", updatedAt: "2026-06-01T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-7-2", saleId: "sale-7", status: "Discussion", date: "2026-06-15T14:00:00Z", picProfileId: "user-4", value: 12000, createdAt: "2026-06-15T14:00:00Z", updatedAt: "2026-06-15T14:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-7-3", saleId: "sale-7", status: "Closed", date: "2026-07-01T10:00:00Z", picProfileId: "user-2", value: 12000, createdAt: "2026-07-01T10:00:00Z", updatedAt: "2026-07-01T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
 ];

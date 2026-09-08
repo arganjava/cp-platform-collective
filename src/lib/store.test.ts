@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useStore } from "./store";
-import type { Notification, Project, Sale, Task, User } from "./types";
+import type { Notification, Project, Sale, SaleStage, Task, User } from "./types";
 
 const mocks = vi.hoisted(() => ({
   insertTask: vi.fn(async () => {}),
@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   insertSale: vi.fn(async () => {}),
   updateSaleRow: vi.fn(async () => {}),
   deleteSaleRow: vi.fn(async () => {}),
+  insertSaleStage: vi.fn(async () => {}),
+  updateSaleStageRow: vi.fn(async () => {}),
+  deleteSaleStageRow: vi.fn(async () => {}),
   insertNotification: vi.fn(async () => {}),
   updateNotificationRow: vi.fn(async () => {}),
   updateAllNotificationsRead: vi.fn(async () => {}),
@@ -77,6 +80,32 @@ const sale: Sale = {
 };
 
 const otherSale: Sale = { ...sale, id: "s-2", projectId: "p-2", amount: 5000 };
+
+const stage: SaleStage = {
+  id: "st-1",
+  saleId: "s-1",
+  status: "Opportunity",
+  date: "2026-09-08T08:00:00Z",
+  picProfileId: "u-1",
+  value: 12000,
+  createdAt: "2026-09-08T08:00:00Z",
+  updatedAt: "2026-09-08T08:00:00Z",
+  createdBy: "u-1",
+  updatedBy: "u-1",
+};
+
+const otherStage: SaleStage = {
+  id: "st-2",
+  saleId: "s-1",
+  status: "Discussion",
+  date: "2026-09-10T08:00:00Z",
+  picProfileId: "u-1",
+  value: 15000,
+  createdAt: "2026-09-08T08:00:00Z",
+  updatedAt: "2026-09-08T08:00:00Z",
+  createdBy: "u-1",
+  updatedBy: "u-1",
+};
 
 const notification: Notification = {
   id: "n-1",
@@ -193,6 +222,44 @@ describe("sale actions", () => {
     useStore.getState().deleteSale("s-1");
     expect(useStore.getState().sales).toEqual([]);
     expect(mocks.deleteSaleRow).toHaveBeenCalledWith("s-1");
+  });
+});
+
+describe("sale stage actions", () => {
+  it("addSaleStage appends and persists", () => {
+    useStore.getState().addSaleStage(stage);
+    expect(useStore.getState().saleStages).toContainEqual(stage);
+    expect(mocks.insertSaleStage).toHaveBeenCalledWith(stage);
+  });
+
+  it("updateSaleStage merges partial updates and persists", () => {
+    useStore.getState().addSaleStage(stage);
+    useStore.getState().updateSaleStage("st-1", { status: "Discussion", value: 16000 });
+    expect(useStore.getState().saleStages[0]).toMatchObject({ status: "Discussion", value: 16000 });
+    expect(mocks.updateSaleStageRow).toHaveBeenCalledWith("st-1", { status: "Discussion", value: 16000 });
+  });
+
+  it("deleteSaleStage removes the stage and persists", () => {
+    useStore.getState().addSaleStage(stage);
+    useStore.getState().deleteSaleStage("st-1");
+    expect(useStore.getState().saleStages).toEqual([]);
+    expect(mocks.deleteSaleStageRow).toHaveBeenCalledWith("st-1");
+  });
+
+  it("getSaleStagesBySaleId returns sorted stages for a specific sale", () => {
+    useStore.getState().initialize({
+      users: [user],
+      projects: [],
+      tasks: [],
+      sales: [sale],
+      saleStages: [otherStage, stage],
+      notifications: [],
+      currentUserId: "u-1",
+    });
+    const stages = useStore.getState().getSaleStagesBySaleId("s-1");
+    expect(stages).toHaveLength(2);
+    expect(stages[0].id).toBe("st-1");
+    expect(stages[1].id).toBe("st-2");
   });
 });
 

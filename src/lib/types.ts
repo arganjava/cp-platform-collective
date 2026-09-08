@@ -4,6 +4,7 @@ export type ProjectStatus = "draft" | "active" | "completed" | "archived";
 export type UserRole = "admin" | "member" | "guest";
 export type NotificationType = "assignment" | "mention" | "deadline" | "update" | "comment";
 export type SaleType = "commission" | "artwork" | "workshop" | "sponsorship" | "grant";
+export type SaleStageStatus = "Opportunity" | "Discussion" | "Closed" | "Lost";
 
 export interface User {
   id: string;
@@ -64,6 +65,19 @@ export interface Sale {
   date: string;
   notes: string;
   createdAt: string;
+}
+
+export interface SaleStage {
+  id: string;
+  saleId: string;
+  status: SaleStageStatus;
+  date: string;
+  picProfileId: string | null;
+  value: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
 }
 
 export interface Notification {

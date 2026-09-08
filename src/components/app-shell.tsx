@@ -14,6 +14,7 @@ import {
   seedProjects,
   seedTasks,
   seedSales,
+  seedSaleStages,
   seedNotifications,
   seedClients,
 } from "@/lib/seed-data";
@@ -39,6 +40,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         projects: seedProjects,
         tasks: seedTasks,
         sales: seedSales,
+        saleStages: seedSaleStages,
         notifications: seedNotifications,
         clients: seedClients,
         currentUserId: seedUsers[0].id,
@@ -124,6 +126,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         projects: seedProjects,
         tasks: seedTasks,
         sales: seedSales,
+        saleStages: seedSaleStages,
         notifications: seedNotifications,
         clients: seedClients,
         currentUserId: seedUsers[0].id,

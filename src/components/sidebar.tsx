@@ -20,7 +20,7 @@ const allNavItems: NavItem[] = [
   { href: "/projects", label: "Projects", icon: FolderKanban, sheet: "02" },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, sheet: "03" },
   { href: "/gantt", label: "Timeline", icon: GanttChart, sheet: "04" },
-  { href: "/sales", label: "Sales", icon: DollarSign, sheet: "05", adminOnly: true },
+  { href: "/sales", label: "Pipeline", icon: DollarSign, sheet: "05", adminOnly: true },
   { href: "/clients", label: "Clients", icon: Building2, sheet: "06", adminOnly: true },
   { href: "/reports", label: "Reports", icon: BarChart3, sheet: "07", adminOnly: true },
   { href: "/users", label: "Users", icon: Users, sheet: "08", adminOnly: true },
