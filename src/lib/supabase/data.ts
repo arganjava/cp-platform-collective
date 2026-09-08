@@ -161,7 +161,6 @@ export function saleColumns(s: Partial<Sale>): Record<string, unknown> {
   if (s.projectId !== undefined) cols.project_id = s.projectId || null;
   if (s.amount !== undefined) cols.amount = s.amount;
   if (s.clientId !== undefined) cols.client_id = s.clientId || null;
-  if (s.clientName !== undefined) cols.client_name = s.clientName;
   if (s.type !== undefined) cols.type = s.type;
   if (s.date !== undefined) cols.date = s.date || null;
   if (s.notes !== undefined) cols.notes = s.notes;
@@ -374,18 +373,37 @@ export async function deleteClientRow(id: string) {
 }
 
 export async function insertSale(sale: Sale) {
-  const { error } = await getSupabase()
-    .from("sales")
-    .insert(saleColumns(sale));
-  if (error) throw error;
+  const cols = saleColumns(sale);
+  const supabase = getSupabase();
+  const { error } = await supabase.from("sales").insert(cols);
+  if (error) {
+    // If the database has not been migrated yet and lacks 'client_id', try with legacy 'client_name'
+    if (error.message?.includes("client_id") && sale.clientName) {
+      const fallbackCols: Record<string, unknown> = { ...cols, client_name: sale.clientName };
+      delete fallbackCols.client_id;
+      const { error: fallbackError } = await supabase.from("sales").insert(fallbackCols);
+      if (fallbackError) throw fallbackError;
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function updateSaleRow(id: string, updates: Partial<Sale>) {
-  const { error } = await getSupabase()
-    .from("sales")
-    .update(saleColumns(updates))
-    .eq("id", id);
-  if (error) throw error;
+  const cols = saleColumns(updates);
+  const supabase = getSupabase();
+  const { error } = await supabase.from("sales").update(cols).eq("id", id);
+  if (error) {
+    // If the database has not been migrated yet and lacks 'client_id', try with legacy 'client_name'
+    if (error.message?.includes("client_id") && updates.clientName) {
+      const fallbackCols: Record<string, unknown> = { ...cols, client_name: updates.clientName };
+      delete fallbackCols.client_id;
+      const { error: fallbackError } = await supabase.from("sales").update(fallbackCols).eq("id", id);
+      if (fallbackError) throw fallbackError;
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function deleteSaleRow(id: string) {

@@ -38,9 +38,9 @@ import { isSupabaseConfigured } from "./supabase/client";
  * Errors are logged loudly and recorded on the store for the app shell to
  * render as a dismissible banner.
  */
-function persist(promise: Promise<unknown>) {
-  if (!isSupabaseConfigured) return;
-  promise.catch((err) => {
+function persist(promise: Promise<unknown>): Promise<unknown> {
+  if (!isSupabaseConfigured) return Promise.resolve();
+  return promise.catch((err) => {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Supabase write failed:", err);
     useStore.getState().setError(message);
@@ -104,7 +104,7 @@ interface AppState {
   deleteSale: (id: string) => void;
 
   // Client actions
-  addClient: (client: Client) => void;
+  addClient: (client: Client) => Promise<void>;
   updateClient: (id: string, updates: Partial<Client>) => void;
   deleteClient: (id: string) => void;
 
@@ -249,9 +249,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // Client actions
-  addClient: (client) => {
+  addClient: async (client) => {
     set((s) => ({ clients: [...s.clients, client] }));
-    persist(insertClient(client));
+    await persist(insertClient(client));
   },
   updateClient: (id, updates) => {
     set((s) => ({

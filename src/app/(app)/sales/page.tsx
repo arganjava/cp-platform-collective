@@ -134,7 +134,7 @@ export default function SalesPage() {
     };
   }).filter((r) => r.total > 0);
 
-  function handleCreateSale() {
+  async function handleCreateSale() {
     const projectId = newSale.projectId || projects[0]?.id;
     let finalClientId = newSale.clientId;
     let finalClientName = "";
@@ -148,7 +148,7 @@ export default function SalesPage() {
       } else {
         const newId = generateId();
         const now = new Date().toISOString();
-        addClient({
+        await addClient({
           id: newId,
           name: trimmed,
           createdAt: now,
@@ -200,7 +200,7 @@ export default function SalesPage() {
     });
   }
 
-  function handleSaveSale() {
+  async function handleSaveSale() {
     if (!editingSaleId || !editSale.amount || !editSale.projectId) return;
     let finalClientId = editSale.clientId;
     let finalClientName = "";
@@ -214,7 +214,7 @@ export default function SalesPage() {
       } else {
         const newId = generateId();
         const now = new Date().toISOString();
-        addClient({
+        await addClient({
           id: newId,
           name: trimmed,
           createdAt: now,
