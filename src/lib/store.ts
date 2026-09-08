@@ -7,6 +7,7 @@ import type {
   Notification,
   TaskStatus,
   ProjectStatus,
+  Client,
 } from "./types";
 import {
   insertTask,
@@ -18,6 +19,9 @@ import {
   insertSale,
   updateSaleRow,
   deleteSaleRow,
+  insertClient,
+  updateClientRow,
+  deleteClientRow,
   insertNotification,
   updateNotificationRow,
   updateAllNotificationsRead,
@@ -50,6 +54,7 @@ interface AppState {
   tasks: Task[];
   sales: Sale[];
   notifications: Notification[];
+  clients: Client[];
   currentUserId: string | null;
   loading: boolean;
   initialized: boolean;
@@ -67,6 +72,7 @@ interface AppState {
     tasks: Task[];
     sales: Sale[];
     notifications: Notification[];
+    clients?: Client[];
     currentUserId: string | null;
   }) => void;
   setCurrentUser: (id: string | null) => void;
@@ -97,6 +103,11 @@ interface AppState {
   updateSale: (id: string, updates: Partial<Sale>) => void;
   deleteSale: (id: string) => void;
 
+  // Client actions
+  addClient: (client: Client) => void;
+  updateClient: (id: string, updates: Partial<Client>) => void;
+  deleteClient: (id: string) => void;
+
   // User actions
   addUser: (user: User, password?: string) => Promise<void>;
   updateUser: (id: string, updates: Partial<User>, skipPersist?: boolean) => void;
@@ -116,6 +127,7 @@ interface AppState {
   getTasksByStatus: (status: TaskStatus) => Task[];
   getProjectById: (id: string) => Project | undefined;
   getUserById: (id: string | null) => User | undefined;
+  getClientById: (id: string | null | undefined) => Client | undefined;
   getSalesByProject: (projectId: string) => Sale[];
   getProjectsByStatus: (status: ProjectStatus) => Project[];
 }
@@ -126,6 +138,7 @@ const initialDataState = {
   tasks: [] as Task[],
   sales: [] as Sale[],
   notifications: [] as Notification[],
+  clients: [] as Client[],
   currentUserId: null as string | null,
   loading: true,
   initialized: false,
@@ -141,13 +154,14 @@ export const useStore = create<AppState>((set, get) => ({
   selectedProjectId: null,
 
   // Hydration
-  initialize: ({ users, projects, tasks, sales, notifications, currentUserId }) =>
+  initialize: ({ users, projects, tasks, sales, notifications, clients, currentUserId }) =>
     set({
       users,
       projects,
       tasks,
       sales,
       notifications,
+      clients: clients ?? [],
       currentUserId,
       loading: false,
       initialized: true,
@@ -232,6 +246,29 @@ export const useStore = create<AppState>((set, get) => ({
   deleteSale: (id) => {
     set((s) => ({ sales: s.sales.filter((sl) => sl.id !== id) }));
     persist(deleteSaleRow(id));
+  },
+
+  // Client actions
+  addClient: (client) => {
+    set((s) => ({ clients: [...s.clients, client] }));
+    persist(insertClient(client));
+  },
+  updateClient: (id, updates) => {
+    set((s) => ({
+      clients: s.clients.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      // If client name updated, also update resolved clientName in sales
+      sales: updates.name
+        ? s.sales.map((sl) => (sl.clientId === id ? { ...sl, clientName: updates.name } : sl))
+        : s.sales,
+    }));
+    persist(updateClientRow(id, updates));
+  },
+  deleteClient: (id) => {
+    set((s) => ({
+      clients: s.clients.filter((c) => c.id !== id),
+      sales: s.sales.map((sl) => (sl.clientId === id ? { ...sl, clientId: "" } : sl)),
+    }));
+    persist(deleteClientRow(id));
   },
 
   // User actions
@@ -335,6 +372,10 @@ export const useStore = create<AppState>((set, get) => ({
   getTasksByStatus: (status) => get().tasks.filter((t) => t.status === status),
   getProjectById: (id) => get().projects.find((p) => p.id === id),
   getUserById: (id) => get().users.find((u) => u.id === id),
+  getClientById: (id) => {
+    if (!id) return undefined;
+    return get().clients.find((c) => c.id === id);
+  },
   getSalesByProject: (projectId) => get().sales.filter((s) => s.projectId === projectId),
   getProjectsByStatus: (status) => get().projects.filter((p) => p.status === status),
 }));

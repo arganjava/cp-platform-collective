@@ -46,15 +46,26 @@ export interface TaskRow {
   created_at: string;
 }
 
+export interface ClientRow {
+  id: string;
+  name: string;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
 export interface SaleRow {
   id: string;
   project_id: string | null;
   amount: number;
-  client_name: string;
+  client_id?: string | null;
+  client_name?: string | null;
   type: string;
   date: string | null;
   notes: string;
   created_at: string;
+  clients?: { name: string } | null;
 }
 
 export interface NotificationRow {
@@ -73,6 +84,7 @@ export type Database = {
       profiles: { Row: ProfileRow; Insert: Partial<ProfileRow>; Update: Partial<ProfileRow>; Relationships: [] };
       projects: { Row: ProjectRow; Insert: Partial<ProjectRow>; Update: Partial<ProjectRow>; Relationships: [] };
       tasks: { Row: TaskRow; Insert: Partial<TaskRow>; Update: Partial<TaskRow>; Relationships: [] };
+      clients: { Row: ClientRow; Insert: Partial<ClientRow>; Update: Partial<ClientRow>; Relationships: [] };
       sales: { Row: SaleRow; Insert: Partial<SaleRow>; Update: Partial<SaleRow>; Relationships: [] };
       notifications: { Row: NotificationRow; Insert: Partial<NotificationRow>; Update: Partial<NotificationRow>; Relationships: [] };
     };

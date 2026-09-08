@@ -1,4 +1,4 @@
-import type { User, Project, Task, Sale, Notification } from "./types";
+import type { User, Project, Task, Sale, Notification, Client } from "./types";
 
 export const seedUsers: User[] = [
   { id: "user-1", name: "Vincent Lim", email: "vincent@collectivep.com", avatarColor: "var(--primary)", role: "admin", isDeleted: false },
@@ -106,17 +106,28 @@ export const seedTasks: Task[] = [
   { id: "task-20", projectId: "proj-5", title: "Content strategy document", description: "Define content pillars, upload schedule, monetisation", status: "todo", priority: "low", assigneeId: "user-2", startDate: "2026-08-01", dueDate: "2026-09-30", tags: ["strategy"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
 ];
 
+export const seedClients: Client[] = [
+  { id: "client-1", name: "National Arts Council", createdAt: "2026-03-01T09:00:00Z", createdBy: "user-1", updatedAt: "2026-03-01T09:00:00Z", updatedBy: "user-1" },
+  { id: "client-2", name: "Far East Organization", createdAt: "2026-03-15T09:00:00Z", createdBy: "user-1", updatedAt: "2026-03-15T09:00:00Z", updatedBy: "user-1" },
+  { id: "client-3", name: "TBWA Singapore", createdAt: "2026-04-01T09:00:00Z", createdBy: "user-2", updatedAt: "2026-04-01T09:00:00Z", updatedBy: "user-2" },
+  { id: "client-4", name: "Lynk Artisan", createdAt: "2026-04-10T09:00:00Z", createdBy: "user-1", updatedAt: "2026-04-10T09:00:00Z", updatedBy: "user-1" },
+  { id: "client-5", name: "Online Store", createdAt: "2026-04-20T09:00:00Z", createdBy: "user-2", updatedAt: "2026-04-20T09:00:00Z", updatedBy: "user-2" },
+  { id: "client-6", name: "National Library Board", createdAt: "2026-05-01T09:00:00Z", createdBy: "user-1", updatedAt: "2026-05-01T09:00:00Z", updatedBy: "user-1" },
+  { id: "client-7", name: "CPAS", createdAt: "2026-05-15T09:00:00Z", createdBy: "user-2", updatedAt: "2026-05-15T09:00:00Z", updatedBy: "user-2" },
+  { id: "client-8", name: "Ticket Sales", createdAt: "2026-06-01T09:00:00Z", createdBy: "user-1", updatedAt: "2026-06-01T09:00:00Z", updatedBy: "user-1" },
+];
+
 export const seedSales: Sale[] = [
-  { id: "sale-1", projectId: "proj-1", amount: 15000, clientName: "National Arts Council", type: "grant", date: "2026-04-15", notes: "DARE Festival project grant — approved", createdAt: "2026-04-15T10:00:00Z" },
-  { id: "sale-2", projectId: "proj-1", amount: 8500, clientName: "Far East Organization", type: "sponsorship", date: "2026-05-20", notes: "Title sponsor for DARE Festival 2026", createdAt: "2026-05-20T10:00:00Z" },
-  { id: "sale-3", projectId: "proj-1", amount: 5000, clientName: "TBWA Singapore", type: "sponsorship", date: "2026-06-10", notes: "Supporting sponsor", createdAt: "2026-06-10T10:00:00Z" },
-  { id: "sale-4", projectId: "proj-2", amount: 3200, clientName: "Lynk Artisan", type: "commission", date: "2026-05-01", notes: "Co-creation partnership revenue share", createdAt: "2026-05-01T10:00:00Z" },
-  { id: "sale-5", projectId: "proj-2", amount: 1800, clientName: "Online Store", type: "artwork", date: "2026-07-15", notes: "Pre-order fragrance sales (20 units)", createdAt: "2026-07-15T10:00:00Z" },
-  { id: "sale-6", projectId: "proj-3", amount: 2000, clientName: "National Library Board", type: "commission", date: "2026-06-20", notes: "Library bulk purchase of Shades", createdAt: "2026-06-20T10:00:00Z" },
-  { id: "sale-7", projectId: "proj-4", amount: 12000, clientName: "TBWA Singapore", type: "workshop", date: "2026-07-01", notes: "4-session corporate training contract", createdAt: "2026-07-01T10:00:00Z" },
-  { id: "sale-8", projectId: "proj-4", amount: 6500, clientName: "CPAS", type: "workshop", date: "2026-07-10", notes: "2-session disability awareness programme", createdAt: "2026-07-10T10:00:00Z" },
-  { id: "sale-9", projectId: "proj-1", amount: 4200, clientName: "Ticket Sales", type: "artwork", date: "2026-07-20", notes: "Early bird ticket revenue (84 tickets)", createdAt: "2026-07-20T10:00:00Z" },
-  { id: "sale-10", projectId: "proj-2", amount: 950, clientName: "Online Store", type: "artwork", date: "2026-07-25", notes: "Additional fragrance orders", createdAt: "2026-07-25T10:00:00Z" },
+  { id: "sale-1", projectId: "proj-1", amount: 15000, clientId: "client-1", clientName: "National Arts Council", type: "grant", date: "2026-04-15", notes: "DARE Festival project grant — approved", createdAt: "2026-04-15T10:00:00Z" },
+  { id: "sale-2", projectId: "proj-1", amount: 8500, clientId: "client-2", clientName: "Far East Organization", type: "sponsorship", date: "2026-05-20", notes: "Title sponsor for DARE Festival 2026", createdAt: "2026-05-20T10:00:00Z" },
+  { id: "sale-3", projectId: "proj-1", amount: 5000, clientId: "client-3", clientName: "TBWA Singapore", type: "sponsorship", date: "2026-06-10", notes: "Supporting sponsor", createdAt: "2026-06-10T10:00:00Z" },
+  { id: "sale-4", projectId: "proj-2", amount: 3200, clientId: "client-4", clientName: "Lynk Artisan", type: "commission", date: "2026-05-01", notes: "Co-creation partnership revenue share", createdAt: "2026-05-01T10:00:00Z" },
+  { id: "sale-5", projectId: "proj-2", amount: 1800, clientId: "client-5", clientName: "Online Store", type: "artwork", date: "2026-07-15", notes: "Pre-order fragrance sales (20 units)", createdAt: "2026-07-15T10:00:00Z" },
+  { id: "sale-6", projectId: "proj-3", amount: 2000, clientId: "client-6", clientName: "National Library Board", type: "commission", date: "2026-06-20", notes: "Library bulk purchase of Shades", createdAt: "2026-06-20T10:00:00Z" },
+  { id: "sale-7", projectId: "proj-4", amount: 12000, clientId: "client-3", clientName: "TBWA Singapore", type: "workshop", date: "2026-07-01", notes: "4-session corporate training contract", createdAt: "2026-07-01T10:00:00Z" },
+  { id: "sale-8", projectId: "proj-4", amount: 6500, clientId: "client-7", clientName: "CPAS", type: "workshop", date: "2026-07-10", notes: "2-session disability awareness programme", createdAt: "2026-07-10T10:00:00Z" },
+  { id: "sale-9", projectId: "proj-1", amount: 4200, clientId: "client-8", clientName: "Ticket Sales", type: "artwork", date: "2026-07-20", notes: "Early bird ticket revenue (84 tickets)", createdAt: "2026-07-20T10:00:00Z" },
+  { id: "sale-10", projectId: "proj-2", amount: 950, clientId: "client-5", clientName: "Online Store", type: "artwork", date: "2026-07-25", notes: "Additional fragrance orders", createdAt: "2026-07-25T10:00:00Z" },
 ];
 
 export const seedNotifications: Notification[] = [

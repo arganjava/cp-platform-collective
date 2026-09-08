@@ -15,6 +15,7 @@ import {
   seedTasks,
   seedSales,
   seedNotifications,
+  seedClients,
 } from "@/lib/seed-data";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -39,6 +40,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         tasks: seedTasks,
         sales: seedSales,
         notifications: seedNotifications,
+        clients: seedClients,
         currentUserId: seedUsers[0].id,
       });
       setStatus("ready");
@@ -123,6 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         tasks: seedTasks,
         sales: seedSales,
         notifications: seedNotifications,
+        clients: seedClients,
         currentUserId: seedUsers[0].id,
       });
       setStatus("ready");

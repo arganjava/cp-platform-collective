@@ -45,11 +45,21 @@ export interface Task {
   order: number;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  createdAt: string;
+  createdBy?: string | null;
+  updatedAt: string;
+  updatedBy?: string | null;
+}
+
 export interface Sale {
   id: string;
   projectId: string;
   amount: number;
-  clientName: string;
+  clientId: string;
+  clientName?: string;
   type: SaleType;
   date: string;
   notes: string;

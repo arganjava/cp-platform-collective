@@ -30,7 +30,7 @@ const saleTypeConfig = {
 };
 
 export default function SalesPage() {
-  const { sales, projects, addSale, updateSale, deleteSale, searchQuery, currentUserId, getUserById } = useStore();
+  const { sales, projects, clients, addClient, addSale, updateSale, deleteSale, searchQuery, currentUserId, getUserById, getClientById } = useStore();
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
 
@@ -40,7 +40,8 @@ export default function SalesPage() {
   const [newSale, setNewSale] = useState({
     projectId: "",
     amount: "",
-    clientName: "",
+    clientId: "",
+    customClientName: "",
     type: "commission" as "commission" | "artwork" | "workshop" | "sponsorship" | "grant",
     notes: "",
   });
@@ -48,11 +49,20 @@ export default function SalesPage() {
   const [editSale, setEditSale] = useState<{
     projectId: string;
     amount: string;
-    clientName: string;
+    clientId: string;
+    customClientName: string;
     type: Sale["type"];
     date: string;
     notes: string;
-  }>({ projectId: "", amount: "", clientName: "", type: "commission", date: "", notes: "" });
+  }>({ projectId: "", amount: "", clientId: "", customClientName: "", type: "commission", date: "", notes: "" });
+
+  const getSaleClientName = (s: Sale) => {
+    if (s.clientId) {
+      const client = getClientById(s.clientId);
+      if (client) return client.name;
+    }
+    return s.clientName || "Unnamed Client";
+  };
 
   if (!isAdmin) {
     const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : "Guest";
@@ -88,9 +98,10 @@ export default function SalesPage() {
   const query = searchQuery.trim().toLowerCase();
   const filteredSales = sales
     .filter((s) => {
+      const clientName = getSaleClientName(s);
       if (query) {
         const project = projects.find((p) => p.id === s.projectId);
-        const haystack = [s.clientName, s.notes, project?.title ?? "", saleTypeConfig[s.type]?.label ?? s.type].join(" ").toLowerCase();
+        const haystack = [clientName, s.notes, project?.title ?? "", saleTypeConfig[s.type]?.label ?? s.type].join(" ").toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       if (filterType !== "all" && s.type !== filterType) return false;
@@ -125,27 +136,64 @@ export default function SalesPage() {
 
   function handleCreateSale() {
     const projectId = newSale.projectId || projects[0]?.id;
-    if (!newSale.clientName || !newSale.amount || !projectId) return;
+    let finalClientId = newSale.clientId;
+    let finalClientName = "";
+
+    if (finalClientId === "__new__" || (!finalClientId && newSale.customClientName.trim())) {
+      const trimmed = newSale.customClientName.trim();
+      const existing = clients.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+      if (existing) {
+        finalClientId = existing.id;
+        finalClientName = existing.name;
+      } else {
+        const newId = generateId();
+        const now = new Date().toISOString();
+        addClient({
+          id: newId,
+          name: trimmed,
+          createdAt: now,
+          createdBy: currentUserId,
+          updatedAt: now,
+          updatedBy: currentUserId,
+        });
+        finalClientId = newId;
+        finalClientName = trimmed;
+      }
+    } else if (finalClientId) {
+      const client = getClientById(finalClientId);
+      finalClientName = client?.name ?? "";
+    }
+
+    if (!finalClientName || !newSale.amount || !projectId) return;
+
     addSale({
       id: generateId(),
       projectId,
       amount: parseFloat(newSale.amount),
-      clientName: newSale.clientName,
+      clientId: finalClientId,
+      clientName: finalClientName,
       type: newSale.type,
       date: new Date().toISOString().split("T")[0],
       notes: newSale.notes,
       createdAt: new Date().toISOString(),
     });
-    setNewSale({ projectId: "", amount: "", clientName: "", type: "commission", notes: "" });
+    setNewSale({ projectId: "", amount: "", clientId: "", customClientName: "", type: "commission", notes: "" });
     setShowNewSale(false);
   }
 
   function openEditSale(sale: Sale) {
     setEditingSaleId(sale.id);
+    let resolvedClientId = sale.clientId || "";
+    if (!resolvedClientId && sale.clientName) {
+      const clientNameLower = sale.clientName.toLowerCase();
+      const matched = clients.find((c) => c.name.toLowerCase() === clientNameLower);
+      if (matched) resolvedClientId = matched.id;
+    }
     setEditSale({
       projectId: sale.projectId,
       amount: String(sale.amount),
-      clientName: sale.clientName,
+      clientId: resolvedClientId,
+      customClientName: resolvedClientId ? "" : (sale.clientName || ""),
       type: sale.type,
       date: sale.date,
       notes: sale.notes,
@@ -153,11 +201,42 @@ export default function SalesPage() {
   }
 
   function handleSaveSale() {
-    if (!editingSaleId || !editSale.clientName.trim() || !editSale.amount || !editSale.projectId) return;
+    if (!editingSaleId || !editSale.amount || !editSale.projectId) return;
+    let finalClientId = editSale.clientId;
+    let finalClientName = "";
+
+    if (finalClientId === "__new__" || (!finalClientId && editSale.customClientName.trim())) {
+      const trimmed = editSale.customClientName.trim();
+      const existing = clients.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+      if (existing) {
+        finalClientId = existing.id;
+        finalClientName = existing.name;
+      } else {
+        const newId = generateId();
+        const now = new Date().toISOString();
+        addClient({
+          id: newId,
+          name: trimmed,
+          createdAt: now,
+          createdBy: currentUserId,
+          updatedAt: now,
+          updatedBy: currentUserId,
+        });
+        finalClientId = newId;
+        finalClientName = trimmed;
+      }
+    } else if (finalClientId) {
+      const client = getClientById(finalClientId);
+      finalClientName = client?.name ?? "";
+    }
+
+    if (!finalClientName) return;
+
     updateSale(editingSaleId, {
       projectId: editSale.projectId,
       amount: parseFloat(editSale.amount),
-      clientName: editSale.clientName.trim(),
+      clientId: finalClientId,
+      clientName: finalClientName,
       type: editSale.type,
       date: editSale.date,
       notes: editSale.notes,
@@ -166,7 +245,8 @@ export default function SalesPage() {
   }
 
   function handleDeleteSale(sale: Sale) {
-    if (window.confirm(`Delete the sale from "${sale.clientName}"? This cannot be undone.`)) {
+    const clientName = getSaleClientName(sale);
+    if (window.confirm(`Delete the sale from "${clientName}"? This cannot be undone.`)) {
       deleteSale(sale.id);
     }
   }
@@ -291,10 +371,11 @@ export default function SalesPage() {
                 {filteredSales.map((sale) => {
                   const project = projects.find((p) => p.id === sale.projectId);
                   const typeConf = saleTypeConfig[sale.type];
+                  const clientName = getSaleClientName(sale);
                   return (
                     <tr key={sale.id} className="border-b border-border/50 hover:bg-secondary/50 transition-colors">
                       <td className="py-3 px-4">
-                        <span className="text-sm font-medium">{sale.clientName}</span>
+                        <span className="text-sm font-medium">{clientName}</span>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5">
@@ -316,7 +397,7 @@ export default function SalesPage() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
-                            aria-label={`Edit sale from ${sale.clientName}`}
+                            aria-label={`Edit sale from ${clientName}`}
                             onClick={() => openEditSale(sale)}
                             className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                           >
@@ -324,7 +405,7 @@ export default function SalesPage() {
                           </button>
                           <button
                             type="button"
-                            aria-label={`Delete sale from ${sale.clientName}`}
+                            aria-label={`Delete sale from ${clientName}`}
                             onClick={() => handleDeleteSale(sale)}
                             className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
                           >
@@ -350,8 +431,27 @@ export default function SalesPage() {
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Client Name</label>
-              <Input placeholder="e.g., National Arts Council" value={newSale.clientName} onChange={(e) => setNewSale({ ...newSale, clientName: e.target.value })} />
+              <label className="text-sm font-medium mb-1.5 block">Client</label>
+              <Select
+                value={newSale.clientId}
+                onChange={(e) => setNewSale({ ...newSale, clientId: e.target.value })}
+              >
+                <option value="">Select a client...</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                <option value="__new__">+ Enter new client...</option>
+              </Select>
+              {(newSale.clientId === "__new__" || (clients.length === 0 && !newSale.clientId)) && (
+                <div className="mt-2">
+                  <Input
+                    placeholder="e.g., National Arts Council"
+                    value={newSale.customClientName}
+                    onChange={(e) => setNewSale({ ...newSale, customClientName: e.target.value })}
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -388,7 +488,17 @@ export default function SalesPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowNewSale(false)}>Cancel</Button>
-              <Button onClick={handleCreateSale} disabled={!newSale.clientName.trim() || !newSale.amount || projects.length === 0}>Log Sale</Button>
+              <Button
+                onClick={handleCreateSale}
+                disabled={
+                  (!newSale.clientId && !newSale.customClientName.trim()) ||
+                  (newSale.clientId === "__new__" && !newSale.customClientName.trim()) ||
+                  !newSale.amount ||
+                  projects.length === 0
+                }
+              >
+                Log Sale
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -403,8 +513,27 @@ export default function SalesPage() {
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Client Name</label>
-              <Input placeholder="e.g., National Arts Council" value={editSale.clientName} onChange={(e) => setEditSale({ ...editSale, clientName: e.target.value })} />
+              <label className="text-sm font-medium mb-1.5 block">Client</label>
+              <Select
+                value={editSale.clientId}
+                onChange={(e) => setEditSale({ ...editSale, clientId: e.target.value })}
+              >
+                <option value="">Select a client...</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                <option value="__new__">+ Enter new client...</option>
+              </Select>
+              {(editSale.clientId === "__new__" || !editSale.clientId) && (
+                <div className="mt-2">
+                  <Input
+                    placeholder="e.g., National Arts Council"
+                    value={editSale.customClientName}
+                    onChange={(e) => setEditSale({ ...editSale, customClientName: e.target.value })}
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -438,7 +567,17 @@ export default function SalesPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setEditingSaleId(null)}>Cancel</Button>
-              <Button onClick={handleSaveSale} disabled={!editSale.clientName.trim() || !editSale.amount || !editSale.projectId}>Save changes</Button>
+              <Button
+                onClick={handleSaveSale}
+                disabled={
+                  (!editSale.clientId && !editSale.customClientName.trim()) ||
+                  (editSale.clientId === "__new__" && !editSale.customClientName.trim()) ||
+                  !editSale.amount ||
+                  !editSale.projectId
+                }
+              >
+                Save changes
+              </Button>
             </div>
           </div>
         </DialogContent>

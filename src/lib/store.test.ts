@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./supabase/data", () => mocks);
+vi.mock("./supabase/client", () => ({
+  isSupabaseConfigured: true,
+  getSupabase: vi.fn(),
+}));
 
 const user: User = {
   id: "u-1",

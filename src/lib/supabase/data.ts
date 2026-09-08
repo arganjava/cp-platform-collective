@@ -5,6 +5,7 @@ import type {
   TaskRow,
   SaleRow,
   NotificationRow,
+  ClientRow,
 } from "./types";
 import type {
   User,
@@ -17,6 +18,7 @@ import type {
   Priority,
   ProjectStatus,
   SaleType,
+  Client,
 } from "../types";
 
 type RowResult<T> = { data: T | null; error: { message: string } | null };
@@ -75,12 +77,24 @@ export function fromTaskRow(r: TaskRow): Task {
   };
 }
 
+export function fromClientRow(r: ClientRow): Client {
+  return {
+    id: r.id,
+    name: r.name,
+    createdAt: r.created_at ?? new Date().toISOString(),
+    createdBy: r.created_by ?? null,
+    updatedAt: r.updated_at ?? new Date().toISOString(),
+    updatedBy: r.updated_by ?? null,
+  };
+}
+
 export function fromSaleRow(r: SaleRow): Sale {
   return {
     id: r.id,
     projectId: r.project_id ?? "",
     amount: Number(r.amount) || 0,
-    clientName: r.client_name ?? "",
+    clientId: r.client_id ?? "",
+    clientName: r.clients?.name ?? r.client_name ?? "",
     type: (r.type as SaleType) || "commission",
     date: r.date ?? "",
     notes: r.notes ?? "",
@@ -132,11 +146,21 @@ export function taskColumns(t: Partial<Task>): Record<string, unknown> {
   return cols;
 }
 
+export function clientColumns(c: Partial<Client>): Record<string, unknown> {
+  const cols: Record<string, unknown> = {};
+  if (c.id !== undefined) cols.id = c.id;
+  if (c.name !== undefined) cols.name = c.name;
+  if (c.createdBy !== undefined) cols.created_by = c.createdBy || null;
+  if (c.updatedBy !== undefined) cols.updated_by = c.updatedBy || null;
+  return cols;
+}
+
 export function saleColumns(s: Partial<Sale>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (s.id !== undefined) cols.id = s.id;
   if (s.projectId !== undefined) cols.project_id = s.projectId || null;
   if (s.amount !== undefined) cols.amount = s.amount;
+  if (s.clientId !== undefined) cols.client_id = s.clientId || null;
   if (s.clientName !== undefined) cols.client_name = s.clientName;
   if (s.type !== undefined) cols.type = s.type;
   if (s.date !== undefined) cols.date = s.date || null;
@@ -176,26 +200,50 @@ export interface TeamData {
   tasks: Task[];
   sales: Sale[];
   notifications: Notification[];
+  clients: Client[];
+}
+
+async function fetchSalesSafe(supabase: ReturnType<typeof getSupabase>): Promise<SaleRow[]> {
+  try {
+    const res = await supabase.from("sales").select("*, clients(name)").order("date", { ascending: false });
+    if (!res.error && res.data) return res.data as SaleRow[];
+    const fallback = await supabase.from("sales").select("*").order("date", { ascending: false });
+    return (fallback.data as SaleRow[]) || [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchClientsSafe(supabase: ReturnType<typeof getSupabase>): Promise<ClientRow[]> {
+  try {
+    const res = await supabase.from("clients").select("*").order("name");
+    if (!res.error && res.data) return res.data as ClientRow[];
+    return [];
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchTeamData(): Promise<TeamData> {
   const supabase = getSupabase();
-  const [profiles, projects, tasks, sales, notifications] = await Promise.all([
+  const [profiles, projects, tasks, notifications, salesRows, clientsRows] = await Promise.all([
     supabase.from("profiles").select("*").order("name"),
     supabase.from("projects").select("*").order("created_at"),
     supabase.from("tasks").select("*").order("sort_order", { ascending: true }).order("created_at"),
-    supabase.from("sales").select("*").order("date", { ascending: false }),
     supabase.from("notifications").select("*").order("created_at", { ascending: false }),
+    fetchSalesSafe(supabase),
+    fetchClientsSafe(supabase),
   ]);
 
   return {
     users: (unwrap(profiles, "load profiles") as ProfileRow[]).map(fromProfileRow),
     projects: (unwrap(projects, "load projects") as ProjectRow[]).map(fromProjectRow),
     tasks: (unwrap(tasks, "load tasks") as TaskRow[]).map(fromTaskRow),
-    sales: (unwrap(sales, "load sales") as SaleRow[]).map(fromSaleRow),
+    sales: salesRows.map(fromSaleRow),
     notifications: (unwrap(notifications, "load notifications") as NotificationRow[]).map(
       fromNotificationRow
     ),
+    clients: clientsRows.map(fromClientRow),
   };
 }
 
@@ -302,6 +350,26 @@ export async function updateTaskRow(id: string, updates: Partial<Task>) {
 
 export async function deleteTaskRow(id: string) {
   const { error } = await getSupabase().from("tasks").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function insertClient(client: Client) {
+  const { error } = await getSupabase()
+    .from("clients")
+    .insert(clientColumns(client));
+  if (error) throw error;
+}
+
+export async function updateClientRow(id: string, updates: Partial<Client>) {
+  const { error } = await getSupabase()
+    .from("clients")
+    .update({ ...clientColumns(updates), updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteClientRow(id: string) {
+  const { error } = await getSupabase().from("clients").delete().eq("id", id);
   if (error) throw error;
 }
 
