@@ -83,8 +83,6 @@ export default function SalesPage() {
     updateSale,
     deleteSale,
     addSaleStage,
-    updateSaleStage,
-    deleteSaleStage,
     searchQuery,
     currentUserId,
     getUserById,
@@ -99,6 +97,7 @@ export default function SalesPage() {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterProject, setFilterProject] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
+  const [filterStageStatus, setFilterStageStatus] = useState<string>("all");
   const [expandedSaleIds, setExpandedSaleIds] = useState<Record<string, boolean>>({});
 
   // Sale Modal States
@@ -136,19 +135,6 @@ export default function SalesPage() {
     value: "",
   });
 
-  const [editingStage, setEditingStage] = useState<SaleStage | null>(null);
-  const [editStageForm, setEditStageForm] = useState<{
-    status: SaleStageStatus;
-    date: string;
-    picProfileId: string;
-    value: string;
-  }>({
-    status: "Opportunity",
-    date: "",
-    picProfileId: "",
-    value: "",
-  });
-
   const getSaleClientName = useCallback((s: Sale) => {
     if (s.clientId) {
       const client = getClientById(s.clientId);
@@ -156,6 +142,13 @@ export default function SalesPage() {
     }
     return s.clientName || "Unnamed Client";
   }, [getClientById]);
+
+  // Retrieve the latest stage for a sale based on latest created_at
+  const getLatestSaleStage = useCallback((saleId: string): SaleStage | null => {
+    const matching = saleStages.filter((st) => st.saleId === saleId);
+    if (matching.length === 0) return null;
+    return [...matching].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  }, [saleStages]);
 
   // Build unique client list for filter
   const clientFilterOptions = useMemo(() => {
@@ -224,6 +217,10 @@ export default function SalesPage() {
       if (filterType !== "all" && s.type !== filterType) return false;
       if (filterProject !== "all" && s.projectId !== filterProject) return false;
       if (filterClient !== "all" && clientName.toLowerCase() !== filterClient.toLowerCase()) return false;
+      if (filterStageStatus !== "all") {
+        const latest = getLatestSaleStage(s.id);
+        if (!latest || latest.status !== filterStageStatus) return false;
+      }
       return true;
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -404,42 +401,6 @@ export default function SalesPage() {
     setStageModalSaleId(null);
   }
 
-  // Handle Editing Sale Stage
-  function openEditStageModal(stage: SaleStage) {
-    setEditingStage(stage);
-    const stageDate = new Date(stage.date);
-    const localIso = !isNaN(stageDate.getTime())
-      ? new Date(stageDate.getTime() - stageDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setEditStageForm({
-      status: stage.status,
-      date: localIso,
-      picProfileId: stage.picProfileId || "",
-      value: String(stage.value),
-    });
-  }
-
-  async function handleSaveEditStage() {
-    if (!editingStage) return;
-    const nowIso = new Date().toISOString();
-    const stageDate = editStageForm.date ? new Date(editStageForm.date).toISOString() : editingStage.date;
-    await updateSaleStage(editingStage.id, {
-      status: editStageForm.status,
-      date: stageDate,
-      picProfileId: editStageForm.picProfileId || null,
-      value: parseFloat(editStageForm.value) || 0,
-      updatedAt: nowIso,
-      updatedBy: currentUserId,
-    });
-    setEditingStage(null);
-  }
-
-  async function handleDeleteStage(stage: SaleStage) {
-    if (window.confirm(`Delete the "${stage.status}" stage? This cannot be undone.`)) {
-      await deleteSaleStage(stage.id);
-    }
-  }
-
   const targetSaleForNewStage = stageModalSaleId ? sales.find((s) => s.id === stageModalSaleId) : null;
 
   return (
@@ -545,6 +506,16 @@ export default function SalesPage() {
             ))}
           </Select>
           <Select
+            value={filterStageStatus}
+            onChange={(e) => setFilterStageStatus(e.target.value)}
+            aria-label="Filter by Stage Status"
+          >
+            <option value="all">All Stage Statuses</option>
+            {stageStatusOptions.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </Select>
+          <Select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             aria-label="Filter by Type"
@@ -578,7 +549,7 @@ export default function SalesPage() {
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Type</th>
                   <th className="text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Amount</th>
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Date</th>
-                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Stages</th>
+                  <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Stage Status</th>
                   <th className="text-left text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 px-3">Notes</th>
                   <th className="w-36 text-right text-xs font-medium text-subtle-foreground uppercase tracking-wider py-3 pr-4 pl-2">Actions</th>
                 </tr>
@@ -598,6 +569,8 @@ export default function SalesPage() {
                     const stages = saleStages
                       .filter((st) => st.saleId === sale.id)
                       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                    const latestStage = getLatestSaleStage(sale.id);
+                    const latestMeta = latestStage ? stageStatusStyles[latestStage.status] : null;
                     const isExpanded = !!expandedSaleIds[sale.id];
 
                     return (
@@ -645,14 +618,14 @@ export default function SalesPage() {
                           </td>
                           <td className="py-3 px-3 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                           <td className="py-3 px-3">
-                            <button
-                              type="button"
-                              onClick={() => toggleExpand(sale.id)}
-                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border border-border bg-secondary/50 hover:bg-secondary transition-colors"
-                            >
-                              <Layers className="h-3 w-3 text-muted-foreground" />
-                              <span>{stages.length} stage{stages.length === 1 ? "" : "s"}</span>
-                            </button>
+                            {latestMeta ? (
+                              <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap", latestMeta.badgeClass)}>
+                                <span className={cn("w-1.5 h-1.5 rounded-full", latestMeta.dotClass)} />
+                                {latestMeta.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">-</span>
+                            )}
                           </td>
                           <td className="py-3 px-3">
                             <span className="text-sm text-subtle-foreground truncate max-w-[200px] block" title={sale.notes}>
@@ -741,7 +714,6 @@ export default function SalesPage() {
                                           <th className="py-2.5 px-3 text-left font-medium">PIC (Person in Charge)</th>
                                           <th className="py-2.5 px-3 text-right font-medium">Stage Value</th>
                                           <th className="py-2.5 px-3 text-right font-medium">Last Updated</th>
-                                          <th className="py-2.5 px-3 text-right font-medium w-24">Actions</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-border/40">
@@ -786,26 +758,6 @@ export default function SalesPage() {
                                               </td>
                                               <td className="py-2.5 px-3 text-right text-muted-foreground">
                                                 {formatDate(st.updatedAt || st.createdAt)}
-                                              </td>
-                                              <td className="py-2.5 px-3 text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                  <button
-                                                    type="button"
-                                                    aria-label={`Edit ${st.status} stage`}
-                                                    onClick={() => openEditStageModal(st)}
-                                                    className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary rounded transition-colors"
-                                                  >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    aria-label={`Delete ${st.status} stage`}
-                                                    onClick={() => handleDeleteStage(st)}
-                                                    className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-destructive hover:bg-accent rounded transition-colors"
-                                                  >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                  </button>
-                                                </div>
                                               </td>
                                             </tr>
                                           );
@@ -1087,74 +1039,6 @@ export default function SalesPage() {
               </Button>
               <Button onClick={handleSaveNewStage}>
                 Add Stage
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Stage Modal */}
-      <Dialog open={editingStage !== null} onOpenChange={(open) => { if (!open) setEditingStage(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Pipeline Stage</DialogTitle>
-            <DialogDescription>Update the stage status, value, date, or assigned PIC.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-2">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Stage Status</label>
-              <Select
-                value={editStageForm.status}
-                onChange={(e) => setEditStageForm({ ...editStageForm, status: e.target.value as SaleStageStatus })}
-              >
-                {stageStatusOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Date & Time</label>
-                <Input
-                  type="datetime-local"
-                  value={editStageForm.date}
-                  onChange={(e) => setEditStageForm({ ...editStageForm, date: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Stage Value ($)</label>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={editStageForm.value}
-                  onChange={(e) => setEditStageForm({ ...editStageForm, value: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Person in Charge (PIC)</label>
-              <Select
-                value={editStageForm.picProfileId}
-                onChange={(e) => setEditStageForm({ ...editStageForm, picProfileId: e.target.value })}
-              >
-                <option value="">Unassigned (None)</option>
-                {activeUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setEditingStage(null)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveEditStage}>
-                Save Changes
               </Button>
             </div>
           </div>
