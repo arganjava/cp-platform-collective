@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import type { SaleStage, SaleStageStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,29 @@ const SalesChart = dynamic(() => import("@/components/reports-charts").then((mod
 const TaskChart = dynamic(() => import("@/components/reports-charts").then((module) => module.TaskChart), { ssr: false });
 const ProjectProgressChart = dynamic(() => import("@/components/reports-charts").then((module) => module.ProjectProgressChart), { ssr: false });
 const TeamChart = dynamic(() => import("@/components/reports-charts").then((module) => module.TeamChart), { ssr: false });
+
+const stageStatusStyles: Record<SaleStageStatus, { label: string; badgeClass: string; dotClass: string }> = {
+  Opportunity: {
+    label: "Opportunity",
+    badgeClass: "border border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    dotClass: "bg-blue-500",
+  },
+  Discussion: {
+    label: "Discussion",
+    badgeClass: "border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    dotClass: "bg-amber-500",
+  },
+  Closed: {
+    label: "Closed",
+    badgeClass: "border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    dotClass: "bg-emerald-500",
+  },
+  Lost: {
+    label: "Lost",
+    badgeClass: "border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    dotClass: "bg-rose-500",
+  },
+};
 
 const statusLabels = {
   todo: "To Do",
@@ -73,30 +97,53 @@ function isDateInRange(value: string, range: ReturnType<typeof getPeriodRange>) 
   return (!range.start || date >= range.start) && (!range.end || date <= range.end);
 }
 
-function taskIntersectsRange(task: { startDate: string; dueDate: string }, range: ReturnType<typeof getPeriodRange>) {
+function taskIntersectsRange(task: { startDate?: string; dueDate?: string }, range: ReturnType<typeof getPeriodRange>) {
   if (!range.start || !range.end) return true;
+  if (!task.dueDate || !task.startDate) return true;
   return new Date(task.dueDate) >= range.start && new Date(task.startDate) <= range.end;
 }
 
+function projectIntersectsRange(project: { startDate?: string; endDate?: string }, range: ReturnType<typeof getPeriodRange>) {
+  if (!range.start || !range.end) return true;
+  if (!project.startDate || !project.endDate) return true;
+  return new Date(project.endDate) >= range.start && new Date(project.startDate) <= range.end;
+}
+
 export default function ReportsPage() {
-  const { projects, tasks, sales, users, getUserById, searchQuery, currentUserId } = useStore();
+  const { projects, tasks, sales, saleStages, users, getUserById, searchQuery, currentUserId } = useStore();
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
 
   const [activeTab, setActiveTab] = useState("overview");
   const [period, setPeriod] = useState<ReportPeriod>("all");
   const [projectId, setProjectId] = useState("all");
+  const [stageStatus, setStageStatus] = useState<string>("all");
 
   const range = useMemo(() => getPeriodRange(period), [period]);
   const query = searchQuery.trim().toLowerCase();
   const selectedProject = projects.find((project) => project.id === projectId);
   const projectLabel = selectedProject?.title || "All projects";
 
+  const getLatestSaleStage = useCallback(
+    (saleId: string): SaleStage | null => {
+      const matching = saleStages.filter((st) => st.saleId === saleId);
+      if (matching.length === 0) return null;
+      return [...matching].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0];
+    },
+    [saleStages]
+  );
+
   const filteredSales = useMemo(
     () =>
       sales.filter((sale) => {
         if (projectId !== "all" && sale.projectId !== projectId) return false;
         if (!isDateInRange(sale.date, range)) return false;
+        if (stageStatus !== "all") {
+          const latest = getLatestSaleStage(sale.id);
+          if (!latest || latest.status !== stageStatus) return false;
+        }
         if (query) {
           const project = projects.find((p) => p.id === sale.projectId);
           const haystack = `${sale.clientName} ${sale.notes} ${project?.title ?? ""}`.toLowerCase();
@@ -104,32 +151,71 @@ export default function ReportsPage() {
         }
         return true;
       }),
-    [projectId, range, sales, query, projects]
+    [projectId, range, stageStatus, getLatestSaleStage, sales, query, projects]
   );
-  const filteredTasks = useMemo(
-    () =>
-      tasks.filter((task) => {
-        if (projectId !== "all" && task.projectId !== projectId) return false;
-        if (!taskIntersectsRange(task, range)) return false;
-        if (query) {
-          const project = projects.find((p) => p.id === task.projectId);
-          const assignee = getUserById(task.assigneeId);
-          const haystack = `${task.title} ${project?.title ?? ""} ${assignee?.name ?? ""}`.toLowerCase();
-          if (!haystack.includes(query)) return false;
+
+  const filteredProjects = useMemo(() => {
+    // When a specific stageStatus filter is selected, only projects with sales in that stage status are in view
+    const stageSaleProjectIds = stageStatus !== "all" ? new Set(filteredSales.map((s) => s.projectId)) : null;
+
+    return projects.filter((project) => {
+      if (projectId !== "all" && project.id !== projectId) return false;
+
+      if (stageSaleProjectIds && !stageSaleProjectIds.has(project.id)) {
+        return false;
+      }
+
+      if (period !== "all" && stageStatus === "all") {
+        const hasSalesInPeriod = sales.some(
+          (s) => s.projectId === project.id && isDateInRange(s.date, range)
+        );
+        const hasTasksInPeriod = tasks.some(
+          (t) => t.projectId === project.id && taskIntersectsRange(t, range)
+        );
+        const intersectsDates = projectIntersectsRange(project, range);
+        if (!hasSalesInPeriod && !hasTasksInPeriod && !intersectsDates) {
+          return false;
         }
-        return true;
-      }),
-    [projectId, range, tasks, query, projects, getUserById]
-  );
-  const filteredProjects = useMemo(
-    () =>
-      projects.filter((project) => {
-        if (projectId !== "all" && project.id !== projectId) return false;
-        if (query && !`${project.title} ${project.description}`.toLowerCase().includes(query)) return false;
-        return true;
-      }),
-    [projectId, projects, query]
-  );
+      }
+
+      if (query) {
+        const text = `${project.title} ${project.description}`.toLowerCase();
+        const hasMatchingSale = filteredSales.some((s) => s.projectId === project.id);
+        const hasMatchingTask = tasks.some(
+          (t) =>
+            t.projectId === project.id &&
+            `${t.title} ${t.description || ""}`.toLowerCase().includes(query)
+        );
+        if (!text.includes(query) && !hasMatchingSale && !hasMatchingTask) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [projects, projectId, stageStatus, filteredSales, period, sales, range, tasks, query]);
+
+  const filteredTasks = useMemo(() => {
+    const validProjectIds = new Set(filteredProjects.map((p) => p.id));
+
+    return tasks.filter((task) => {
+      if (!validProjectIds.has(task.projectId)) return false;
+      if (!taskIntersectsRange(task, range)) return false;
+
+      if (query) {
+        const project = projects.find((p) => p.id === task.projectId);
+        const assignee = getUserById(task.assigneeId);
+        const haystack = `${task.title} ${task.description || ""} ${project?.title ?? ""} ${assignee?.name ?? ""}`.toLowerCase();
+        const projectMatched = `${project?.title ?? ""} ${project?.description ?? ""}`.toLowerCase().includes(query);
+        const saleMatched = filteredSales.some((s) => s.projectId === task.projectId);
+        if (!haystack.includes(query) && !projectMatched && !saleMatched) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [filteredProjects, tasks, range, query, projects, getUserById, filteredSales]);
 
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.amount, 0);
   const completedTasks = filteredTasks.filter((task) => task.status === "done").length;
@@ -225,7 +311,8 @@ export default function ReportsPage() {
   }
 
   const completionLabel = filteredTasks.length > 0 ? `${completedTasks}/${filteredTasks.length}` : "0";
-  const reportStatus = `${projectLabel} · ${range.label} · ${filteredSales.length} sales entries, ${filteredTasks.length} tasks`;
+  const stageStatusLabel = stageStatus === "all" ? "All Stage Statuses" : stageStatus;
+  const reportStatus = `${projectLabel} · ${stageStatusLabel} · ${range.label} · ${filteredSales.length} sales entries, ${filteredTasks.length} tasks, ${filteredProjects.length} projects`;
 
   if (!isAdmin) {
     const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : "Guest";
@@ -270,12 +357,14 @@ export default function ReportsPage() {
         onPeriodChange={setPeriod}
         projectId={projectId}
         onProjectChange={setProjectId}
+        stageStatus={stageStatus}
+        onStageStatusChange={setStageStatus}
         projects={projects}
         rangeLabel={range.label}
         onPrint={handlePrint}
       />
       <p className="sr-only" aria-live="polite">Report updated: {reportStatus}</p>
-      <ReportMeta rangeLabel={range.label} projectLabel={projectLabel} />
+      <ReportMeta rangeLabel={range.label} projectLabel={projectLabel} stageStatusLabel={stageStatusLabel} />
 
       <SheetSummary>
         <SummaryMetric value={formatCurrency(totalRevenue)} label="Revenue" indicator={<Badge variant="neutral">{filteredSales.length} entries</Badge>} />
@@ -319,32 +408,60 @@ export default function ReportsPage() {
         <TabsContent value="sales">
           <ReportPanel title="Sales detail" description={`${filteredSales.length} transaction${filteredSales.length === 1 ? "" : "s"} in ${range.label.toLowerCase()}.`}>
             {filteredSales.length === 0 ? (
-              <div className="border-y border-border bg-secondary p-8 text-center text-sm text-subtle-foreground">No sales recorded for this period and project filter.</div>
+              <div className="border-y border-border bg-secondary p-8 text-center text-sm text-subtle-foreground">No sales recorded for the selected period, project, or stage status filters.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px]">
                   <caption className="sr-only">Sales detail for {range.label}</caption>
                   <thead>
                     <tr className="border-b border-border">
-                      {['Date', 'Client', 'Project', 'Type', 'Amount'].map((heading) => <th key={heading} scope="col" className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-subtle-foreground">{heading}</th>)}
+                      {['Date', 'Client', 'Project', 'Type', 'Stage Status', 'Amount'].map((heading) => (
+                        <th
+                          key={heading}
+                          scope="col"
+                          className={cn(
+                            "px-3 py-3 text-xs font-semibold uppercase tracking-wider text-subtle-foreground",
+                            heading === "Amount" ? "text-right" : "text-left"
+                          )}
+                        >
+                          {heading}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {[...filteredSales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((sale) => {
                       const project = projects.find((item) => item.id === sale.projectId);
+                      const latestStage = getLatestSaleStage(sale.id);
+                      const stageMeta = latestStage ? stageStatusStyles[latestStage.status] : null;
                       return (
                         <tr key={sale.id} className="border-b border-border/50">
                           <td className="px-3 py-3 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                           <td className="px-3 py-3 text-sm font-medium">{sale.clientName}</td>
                           <td className="px-3 py-3 text-sm text-muted-foreground">{project?.title || "Unknown project"}</td>
                           <td className="px-3 py-3"><Badge variant={sale.type === "sponsorship" ? "accent" : sale.type === "grant" ? "neutral" : sale.type === "workshop" ? "warning" : "neutral"}>{sale.type}</Badge></td>
+                          <td className="px-3 py-3">
+                            {stageMeta ? (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap",
+                                  stageMeta.badgeClass
+                                )}
+                              >
+                                <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dotClass)} />
+                                {stageMeta.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">-</span>
+                            )}
+                          </td>
                           <td className="px-3 py-3 text-right text-sm font-semibold">{formatCurrency(sale.amount)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-border font-semibold"><td colSpan={4} className="px-3 py-3 text-sm">Total</td><td className="px-3 py-3 text-right text-sm">{formatCurrency(totalRevenue)}</td></tr>
+                    <tr className="border-t-2 border-border font-semibold"><td colSpan={5} className="px-3 py-3 text-sm">Total</td><td className="px-3 py-3 text-right text-sm">{formatCurrency(totalRevenue)}</td></tr>
                   </tfoot>
                 </table>
               </div>

@@ -157,7 +157,22 @@ export const seedSaleStages: SaleStage[] = [
   { id: "stage-4-1", saleId: "sale-4", status: "Opportunity", date: "2026-04-12T09:00:00Z", picProfileId: "user-1", value: 3200, createdAt: "2026-04-12T09:00:00Z", updatedAt: "2026-04-12T09:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
   { id: "stage-4-2", saleId: "sale-4", status: "Closed", date: "2026-05-01T10:00:00Z", picProfileId: "user-1", value: 3200, createdAt: "2026-05-01T10:00:00Z", updatedAt: "2026-05-01T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
 
+  { id: "stage-5-1", saleId: "sale-5", status: "Opportunity", date: "2026-07-01T10:00:00Z", picProfileId: "user-2", value: 1800, createdAt: "2026-07-01T10:00:00Z", updatedAt: "2026-07-01T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-5-2", saleId: "sale-5", status: "Discussion", date: "2026-07-15T10:00:00Z", picProfileId: "user-2", value: 1800, createdAt: "2026-07-15T10:00:00Z", updatedAt: "2026-07-15T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+
+  { id: "stage-6-1", saleId: "sale-6", status: "Opportunity", date: "2026-06-20T10:00:00Z", picProfileId: "user-1", value: 2000, createdAt: "2026-06-20T10:00:00Z", updatedAt: "2026-06-20T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+
   { id: "stage-7-1", saleId: "sale-7", status: "Opportunity", date: "2026-06-01T10:00:00Z", picProfileId: "user-2", value: 15000, createdAt: "2026-06-01T10:00:00Z", updatedAt: "2026-06-01T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
   { id: "stage-7-2", saleId: "sale-7", status: "Discussion", date: "2026-06-15T14:00:00Z", picProfileId: "user-4", value: 12000, createdAt: "2026-06-15T14:00:00Z", updatedAt: "2026-06-15T14:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
   { id: "stage-7-3", saleId: "sale-7", status: "Closed", date: "2026-07-01T10:00:00Z", picProfileId: "user-2", value: 12000, createdAt: "2026-07-01T10:00:00Z", updatedAt: "2026-07-01T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+
+  { id: "stage-8-1", saleId: "sale-8", status: "Opportunity", date: "2026-06-15T10:00:00Z", picProfileId: "user-2", value: 6500, createdAt: "2026-06-15T10:00:00Z", updatedAt: "2026-06-15T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-8-2", saleId: "sale-8", status: "Discussion", date: "2026-07-10T10:00:00Z", picProfileId: "user-2", value: 6500, createdAt: "2026-07-10T10:00:00Z", updatedAt: "2026-07-10T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+
+  { id: "stage-9-1", saleId: "sale-9", status: "Opportunity", date: "2026-06-25T10:00:00Z", picProfileId: "user-1", value: 4200, createdAt: "2026-06-25T10:00:00Z", updatedAt: "2026-06-25T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+  { id: "stage-9-2", saleId: "sale-9", status: "Closed", date: "2026-07-20T10:00:00Z", picProfileId: "user-1", value: 4200, createdAt: "2026-07-20T10:00:00Z", updatedAt: "2026-07-20T10:00:00Z", createdBy: "user-1", updatedBy: "user-1" },
+
+  { id: "stage-10-1", saleId: "sale-10", status: "Opportunity", date: "2026-07-15T10:00:00Z", picProfileId: "user-2", value: 950, createdAt: "2026-07-15T10:00:00Z", updatedAt: "2026-07-15T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-10-2", saleId: "sale-10", status: "Discussion", date: "2026-07-20T10:00:00Z", picProfileId: "user-2", value: 950, createdAt: "2026-07-20T10:00:00Z", updatedAt: "2026-07-20T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+  { id: "stage-10-3", saleId: "sale-10", status: "Lost", date: "2026-07-25T10:00:00Z", picProfileId: "user-2", value: 950, createdAt: "2026-07-25T10:00:00Z", updatedAt: "2026-07-25T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
 ];

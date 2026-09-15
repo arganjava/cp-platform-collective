@@ -16,6 +16,8 @@ export interface ReportPeriodToolbarProps {
   projectId: string;
   onProjectChange: (projectId: string) => void;
   projects: Array<{ id: string; title: string }>;
+  stageStatus?: string;
+  onStageStatusChange?: (status: string) => void;
   rangeLabel: string;
   onPrint: () => void;
 }
@@ -26,12 +28,14 @@ export function ReportPeriodToolbar({
   projectId,
   onProjectChange,
   projects,
+  stageStatus = "all",
+  onStageStatusChange,
   rangeLabel,
   onPrint,
 }: ReportPeriodToolbarProps) {
   return (
     <form aria-label="Report filters" className="flex flex-col gap-3 border border-border bg-card p-4 sm:flex-row sm:flex-wrap sm:items-end">
-      <div className="min-w-0 flex-1 sm:min-w-52">
+      <div className="min-w-0 flex-1 sm:min-w-44">
         <label htmlFor="report-period" className="mb-1.5 block text-sm font-semibold text-foreground">Reporting period</label>
         <Select
           id="report-period"
@@ -44,7 +48,7 @@ export function ReportPeriodToolbar({
           <option value="this-year">This year</option>
         </Select>
       </div>
-      <div className="min-w-0 flex-1 sm:min-w-52">
+      <div className="min-w-0 flex-1 sm:min-w-44">
         <label htmlFor="report-project" className="mb-1.5 block text-sm font-semibold text-foreground">Project</label>
         <Select
           id="report-project"
@@ -55,6 +59,22 @@ export function ReportPeriodToolbar({
           {projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
         </Select>
       </div>
+      {onStageStatusChange && (
+        <div className="min-w-0 flex-1 sm:min-w-44">
+          <label htmlFor="report-stage-status" className="mb-1.5 block text-sm font-semibold text-foreground">Stage Status</label>
+          <Select
+            id="report-stage-status"
+            value={stageStatus}
+            onChange={(event) => onStageStatusChange(event.target.value)}
+          >
+            <option value="all">All Stage Statuses</option>
+            <option value="Opportunity">Opportunity</option>
+            <option value="Discussion">Discussion</option>
+            <option value="Closed">Closed</option>
+            <option value="Lost">Lost</option>
+          </Select>
+        </div>
+      )}
       <div className="flex min-h-10 items-center gap-2 text-sm text-muted-foreground sm:px-2" aria-live="polite">
         <CalendarRange className="h-4 w-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
         <span>{rangeLabel}</span>
@@ -137,6 +157,19 @@ export function AttentionProjectList({ projects }: { projects: AttentionProject[
   );
 }
 
-export function ReportMeta({ rangeLabel, projectLabel }: { rangeLabel: string; projectLabel: string }) {
-  return <p className="report-print-meta hidden text-sm text-muted-foreground print:block">Reporting period: {rangeLabel} · Project: {projectLabel}</p>;
+export function ReportMeta({
+  rangeLabel,
+  projectLabel,
+  stageStatusLabel,
+}: {
+  rangeLabel: string;
+  projectLabel: string;
+  stageStatusLabel?: string;
+}) {
+  return (
+    <p className="report-print-meta hidden text-sm text-muted-foreground print:block">
+      Reporting period: {rangeLabel} · Project: {projectLabel}
+      {stageStatusLabel && stageStatusLabel !== "All Stage Statuses" ? ` · Stage Status: ${stageStatusLabel}` : ""}
+    </p>
+  );
 }
