@@ -65,7 +65,6 @@ export default function ClientsPage() {
   const [editError, setEditError] = useState<string | null>(null);
 
   const [deletingClient, setDeletingClient] = useState<Client | null>(null);
-  const [viewingClient, setViewingClient] = useState<Client | null>(null);
 
   // Stats calculation per client
   const clientStats = useMemo(() => {
@@ -217,8 +216,6 @@ export default function ClientsPage() {
     setDeletingClient(null);
   }
 
-  const viewingStats = viewingClient ? clientStats.get(viewingClient.id) : null;
-
   return (
     <PageFrame id="clients-page-frame">
       {/* Header */}
@@ -361,13 +358,20 @@ export default function ClientsPage() {
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-semibold text-xs">
+                          <Link
+                            href={`/clients/${client.id}`}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-semibold text-xs hover:bg-primary/20 transition-colors"
+                            title={`View details for ${client.name}`}
+                          >
                             {client.name.slice(0, 2).toUpperCase()}
-                          </div>
+                          </Link>
                           <div className="min-w-0">
-                            <span className="text-sm font-semibold text-foreground block truncate">
+                            <Link
+                              href={`/clients/${client.id}`}
+                              className="text-sm font-semibold text-foreground hover:text-primary transition-colors block truncate"
+                            >
                               {client.name}
-                            </span>
+                            </Link>
                             <span className="text-xs text-muted-foreground">ID: {client.id.slice(0, 8)}...</span>
                           </div>
                         </div>
@@ -402,16 +406,17 @@ export default function ClientsPage() {
                         )}
                       </td>
                       <td className="py-2 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            aria-label={`View deals for ${client.name}`}
-                            onClick={() => setViewingClient(client)}
-                            title="View Deals"
-                            className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            href={`/clients/${client.id}`}
+                            id={`btn-client-detail-${client.id}`}
+                            aria-label={`View details for ${client.name}`}
+                            title="View Client Details and Deals"
+                            className="inline-flex h-8 px-2.5 items-center gap-1.5 rounded text-xs font-medium border border-border bg-secondary/40 text-foreground hover:bg-secondary hover:text-primary transition-colors"
                           >
-                            <Eye className="h-4 w-4" />
-                          </button>
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Detail</span>
+                          </Link>
                           <button
                             type="button"
                             aria-label={`Edit ${client.name}`}
@@ -419,7 +424,7 @@ export default function ClientsPage() {
                             title="Edit Client"
                             className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
@@ -428,7 +433,7 @@ export default function ClientsPage() {
                             title="Delete Client"
                             className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>
@@ -562,103 +567,6 @@ export default function ClientsPage() {
                 Delete Client
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Deals Dialog */}
-      <Dialog
-        open={viewingClient !== null}
-        onOpenChange={(open) => {
-          if (!open) setViewingClient(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              <span>{viewingClient?.name}</span>
-            </DialogTitle>
-            <DialogDescription>
-              Financial transactions and deals linked to this client account.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto space-y-4 pt-2">
-            {/* Overview pill stats */}
-            <div className="grid grid-cols-2 gap-3 p-3 bg-secondary/30 rounded-lg border border-border/50">
-              <div>
-                <span className="text-xs text-muted-foreground block">Total Revenue</span>
-                <span className="text-lg font-bold text-foreground tabular">
-                  ${viewingStats?.totalRevenue.toLocaleString() || "0"}
-                </span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Associated Deals</span>
-                <span className="text-lg font-bold text-foreground tabular">
-                  {viewingStats?.dealCount || 0}
-                </span>
-              </div>
-            </div>
-
-            {/* List of deals */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                Deal History
-              </h4>
-              {(!viewingStats || viewingStats.sales.length === 0) ? (
-                <div className="text-center py-8 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
-                  No sales recorded for this client yet.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {viewingStats.sales.map((deal) => {
-                    const project = projects.find((p) => p.id === deal.projectId);
-                    return (
-                      <div
-                        key={deal.id}
-                        className="p-3 bg-card border border-border/60 rounded-lg flex items-center justify-between gap-3 text-sm"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">
-                              ${deal.amount.toLocaleString()}
-                            </span>
-                            <Badge variant="neutral" className="text-xs capitalize">
-                              {deal.type}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-                            {project && (
-                              <span className="flex items-center gap-1">
-                                <Briefcase className="h-3 w-3" />
-                                <span className="truncate max-w-[200px]">{project.title}</span>
-                              </span>
-                            )}
-                            <span>•</span>
-                            <span>{formatDate(deal.date)}</span>
-                          </div>
-                          {deal.notes && (
-                            <p className="text-xs text-subtle-foreground mt-1 truncate">
-                              {deal.notes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-between items-center pt-3 border-t border-border mt-2">
-            <Link href="/sales" className="text-xs text-primary hover:underline flex items-center gap-1">
-              <span>Go to Sales module</span>
-            </Link>
-            <Button variant="outline" onClick={() => setViewingClient(null)}>
-              Close
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
