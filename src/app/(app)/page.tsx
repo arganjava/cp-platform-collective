@@ -34,7 +34,9 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { projects, tasks, sales, users, getUserById, searchQuery } = useStore();
+  const { projects, tasks, sales, users, getUserById, currentUserId, searchQuery } = useStore();
+  const currentUser = getUserById(currentUserId);
+  const isAdmin = currentUser?.role === "admin";
 
   const query = searchQuery.trim().toLowerCase();
   const matchesQuery = (text: string) => !query || text.toLowerCase().includes(query);
@@ -83,11 +85,13 @@ export default function DashboardPage() {
           }
         />
 
-        <SheetSummary>
-          <SummaryMetric value={projects.length} label="Projects" indicator={<Badge variant="neutral">{activeProjects.length} active</Badge>} />
-          <SummaryMetric value={totalTasks} label="Tasks" indicator={<Badge variant="positive">{completionPct}% done</Badge>} />
-          <SummaryMetric value={overdueTasks} label="Overdue" indicator={overdueTasks > 0 ? <Badge variant="danger">{overdueTasks} need attention</Badge> : <Badge variant="positive">On track</Badge>} />
-          <SummaryMetric value={`$${(totalRevenue / 1000).toFixed(0)}k`} label="Revenue" indicator={<Badge variant="neutral">+${(thisMonthRevenue / 1000).toFixed(0)}k this month</Badge>} />
+        <SheetSummary id="dashboard-sheet-summary" className={cn(!isAdmin && "sm:grid-cols-3")}>
+          <SummaryMetric id="dashboard-metric-projects" value={projects.length} label="Projects" indicator={<Badge variant="neutral">{activeProjects.length} active</Badge>} />
+          <SummaryMetric id="dashboard-metric-tasks" value={totalTasks} label="Tasks" indicator={<Badge variant="positive">{completionPct}% done</Badge>} />
+          <SummaryMetric id="dashboard-metric-overdue" value={overdueTasks} label="Overdue" indicator={overdueTasks > 0 ? <Badge variant="danger">{overdueTasks} need attention</Badge> : <Badge variant="positive">On track</Badge>} />
+          {isAdmin && (
+            <SummaryMetric id="dashboard-metric-revenue" value={`$${(totalRevenue / 1000).toFixed(0)}k`} label="Revenue" indicator={<Badge variant="neutral">+${(thisMonthRevenue / 1000).toFixed(0)}k this month</Badge>} />
+          )}
         </SheetSummary>
 
         <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.9fr)]">
