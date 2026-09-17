@@ -41,6 +41,7 @@ export interface Task {
   assigneeId: string | null;
   startDate: string;
   dueDate: string;
+  checkDate?: string | null;
   tags: string[];
   createdAt: string;
   order: number;

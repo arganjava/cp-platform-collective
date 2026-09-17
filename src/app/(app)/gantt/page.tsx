@@ -5,6 +5,7 @@ import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
+import { Flag } from "lucide-react";
 
 type ZoomLevel = "day" | "week" | "month";
 
@@ -35,15 +36,21 @@ export default function GanttPage() {
   });
 
   const timelineStart = useMemo(() => {
-    const dates = allTasks.map((t) => new Date(t.startDate).getTime());
+    const dates = allTasks.flatMap((t) =>
+      [t.startDate, t.checkDate].filter(Boolean).map((d) => new Date(d!).getTime())
+    );
     const projects2 = activeProjects.map((p) => new Date(p.startDate).getTime());
-    return new Date(Math.min(...dates, ...projects2));
+    const valid = [...dates, ...projects2].filter((n) => !isNaN(n));
+    return valid.length > 0 ? new Date(Math.min(...valid)) : new Date();
   }, [allTasks, activeProjects]);
 
   const timelineEnd = useMemo(() => {
-    const dates = allTasks.map((t) => new Date(t.dueDate).getTime());
+    const dates = allTasks.flatMap((t) =>
+      [t.dueDate, t.checkDate].filter(Boolean).map((d) => new Date(d!).getTime())
+    );
     const projects2 = activeProjects.map((p) => new Date(p.endDate).getTime());
-    return new Date(Math.max(...dates, ...projects2));
+    const valid = [...dates, ...projects2].filter((n) => !isNaN(n));
+    return valid.length > 0 ? new Date(Math.max(...valid)) : new Date();
   }, [allTasks, activeProjects]);
 
   // Generate columns based on zoom level
@@ -63,7 +70,7 @@ export default function GanttPage() {
     return cols;
   }, [timelineStart, timelineEnd, zoom]);
 
-  const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / 86400000);
+  const totalDays = Math.max(1, Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / 86400000));
 
   function getBarPosition(startDate: string, endDate: string) {
     const start = new Date(startDate);
@@ -73,6 +80,14 @@ export default function GanttPage() {
     const left = (startOffset / totalDays) * 100;
     const width = (duration / totalDays) * 100;
     return { left: `${left}%`, width: `${Math.min(width, 100 - left)}%` };
+  }
+
+  function getPointPosition(dateStr: string): number | null {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const offset = (d.getTime() - timelineStart.getTime()) / 86400000;
+    const left = (offset / totalDays) * 100;
+    return Math.max(0, Math.min(100, left));
   }
 
   function formatColumnHeader(date: Date): string {
@@ -209,6 +224,7 @@ export default function GanttPage() {
                     {projectTasks.map((task) => {
                       const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
                       const barPos = getBarPosition(task.startDate, task.dueDate);
+                      const checkDatePos = task.checkDate ? getPointPosition(task.checkDate) : null;
                       const isHovered = hoveredTask === task.id;
 
                       return (
@@ -229,6 +245,14 @@ export default function GanttPage() {
                                 style={{ backgroundColor: priorityColors[task.priority] }}
                               />
                               <span className="text-sm truncate">{task.title}</span>
+                              {task.checkDate && (
+                                <span
+                                  className="inline-flex items-center text-blue-600 dark:text-blue-400 shrink-0"
+                                  title={`Check Date: ${formatDate(task.checkDate)}`}
+                                >
+                                  <Flag className="w-3 h-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400" />
+                                </span>
+                              )}
                               {assignee && (
                                 <div
                                   className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground flex-shrink-0 ml-auto"
@@ -243,8 +267,9 @@ export default function GanttPage() {
 
                           {/* Gantt bar */}
                           <div className="flex-1 relative py-2.5">
+                            {/* Task schedule line (start_date to due_date kept as current) */}
                             <div
-                              className="gantt-bar absolute h-6 top-1/2 -translate-y-1/2 flex items-center px-2"
+                              className="gantt-bar absolute h-6 top-1/2 -translate-y-1/2 flex items-center px-2 z-10"
                               style={{
                                 ...barPos,
                                 backgroundColor: task.status === "done" ? "var(--muted-foreground)" : project.color,
@@ -257,6 +282,32 @@ export default function GanttPage() {
                                 </span>
                               )}
                             </div>
+
+                            {/* Specific point check_date flagging with blue color */}
+                            {checkDatePos !== null && (
+                              <div
+                                className="absolute top-0 bottom-0 z-20 pointer-events-auto group/flag"
+                                style={{ left: `${checkDatePos}%` }}
+                                id={`gantt-check-flag-${task.id}`}
+                              >
+                                {/* Blue vertical pin line */}
+                                <div className="absolute top-0 bottom-0 w-0.5 -translate-x-1/2 bg-blue-600 dark:bg-blue-400 shadow-sm" />
+
+                                {/* Blue flag marker button */}
+                                <div
+                                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 dark:bg-blue-500 text-white shadow-md ring-2 ring-card hover:scale-125 transition-transform cursor-pointer"
+                                  title={`Check Date: ${formatDate(task.checkDate!)}`}
+                                >
+                                  <Flag className="w-2.5 h-2.5 fill-white text-white" />
+                                </div>
+
+                                {/* Hover tooltip */}
+                                <div className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/flag:opacity-100 transition-opacity bg-blue-700 dark:bg-blue-800 text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-30">
+                                  Check Date: {formatDate(task.checkDate!)}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Grid lines */}
                             {columns.map((_, i) => (
                               <div
@@ -294,6 +345,12 @@ export default function GanttPage() {
           <div className="flex items-center gap-2">
             <div className="w-px h-4 bg-brand" />
             <span className="text-xs text-muted-foreground">Today</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white">
+              <Flag className="w-2.5 h-2.5 fill-white text-white" />
+            </div>
+            <span className="text-xs text-muted-foreground">Check Date (Flag)</span>
           </div>
         </div>
       </PageFrame>

@@ -55,6 +55,7 @@ create table if not exists public.tasks (
   assignee_id uuid references public.profiles (id) on delete set null,
   start_date  date,
   due_date    date,
+  check_date  date,
   tags        text[] not null default '{}'::text[],
   sort_order  integer not null default 0,
   created_at  timestamptz not null default now()

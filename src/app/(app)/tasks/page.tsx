@@ -29,6 +29,7 @@ import {
   FolderKanban,
   RotateCcw,
   AlertTriangle,
+  Flag,
 } from "lucide-react";
 
 const priorityVariant: Record<string, "neutral" | "warning" | "accent" | "danger"> = {
@@ -83,6 +84,7 @@ export default function TasksPage() {
   const [newTaskDueDate, setNewTaskDueDate] = useState(
     new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]
   );
+  const [newTaskCheckDate, setNewTaskCheckDate] = useState<string>("");
 
   // Edit Task State
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -94,6 +96,7 @@ export default function TasksPage() {
     priority: Priority;
     assigneeId: string;
     dueDate: string;
+    checkDate: string;
   }>({
     title: "",
     description: "",
@@ -102,6 +105,7 @@ export default function TasksPage() {
     priority: "medium",
     assigneeId: "",
     dueDate: "",
+    checkDate: "",
   });
 
   // Delete Task State
@@ -247,6 +251,7 @@ export default function TasksPage() {
       assigneeId: newTaskAssignee || null,
       startDate: new Date().toISOString().split("T")[0],
       dueDate: newTaskDueDate || new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
+      checkDate: newTaskCheckDate.trim() ? newTaskCheckDate : null,
       tags: [],
       createdAt: new Date().toISOString(),
       order: tasks.length,
@@ -254,6 +259,7 @@ export default function TasksPage() {
 
     setNewTaskTitle("");
     setNewTaskDescription("");
+    setNewTaskCheckDate("");
     setShowNewTask(false);
   }
 
@@ -267,6 +273,7 @@ export default function TasksPage() {
       priority: task.priority,
       assigneeId: task.assigneeId ?? "",
       dueDate: task.dueDate ? task.dueDate.split("T")[0] : "",
+      checkDate: task.checkDate ? task.checkDate.split("T")[0] : "",
     });
   }
 
@@ -280,6 +287,7 @@ export default function TasksPage() {
       priority: editForm.priority,
       assigneeId: editForm.assigneeId || null,
       dueDate: editForm.dueDate,
+      checkDate: editForm.checkDate.trim() ? editForm.checkDate : null,
     });
     setEditingTaskId(null);
   }
@@ -741,6 +749,12 @@ export default function TasksPage() {
                               {task.dueDate ? formatDate(task.dueDate) : "No due date"}
                             </span>
                           </div>
+                          {task.checkDate && (
+                            <div className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium mt-0.5" title={`Check Date: ${formatDate(task.checkDate)}`}>
+                              <Flag className="h-3 w-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400 shrink-0" />
+                              <span className="tabular">Check: {formatDate(task.checkDate)}</span>
+                            </div>
+                          )}
                           {isOverdue && (
                             <span className="text-[10px] font-semibold text-destructive uppercase tracking-wider">
                               Overdue by {Math.abs(daysLeft)}d
@@ -890,6 +904,21 @@ export default function TasksPage() {
               </div>
             </div>
 
+            <div>
+              <label htmlFor="input-new-task-check-date" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                <Flag className="h-3.5 w-3.5 text-blue-600 fill-blue-600 dark:text-blue-400 dark:fill-blue-400" />
+                <span>Check Date</span>
+                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional milestone flag)</span>
+              </label>
+              <Input
+                id="input-new-task-check-date"
+                type="date"
+                value={newTaskCheckDate}
+                onChange={(e) => setNewTaskCheckDate(e.target.value)}
+                className="w-full"
+              />
+            </div>
+
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
               <Button type="button" variant="outline" onClick={() => setShowNewTask(false)}>
                 Cancel
@@ -1009,16 +1038,31 @@ export default function TasksPage() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="edit-task-due" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                Due Date
-              </label>
-              <Input
-                id="edit-task-due"
-                type="date"
-                value={editForm.dueDate}
-                onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="edit-task-due" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  Due Date
+                </label>
+                <Input
+                  id="edit-task-due"
+                  type="date"
+                  value={editForm.dueDate}
+                  onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="edit-task-check-date" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <Flag className="h-3.5 w-3.5 text-blue-600 fill-blue-600 dark:text-blue-400 dark:fill-blue-400" />
+                  <span>Check Date</span>
+                </label>
+                <Input
+                  id="edit-task-check-date"
+                  type="date"
+                  value={editForm.checkDate}
+                  onChange={(e) => setEditForm({ ...editForm, checkDate: e.target.value })}
+                />
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
