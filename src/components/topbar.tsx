@@ -8,7 +8,17 @@ import { Search, Bell, ClipboardList, MessageCircle, Clock3, Info } from "lucide
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const pageTitles: Record<string, string> = { "/": "Dashboard", "/projects": "Projects", "/tasks": "My Tasks", "/gantt": "Timeline", "/sales": "Sales", "/reports": "Reports" };
+const pageTitles: Record<string, string> = {
+  "/": "Dashboard",
+  "/projects": "Projects",
+  "/tasks": "My Tasks",
+  "/gantt": "Timeline",
+  "/pipelines": "Pipeline",
+  "/sales": "Pipeline",
+  "/clients": "Clients",
+  "/reports": "Reports",
+  "/users": "Users",
+};
 
 export function TopBar() {
   const pathname = usePathname();

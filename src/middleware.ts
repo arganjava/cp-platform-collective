@@ -114,14 +114,16 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Admin-only route guard: /users, /reports, /sales are restricted from members & guests
+  // Admin-only route guard: /users, /reports, /sales, /pipelines are restricted from members & guests
   const isAdminOnlyRoute =
     pathname === "/users" ||
     pathname.startsWith("/users/") ||
     pathname === "/reports" ||
     pathname.startsWith("/reports/") ||
     pathname === "/sales" ||
-    pathname.startsWith("/sales/");
+    pathname.startsWith("/sales/") ||
+    pathname === "/pipelines" ||
+    pathname.startsWith("/pipelines/");
 
   if (user && isAdminOnlyRoute && userRole && userRole !== "admin") {
     return NextResponse.redirect(new URL("/", origin));

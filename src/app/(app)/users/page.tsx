@@ -648,17 +648,17 @@ export default function UsersPage() {
               </Select>
               {newUser.role === "admin" && (
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  <strong>Admin:</strong> Full access to all modules including Users, Reports, and Sales. Email domain must be <strong>@collectivep.com</strong>.
+                  <strong>Admin:</strong> Full access to all modules including Users, Reports, and Pipeline. Email domain must be <strong>@collectivep.com</strong>.
                 </p>
               )}
               {newUser.role === "member" && (
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  <strong>Member:</strong> Internal team access to Projects, Tasks & Timeline. Access to /users, /reports, and /sales is restricted. Email domain must be <strong>@collectivep.com</strong>.
+                  <strong>Member:</strong> Internal team access to Projects, Tasks & Timeline. Access to /users, /reports, and /pipelines is restricted. Email domain must be <strong>@collectivep.com</strong>.
                 </p>
               )}
               {newUser.role === "guest" && (
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  <strong>Guest:</strong> Outside partner access to Projects, Tasks & Timeline. Access to /users, /reports, and /sales is restricted. Can use <strong>any email domain</strong> (@collectivep.com, @gmail.com, @yahoo.com, etc.).
+                  <strong>Guest:</strong> Outside partner access to Projects, Tasks & Timeline. Access to /users, /reports, and /pipelines is restricted. Can use <strong>any email domain</strong> (@collectivep.com, @gmail.com, @yahoo.com, etc.).
                 </p>
               )}
             </div>
