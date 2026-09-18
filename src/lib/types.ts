@@ -42,6 +42,7 @@ export interface Task {
   startDate: string;
   dueDate: string;
   checkDate?: string | null;
+  link?: string | null;
   tags: string[];
   createdAt: string;
   order: number;

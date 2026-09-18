@@ -26,6 +26,7 @@ describe("taskColumns", () => {
       startDate: "2026-08-01",
       dueDate: "2026-08-31",
       checkDate: "2026-08-15",
+      link: "https://example.com/spec",
       tags: ["ticketing", "sales"],
       createdAt: "2026-07-20T09:00:00Z",
       order: 2,
@@ -41,6 +42,7 @@ describe("taskColumns", () => {
       start_date: task.startDate,
       due_date: task.dueDate,
       check_date: task.checkDate,
+      link: task.link,
       tags: task.tags,
       sort_order: task.order,
     });
@@ -181,6 +183,7 @@ describe("row → app type mappers", () => {
       startDate: "",
       dueDate: "",
       checkDate: null,
+      link: null,
       tags: [],
       order: 3,
     });
@@ -198,6 +201,7 @@ describe("row → app type mappers", () => {
       start_date: "2026-08-01",
       due_date: "2026-08-31",
       check_date: "2026-08-15",
+      link: "https://example.com/brief",
       tags: ["sales"],
       sort_order: 1,
       created_at: "2026-07-20T09:00:00Z",
@@ -207,6 +211,7 @@ describe("row → app type mappers", () => {
       priority: "urgent",
       assigneeId: "u-1",
       checkDate: "2026-08-15",
+      link: "https://example.com/brief",
       tags: ["sales"],
       order: 1,
     });

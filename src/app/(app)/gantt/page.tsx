@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
-import { Flag } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { Flag, ExternalLink, Lock } from "lucide-react";
 
 type ZoomLevel = "day" | "week" | "month";
 
@@ -17,41 +18,98 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function GanttPage() {
-  const { projects, tasks, getUserById, searchQuery } = useStore();
+  const { projects, tasks, getUserById, getActiveUsers, currentUserId, searchQuery } = useStore();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomLevel>("week");
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
 
-  const activeProjects = projects.filter((p) => p.status === "active");
+  const currentUser = getUserById(currentUserId);
+  const isAdmin = currentUser?.role === "admin";
+  const activeUsers = getActiveUsers();
+
+  // Assignee filter: for admin, defaults to "all"; for member/guest, defaults to self and is disabled
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
+
+  useEffect(() => {
+    if (!isAdmin && currentUserId) {
+      setFilterAssignee(currentUserId);
+    }
+  }, [isAdmin, currentUserId]);
+
+  const effectiveAssignee = isAdmin ? filterAssignee : (currentUserId || "all");
+
+  // For member and guest roles: filter projects related to tasks where tasks.assignee_id = current user
+  const userProjectIds = useMemo(() => {
+    if (isAdmin) return null;
+    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
+  }, [tasks, isAdmin, currentUserId]);
+
+  const visibleProjects = useMemo(() => {
+    const active = projects.filter((p) => p.status === "active");
+    if (isAdmin) return active;
+    return active.filter((p) => userProjectIds?.has(p.id));
+  }, [projects, isAdmin, userProjectIds]);
+
+  useEffect(() => {
+    if (selectedProject && !visibleProjects.some((p) => p.id === selectedProject)) {
+      setSelectedProject(null);
+    }
+  }, [selectedProject, visibleProjects]);
+
   const query = searchQuery.trim().toLowerCase();
 
-  // Calculate timeline bounds
-  const allTasks = (selectedProject
-    ? tasks.filter((t) => t.projectId === selectedProject)
-    : tasks
-  ).filter((t) => {
-    if (!query) return true;
-    const project = projects.find((p) => p.id === t.projectId);
-    return `${t.title} ${project?.title ?? ""}`.toLowerCase().includes(query);
-  });
+  // Calculate filtered tasks based on project, assignee, and search
+  const allTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      // Assignee filter
+      if (effectiveAssignee === "unassigned") {
+        if (t.assigneeId) return false;
+      } else if (effectiveAssignee !== "all") {
+        if (t.assigneeId !== effectiveAssignee) return false;
+      }
+
+      // Member/Guest restriction: must be assigned to self and in related projects
+      if (!isAdmin && currentUserId) {
+        if (t.assigneeId !== currentUserId) return false;
+        if (!userProjectIds?.has(t.projectId)) return false;
+      }
+
+      // Project filter
+      if (selectedProject) {
+        if (t.projectId !== selectedProject) return false;
+      } else if (!isAdmin) {
+        if (!userProjectIds?.has(t.projectId)) return false;
+      }
+
+      // Search query filter
+      if (query) {
+        const project = projects.find((p) => p.id === t.projectId);
+        const assignee = t.assigneeId ? getUserById(t.assigneeId) : null;
+        const haystack = `${t.title} ${project?.title ?? ""} ${assignee?.name ?? ""}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      return true;
+    });
+  }, [tasks, effectiveAssignee, isAdmin, currentUserId, userProjectIds, selectedProject, query, projects, getUserById]);
 
   const timelineStart = useMemo(() => {
     const dates = allTasks.flatMap((t) =>
       [t.startDate, t.checkDate].filter(Boolean).map((d) => new Date(d!).getTime())
     );
-    const projects2 = activeProjects.map((p) => new Date(p.startDate).getTime());
+    const projects2 = visibleProjects.map((p) => new Date(p.startDate).getTime());
     const valid = [...dates, ...projects2].filter((n) => !isNaN(n));
     return valid.length > 0 ? new Date(Math.min(...valid)) : new Date();
-  }, [allTasks, activeProjects]);
+  }, [allTasks, visibleProjects]);
 
   const timelineEnd = useMemo(() => {
     const dates = allTasks.flatMap((t) =>
       [t.dueDate, t.checkDate].filter(Boolean).map((d) => new Date(d!).getTime())
     );
-    const projects2 = activeProjects.map((p) => new Date(p.endDate).getTime());
+    const projects2 = visibleProjects.map((p) => new Date(p.endDate).getTime());
     const valid = [...dates, ...projects2].filter((n) => !isNaN(n));
     return valid.length > 0 ? new Date(Math.max(...valid)) : new Date();
-  }, [allTasks, activeProjects]);
+  }, [allTasks, visibleProjects]);
 
   // Generate columns based on zoom level
   const columns = useMemo(() => {
@@ -130,31 +188,79 @@ export default function GanttPage() {
             ))}
           </div>}
         />
-        <Toolbar className="border-0 bg-transparent p-0">
-        {/* Project filter */}
-          <button
-            onClick={() => setSelectedProject(null)}
-            className={cn(
-              "px-3 py-1.5 text-sm font-medium transition-all cursor-pointer",
-              !selectedProject ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
+        <Toolbar className="border-0 bg-transparent p-0 flex flex-wrap items-center justify-between gap-3">
+          {/* Assignee filter: role admin can view all timeline and has Assignee filter, for role member and guest filter defaults to self and is disabled */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground whitespace-nowrap">
+              Assignee:
+            </span>
+            {isAdmin ? (
+              <Select
+                id="gantt-filter-assignee"
+                aria-label="Filter timeline by assignee"
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="w-48 text-xs h-8"
+              >
+                <option value="all">All Assignees</option>
+                {currentUserId && <option value={currentUserId}>Assigned to Me</option>}
+                <option value="unassigned">Unassigned</option>
+                {activeUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{u.id === currentUserId ? " (You)" : ""}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <div
+                className="flex items-center gap-1.5"
+                title="Role member and guest can only view timeline assigned to themselves"
+              >
+                <Select
+                  id="gantt-filter-assignee-disabled"
+                  aria-label="Filter timeline by assignee (disabled for member/guest)"
+                  disabled
+                  value={currentUserId || ""}
+                  className="w-48 text-xs h-8 opacity-75 cursor-not-allowed bg-muted"
+                >
+                  <option value={currentUserId || ""}>
+                    {currentUser ? `${currentUser.name} (You)` : "Assigned to You"}
+                  </option>
+                </Select>
+                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-secondary px-1.5 py-1 border border-border">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>Self Only</span>
+                </span>
+              </div>
             )}
-          >
-            All Projects
-          </button>
-          {activeProjects.map((p) => (
+          </div>
+
+          {/* Project filter */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
-              key={p.id}
-              onClick={() => setSelectedProject(p.id === selectedProject ? null : p.id)}
+              onClick={() => setSelectedProject(null)}
               className={cn(
-                "px-3 py-1.5 text-sm font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                selectedProject === p.id ? "text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
+                "px-3 py-1.5 text-xs font-medium transition-all cursor-pointer",
+                !selectedProject ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
               )}
-              style={selectedProject === p.id ? { backgroundColor: p.color } : undefined}
             >
-              <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
-              {p.title}
+              All Projects
             </button>
-          ))}
+            {visibleProjects.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedProject(p.id === selectedProject ? null : p.id)}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                  selectedProject === p.id ? "text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:border-input"
+                )}
+                style={selectedProject === p.id ? { backgroundColor: p.color } : undefined}
+              >
+                <div className="w-2 h-2" style={{ backgroundColor: p.color }} />
+                {p.title}
+              </button>
+            ))}
+          </div>
         </Toolbar>
 
         {/* Gantt Chart */}
@@ -193,77 +299,99 @@ export default function GanttPage() {
               </div>
 
               {/* Project rows */}
-              {(selectedProject ? activeProjects.filter((p) => p.id === selectedProject) : activeProjects).map((project) => {
-                const projectTasks = allTasks.filter((t) => t.projectId === project.id);
-                if (projectTasks.length === 0) return null;
-                const members = project.memberIds.map((id) => getUserById(id)).filter(Boolean);
+              {allTasks.length === 0 ? (
+                <div className="py-16 text-center text-muted-foreground">
+                  <p className="text-sm font-medium text-foreground">No tasks to display on timeline</p>
+                  <p className="mt-1 text-xs text-subtle-foreground">
+                    {isAdmin
+                      ? "No tasks match the selected project or assignee filter."
+                      : "No active tasks are assigned to you for this timeline."}
+                  </p>
+                </div>
+              ) : (
+                (selectedProject ? visibleProjects.filter((p) => p.id === selectedProject) : visibleProjects).map((project) => {
+                  const projectTasks = allTasks.filter((t) => t.projectId === project.id);
+                  if (projectTasks.length === 0) return null;
+                  const members = project.memberIds.map((id) => getUserById(id)).filter(Boolean);
 
-                return (
-                  <div key={project.id}>
-                    {/* Project header row */}
-                    <div className="flex border-b border-border bg-secondary/50">
-                      <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-secondary/50 px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5" style={{ backgroundColor: project.color }} />
-                          <span className="text-sm font-semibold">{project.title}</span>
+                  return (
+                    <div key={project.id}>
+                      {/* Project header row */}
+                      <div className="flex border-b border-border bg-secondary/50">
+                        <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-secondary/50 px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5" style={{ backgroundColor: project.color }} />
+                            <span className="text-sm font-semibold">{project.title}</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 relative py-2">
+                          {/* Project duration bar */}
+                          <div
+                            className="absolute h-2 opacity-20 top-1/2 -translate-y-1/2"
+                            style={{
+                              ...getBarPosition(project.startDate, project.endDate),
+                              backgroundColor: project.color,
+                            }}
+                          />
                         </div>
                       </div>
-                      <div className="flex-1 relative py-2">
-                        {/* Project duration bar */}
-                        <div
-                          className="absolute h-2 opacity-20 top-1/2 -translate-y-1/2"
-                          style={{
-                            ...getBarPosition(project.startDate, project.endDate),
-                            backgroundColor: project.color,
-                          }}
-                        />
-                      </div>
-                    </div>
 
-                    {/* Task rows */}
-                    {projectTasks.map((task) => {
-                      const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
-                      const barPos = getBarPosition(task.startDate, task.dueDate);
-                      const checkDatePos = task.checkDate ? getPointPosition(task.checkDate) : null;
-                      const isHovered = hoveredTask === task.id;
+                      {/* Task rows */}
+                      {projectTasks.map((task) => {
+                        const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
+                        const barPos = getBarPosition(task.startDate, task.dueDate);
+                        const checkDatePos = task.checkDate ? getPointPosition(task.checkDate) : null;
+                        const isHovered = hoveredTask === task.id;
 
-                      return (
-                        <div
-                          key={task.id}
-                          className={cn(
-                            "flex border-b border-border/50 transition-colors",
-                            isHovered && "bg-secondary/50"
-                          )}
-                          onMouseEnter={() => setHoveredTask(task.id)}
-                          onMouseLeave={() => setHoveredTask(null)}
-                        >
-                          {/* Task info */}
-                          <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-card px-4 py-2.5">
-                            <div className="flex items-center gap-2 pl-4">
-                              <div
-                                className="w-1.5 h-1.5 flex-shrink-0"
-                                style={{ backgroundColor: priorityColors[task.priority] }}
-                              />
-                              <span className="text-sm truncate">{task.title}</span>
-                              {task.checkDate && (
-                                <span
-                                  className="inline-flex items-center text-blue-600 dark:text-blue-400 shrink-0"
-                                  title={`Check Date: ${formatDate(task.checkDate)}`}
-                                >
-                                  <Flag className="w-3 h-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400" />
-                                </span>
-                              )}
-                              {assignee && (
+                        return (
+                          <div
+                            key={task.id}
+                            className={cn(
+                              "flex border-b border-border/50 transition-colors",
+                              isHovered && "bg-secondary/50"
+                            )}
+                            onMouseEnter={() => setHoveredTask(task.id)}
+                            onMouseLeave={() => setHoveredTask(null)}
+                          >
+                            {/* Task info */}
+                            <div className="sticky left-0 z-20 w-[280px] flex-shrink-0 border-r border-border bg-card px-4 py-2.5">
+                              <div className="flex items-center gap-2 pl-4">
                                 <div
-                                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground flex-shrink-0 ml-auto"
-                                  style={{ backgroundColor: assignee.avatarColor }}
-                                  title={assignee.name}
-                                >
-                                  {getInitials(assignee.name)}
-                                </div>
-                              )}
+                                  className="w-1.5 h-1.5 flex-shrink-0"
+                                  style={{ backgroundColor: priorityColors[task.priority] }}
+                                />
+                                <span className="text-sm truncate">{task.title}</span>
+                                {task.link && (
+                                  <a
+                                    href={task.link.startsWith("http://") || task.link.startsWith("https://") ? task.link : `https://${task.link}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center text-primary shrink-0 hover:text-primary/80"
+                                    title={`Open link: ${task.link}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                                {task.checkDate && (
+                                  <span
+                                    className="inline-flex items-center text-blue-600 dark:text-blue-400 shrink-0"
+                                    title={`Check Date: ${formatDate(task.checkDate)}`}
+                                  >
+                                    <Flag className="w-3 h-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400" />
+                                  </span>
+                                )}
+                                {assignee && (
+                                  <div
+                                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground flex-shrink-0 ml-auto"
+                                    style={{ backgroundColor: assignee.avatarColor }}
+                                    title={assignee.name}
+                                  >
+                                    {getInitials(assignee.name)}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
 
                           {/* Gantt bar */}
                           <div className="flex-1 relative py-2.5">
@@ -322,7 +450,8 @@ export default function GanttPage() {
                     })}
                   </div>
                 );
-              })}
+              })
+            )}
             </div>
           </div>
         </Card>
@@ -351,6 +480,10 @@ export default function GanttPage() {
               <Flag className="w-2.5 h-2.5 fill-white text-white" />
             </div>
             <span className="text-xs text-muted-foreground">Check Date (Flag)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <ExternalLink className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs text-muted-foreground">Task Link</span>
           </div>
         </div>
       </PageFrame>

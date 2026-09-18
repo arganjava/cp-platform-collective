@@ -56,6 +56,7 @@ create table if not exists public.tasks (
   start_date  date,
   due_date    date,
   check_date  date,
+  link        text,
   tags        text[] not null default '{}'::text[],
   sort_order  integer not null default 0,
   created_at  timestamptz not null default now()

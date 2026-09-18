@@ -75,6 +75,7 @@ export function fromTaskRow(r: TaskRow): Task {
     startDate: r.start_date ?? "",
     dueDate: r.due_date ?? "",
     checkDate: r.check_date ?? null,
+    link: r.link ?? null,
     tags: r.tags ?? [],
     createdAt: r.created_at ?? new Date().toISOString(),
     order: r.sort_order ?? 0,
@@ -161,6 +162,7 @@ export function taskColumns(t: Partial<Task>): Record<string, unknown> {
   if (t.startDate !== undefined) cols.start_date = t.startDate || null;
   if (t.dueDate !== undefined) cols.due_date = t.dueDate || null;
   if (t.checkDate !== undefined) cols.check_date = t.checkDate || null;
+  if (t.link !== undefined) cols.link = t.link || null;
   if (t.tags !== undefined) cols.tags = t.tags;
   if (t.order !== undefined) cols.sort_order = t.order;
   return cols;

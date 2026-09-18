@@ -30,6 +30,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Flag,
+  ExternalLink,
 } from "lucide-react";
 
 const priorityVariant: Record<string, "neutral" | "warning" | "accent" | "danger"> = {
@@ -87,6 +88,7 @@ export default function TasksPage() {
     new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]
   );
   const [newTaskCheckDate, setNewTaskCheckDate] = useState<string>("");
+  const [newTaskLink, setNewTaskLink] = useState<string>("");
 
   // Edit Task State
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export default function TasksPage() {
     assigneeId: string;
     dueDate: string;
     checkDate: string;
+    link: string;
   }>({
     title: "",
     description: "",
@@ -108,6 +111,7 @@ export default function TasksPage() {
     assigneeId: "",
     dueDate: "",
     checkDate: "",
+    link: "",
   });
 
   // Delete Task State
@@ -284,6 +288,7 @@ export default function TasksPage() {
       startDate: new Date().toISOString().split("T")[0],
       dueDate: newTaskDueDate || new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
       checkDate: newTaskCheckDate.trim() ? newTaskCheckDate : null,
+      link: newTaskLink.trim() ? newTaskLink.trim() : null,
       tags: [],
       createdAt: new Date().toISOString(),
       order: tasks.length,
@@ -292,6 +297,7 @@ export default function TasksPage() {
     setNewTaskTitle("");
     setNewTaskDescription("");
     setNewTaskCheckDate("");
+    setNewTaskLink("");
     setNewTaskAssignee(currentUserId || "");
     setShowNewTask(false);
   }
@@ -307,6 +313,7 @@ export default function TasksPage() {
       assigneeId: task.assigneeId ?? "",
       dueDate: task.dueDate ? task.dueDate.split("T")[0] : "",
       checkDate: task.checkDate ? task.checkDate.split("T")[0] : "",
+      link: task.link || "",
     });
   }
 
@@ -321,6 +328,7 @@ export default function TasksPage() {
       assigneeId: editForm.assigneeId || null,
       dueDate: editForm.dueDate,
       checkDate: editForm.checkDate.trim() ? editForm.checkDate : null,
+      link: editForm.link.trim() ? editForm.link.trim() : null,
     });
     setEditingTaskId(null);
   }
@@ -708,14 +716,33 @@ export default function TasksPage() {
                               {task.status === "done" && <CheckCircle2 className="h-3.5 w-3.5" />}
                             </button>
                             <div className="min-w-0">
-                              <span
-                                className={cn(
-                                  "font-medium text-foreground",
-                                  task.status === "done" && "line-through text-subtle-foreground"
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span
+                                  className={cn(
+                                    "font-medium text-foreground",
+                                    task.status === "done" && "line-through text-subtle-foreground"
+                                  )}
+                                >
+                                  {task.title}
+                                </span>
+                                {task.link && (
+                                  <a
+                                    href={
+                                      task.link.startsWith("http://") || task.link.startsWith("https://")
+                                        ? task.link
+                                        : `https://${task.link}`
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                    title={task.link}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    <span>Link</span>
+                                  </a>
                                 )}
-                              >
-                                {task.title}
-                              </span>
+                              </div>
                               {task.description && (
                                 <p className="truncate text-xs text-muted-foreground max-w-xs sm:max-w-sm">
                                   {task.description}
@@ -962,6 +989,22 @@ export default function TasksPage() {
               />
             </div>
 
+            <div>
+              <label htmlFor="input-new-task-link" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                <span>Link</span>
+                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional URL)</span>
+              </label>
+              <Input
+                id="input-new-task-link"
+                type="url"
+                placeholder="https://..."
+                value={newTaskLink}
+                onChange={(e) => setNewTaskLink(e.target.value)}
+                className="w-full"
+              />
+            </div>
+
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
               <Button type="button" variant="outline" onClick={() => setShowNewTask(false)}>
                 Cancel
@@ -1106,6 +1149,22 @@ export default function TasksPage() {
                   onChange={(e) => setEditForm({ ...editForm, checkDate: e.target.value })}
                 />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="edit-task-link" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                <span>Link</span>
+                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional URL)</span>
+              </label>
+              <Input
+                id="edit-task-link"
+                type="url"
+                placeholder="https://..."
+                value={editForm.link}
+                onChange={(e) => setEditForm({ ...editForm, link: e.target.value })}
+                className="w-full"
+              />
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
