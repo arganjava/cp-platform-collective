@@ -41,12 +41,23 @@ export default function DashboardPage() {
   const query = searchQuery.trim().toLowerCase();
   const matchesQuery = (text: string) => !query || text.toLowerCase().includes(query);
 
-  const activeProjects = projects.filter((p) => p.status === "active");
+  const visibleTasks = isAdmin ? tasks : tasks.filter((t) => t.assigneeId === currentUserId);
+
+  const userProjectIds = React.useMemo(() => {
+    if (isAdmin) return null;
+    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
+  }, [tasks, isAdmin, currentUserId]);
+
+  const baseProjects = isAdmin
+    ? projects
+    : projects.filter((p) => userProjectIds?.has(p.id));
+
+  const activeProjects = baseProjects.filter((p) => p.status === "active");
   const visibleProjects = activeProjects.filter((p) => matchesQuery(p.title));
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === "done").length;
+  const totalTasks = visibleTasks.length;
+  const completedTasks = visibleTasks.filter((t) => t.status === "done").length;
   const completionPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const overdueTasks = tasks.filter((t) => {
+  const overdueTasks = visibleTasks.filter((t) => {
     if (t.status === "done") return false;
     return new Date(t.dueDate) < new Date();
   }).length;
@@ -58,11 +69,11 @@ export default function DashboardPage() {
   });
   const thisMonthRevenue = thisMonthSales.reduce((sum, s) => sum + s.amount, 0);
 
-  const upcomingDeadlines = [...tasks]
+  const upcomingDeadlines = [...visibleTasks]
     .filter((t) => t.status !== "done")
     .filter((t) => {
       if (!query) return true;
-      const project = projects.find((p) => p.id === t.projectId);
+      const project = baseProjects.find((p) => p.id === t.projectId);
       return matchesQuery(`${t.title} ${project?.title ?? ""}`);
     })
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
@@ -86,7 +97,7 @@ export default function DashboardPage() {
         />
 
         <SheetSummary id="dashboard-sheet-summary" className={cn(!isAdmin && "sm:grid-cols-3")}>
-          <SummaryMetric id="dashboard-metric-projects" value={projects.length} label="Projects" indicator={<Badge variant="neutral">{activeProjects.length} active</Badge>} />
+          <SummaryMetric id="dashboard-metric-projects" value={baseProjects.length} label="Projects" indicator={<Badge variant="neutral">{activeProjects.length} active</Badge>} />
           <SummaryMetric id="dashboard-metric-tasks" value={totalTasks} label="Tasks" indicator={<Badge variant="positive">{completionPct}% done</Badge>} />
           <SummaryMetric id="dashboard-metric-overdue" value={overdueTasks} label="Overdue" indicator={overdueTasks > 0 ? <Badge variant="danger">{overdueTasks} need attention</Badge> : <Badge variant="positive">On track</Badge>} />
           {isAdmin && (
@@ -104,7 +115,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-0 border-y border-border sm:grid-cols-4">
                   {(["todo", "in_progress", "review", "done"] as const).map((status) => {
-                    const count = tasks.filter((t) => t.status === status).length;
+                    const count = visibleTasks.filter((t) => t.status === status).length;
                     return (
                       <div key={status} className="flex flex-col gap-1 px-4 py-3 border-r border-border last:border-r-0">
                         <div className="flex items-center gap-2">
@@ -165,7 +176,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="divide-y divide-border">
                   {visibleProjects.map((project) => {
-                    const projectTasks = tasks.filter((t) => t.projectId === project.id);
+                    const projectTasks = visibleTasks.filter((t) => t.projectId === project.id);
                     const doneTasks = projectTasks.filter((t) => t.status === "done").length;
                     const progress = projectTasks.length > 0 ? Math.round((doneTasks / projectTasks.length) * 100) : 0;
                     const members = project.memberIds.map((id) => getUserById(id)).filter(Boolean);
@@ -214,7 +225,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="divide-y divide-border">
                   {users.filter((u) => matchesQuery(u.name)).slice(0, 6).map((user) => {
-                    const userTasks = tasks.filter((t) => t.assigneeId === user.id && t.status !== "done");
+                    const userTasks = visibleTasks.filter((t) => t.assigneeId === user.id && t.status !== "done");
                     return (
                       <div key={user.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                         <div

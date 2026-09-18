@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
 import type { Project, Task } from "@/lib/types";
@@ -41,7 +41,7 @@ export default function ProjectsPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskProject, setNewTaskProject] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
-  const [newTaskAssignee, setNewTaskAssignee] = useState("");
+  const [newTaskAssignee, setNewTaskAssignee] = useState(currentUserId || "");
   const [newProjectTitle, setNewProjectTitle] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
@@ -54,15 +54,29 @@ export default function ProjectsPage() {
     color: string;
   }>({ title: "", description: "", status: "active", color: "var(--primary)" });
 
-  const activeProjects = projects.filter((p) => p.status === "active");
-  const displayedTasks = selectedProject
-    ? tasks.filter((t) => t.projectId === selectedProject)
-    : tasks;
+  const userProjectIds = useMemo(() => {
+    if (isAdmin) return null;
+    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
+  }, [tasks, isAdmin, currentUserId]);
+
+  const visibleProjects = useMemo(() => {
+    if (isAdmin) return projects;
+    return projects.filter((p) => userProjectIds?.has(p.id));
+  }, [projects, isAdmin, userProjectIds]);
+
+  const activeProjects = visibleProjects.filter((p) => p.status === "active");
+  const visibleTasks = isAdmin ? tasks : tasks.filter((t) => t.assigneeId === currentUserId);
+  const effectiveSelectedProject = selectedProject && visibleProjects.some((p) => p.id === selectedProject)
+    ? selectedProject
+    : null;
+  const displayedTasks = effectiveSelectedProject
+    ? visibleTasks.filter((t) => t.projectId === effectiveSelectedProject)
+    : visibleTasks;
 
   const query = searchQuery.trim().toLowerCase();
   const filteredTasks = displayedTasks.filter((t) => {
     if (!query) return true;
-    const project = projects.find((p) => p.id === t.projectId);
+    const project = visibleProjects.find((p) => p.id === t.projectId) || projects.find((p) => p.id === t.projectId);
     const assignee = getUserById(t.assigneeId);
     const haystack = [t.title, project?.title ?? "", assignee?.name ?? "", ...t.tags].join(" ").toLowerCase();
     return haystack.includes(query);
@@ -76,7 +90,7 @@ export default function ProjectsPage() {
   };
 
   function handleCreateTask() {
-    const projectId = newTaskProject || selectedProject || projects[0]?.id;
+    const projectId = newTaskProject || effectiveSelectedProject || visibleProjects[0]?.id || projects[0]?.id;
     if (!newTaskTitle.trim() || !projectId) return;
     const task = {
       id: generateId(),
@@ -85,7 +99,7 @@ export default function ProjectsPage() {
       description: "",
       status: "todo" as const,
       priority: newTaskPriority,
-      assigneeId: newTaskAssignee || null,
+      assigneeId: newTaskAssignee || (!isAdmin ? currentUserId : null),
       startDate: new Date().toISOString().split("T")[0],
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
       tags: [],
@@ -94,6 +108,7 @@ export default function ProjectsPage() {
     };
     addTask(task);
     setNewTaskTitle("");
+    setNewTaskAssignee(currentUserId || "");
     setShowNewTask(false);
   }
 
@@ -461,7 +476,7 @@ export default function ProjectsPage() {
                 className="h-9"
               >
                 <option value="">Select project...</option>
-                {projects.map((p) => (
+                {visibleProjects.map((p) => (
                   <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
               </Select>
@@ -489,7 +504,7 @@ export default function ProjectsPage() {
                 >
                   <option value="">Unassigned</option>
                   {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+                    <option key={u.id} value={u.id}>{u.name}{u.id === currentUserId ? " (You)" : ""}</option>
                   ))}
                 </Select>
               </div>

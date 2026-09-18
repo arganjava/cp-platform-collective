@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
 import type { Task, Priority, TaskStatus } from "@/lib/types";
@@ -63,6 +63,8 @@ export default function TasksPage() {
     searchQuery: globalSearchQuery,
   } = useStore();
 
+  const currentUser = getUserById(currentUserId);
+  const isAdmin = currentUser?.role === "admin";
   const activeUsers = getActiveUsers();
 
   // Multi-filter states
@@ -113,6 +115,28 @@ export default function TasksPage() {
 
   const query = (localSearch || globalSearchQuery).trim().toLowerCase();
 
+  // Role-based visibility: admin can view all data, member and guest are filtered by tasks.assignee_id
+  const visibleTasks = useMemo(() => {
+    if (isAdmin) return tasks;
+    return tasks.filter((t) => t.assigneeId === currentUserId);
+  }, [tasks, isAdmin, currentUserId]);
+
+  const userProjectIds = useMemo(() => {
+    if (isAdmin) return null;
+    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
+  }, [tasks, isAdmin, currentUserId]);
+
+  const visibleProjects = useMemo(() => {
+    if (isAdmin) return projects;
+    return projects.filter((p) => userProjectIds?.has(p.id));
+  }, [projects, isAdmin, userProjectIds]);
+
+  useEffect(() => {
+    if (filterProject !== "all" && !visibleProjects.some((p) => p.id === filterProject)) {
+      setFilterProject("all");
+    }
+  }, [filterProject, visibleProjects]);
+
   // Today reference date normalized to midnight
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
@@ -121,7 +145,7 @@ export default function TasksPage() {
 
   // Filter combined logic
   const filteredTasks = useMemo(() => {
-    return tasks
+    return visibleTasks
       .filter((t) => {
         // 1. Search Query
         if (query) {
@@ -149,13 +173,15 @@ export default function TasksPage() {
         // 4. Project Filter
         if (filterProject !== "all" && t.projectId !== filterProject) return false;
 
-        // 5. Assignee Filter
-        if (filterAssignee === "unassigned") {
-          if (t.assigneeId) return false;
-        } else if (filterAssignee === "mine") {
-          if (t.assigneeId !== currentUserId) return false;
-        } else if (filterAssignee !== "all") {
-          if (t.assigneeId !== filterAssignee) return false;
+        // 5. Assignee Filter (for admin)
+        if (isAdmin) {
+          if (filterAssignee === "unassigned") {
+            if (t.assigneeId) return false;
+          } else if (filterAssignee === "mine") {
+            if (t.assigneeId !== currentUserId) return false;
+          } else if (filterAssignee !== "all") {
+            if (t.assigneeId !== filterAssignee) return false;
+          }
         }
 
         // 6. Deadline Filter
@@ -203,7 +229,8 @@ export default function TasksPage() {
         return a.title.localeCompare(b.title);
       });
   }, [
-    tasks,
+    visibleTasks,
+    isAdmin,
     query,
     filterStatus,
     filterPriority,
@@ -238,8 +265,13 @@ export default function TasksPage() {
 
   function handleCreateTask(e: React.FormEvent) {
     e.preventDefault();
-    const projectId = newTaskProject || projects[0]?.id;
+    const availableProjects = visibleProjects.length > 0 ? visibleProjects : projects;
+    const projectId = newTaskProject || availableProjects[0]?.id;
     if (!newTaskTitle.trim() || !projectId) return;
+
+    const taskAssignee = isAdmin
+      ? newTaskAssignee || null
+      : newTaskAssignee || currentUserId || null;
 
     addTask({
       id: generateId(),
@@ -248,7 +280,7 @@ export default function TasksPage() {
       description: newTaskDescription.trim(),
       status: "todo",
       priority: newTaskPriority,
-      assigneeId: newTaskAssignee || null,
+      assigneeId: taskAssignee,
       startDate: new Date().toISOString().split("T")[0],
       dueDate: newTaskDueDate || new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
       checkDate: newTaskCheckDate.trim() ? newTaskCheckDate : null,
@@ -260,6 +292,7 @@ export default function TasksPage() {
     setNewTaskTitle("");
     setNewTaskDescription("");
     setNewTaskCheckDate("");
+    setNewTaskAssignee(currentUserId || "");
     setShowNewTask(false);
   }
 
@@ -304,15 +337,16 @@ export default function TasksPage() {
         {/* Header */}
         <PageHeader
           title="Tasks"
-          description={`Showing ${filteredTasks.length} of ${tasks.length} tasks across ${projects.length} active projects.`}
+          description={`Showing ${filteredTasks.length} of ${visibleTasks.length} tasks across ${visibleProjects.length} active projects.`}
           actions={
             <Button
               id="btn-create-task-top"
               size="sm"
               onClick={() => {
-                if (!newTaskProject && projects.length > 0) {
-                  setNewTaskProject(projects[0].id);
+                if ((!newTaskProject || !visibleProjects.some((p) => p.id === newTaskProject)) && visibleProjects.length > 0) {
+                  setNewTaskProject(visibleProjects[0].id);
                 }
+                setNewTaskAssignee(currentUserId || "");
                 setShowNewTask(true);
               }}
               className="flex items-center gap-2"
@@ -326,7 +360,7 @@ export default function TasksPage() {
         {/* Quick Status Stats */}
         <div className="grid grid-cols-2 gap-0 border-y border-border sm:grid-cols-4" id="tasks-status-tabs">
           {(Object.entries(statusConfig) as [TaskStatus, typeof statusConfig.todo][]).map(([status, config]) => {
-            const count = tasks.filter((t) => t.status === status).length;
+            const count = visibleTasks.filter((t) => t.status === status).length;
             const isSelected = filterStatus === status;
             const Icon = config.icon;
             return (
@@ -369,25 +403,34 @@ export default function TasksPage() {
           {/* Filter Dropdowns Grid */}
           <div className="flex flex-wrap items-center gap-2">
             {/* 1. Assignee Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Assignee:</span>
-              <Select
-                id="filter-task-assignee"
-                aria-label="Filter tasks by assignee"
-                value={filterAssignee}
-                onChange={(e) => setFilterAssignee(e.target.value)}
-                className="w-36 text-xs"
-              >
-                <option value="all">All Assignees</option>
-                <option value="mine">Assigned to Me</option>
-                <option value="unassigned">Unassigned</option>
-                {activeUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {isAdmin ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Assignee:</span>
+                <Select
+                  id="filter-task-assignee"
+                  aria-label="Filter tasks by assignee"
+                  value={filterAssignee}
+                  onChange={(e) => setFilterAssignee(e.target.value)}
+                  className="w-36 text-xs"
+                >
+                  <option value="all">All Assignees</option>
+                  <option value="mine">Assigned to Me</option>
+                  <option value="unassigned">Unassigned</option>
+                  {activeUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5" title="As a member or guest, you view tasks assigned to you">
+                <span className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Assignee:</span>
+                <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-secondary text-foreground border border-border">
+                  Assigned to You
+                </span>
+              </div>
+            )}
 
             {/* 2. Project Filter */}
             <div className="flex items-center gap-1.5">
@@ -400,7 +443,7 @@ export default function TasksPage() {
                 className="w-36 text-xs"
               >
                 <option value="all">All Projects</option>
-                {projects.map((p) => (
+                {visibleProjects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.title}
                   </option>
@@ -844,7 +887,7 @@ export default function TasksPage() {
                   onChange={(e) => setNewTaskProject(e.target.value)}
                   className="w-full"
                 >
-                  {projects.map((p) => (
+                  {visibleProjects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
                     </option>
@@ -884,7 +927,7 @@ export default function TasksPage() {
                   <option value="">Unassigned</option>
                   {activeUsers.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name}
+                      {u.name}{u.id === currentUserId ? " (You)" : ""}
                     </option>
                   ))}
                 </Select>
@@ -974,7 +1017,7 @@ export default function TasksPage() {
                   onChange={(e) => setEditForm({ ...editForm, projectId: e.target.value })}
                   className="w-full"
                 >
-                  {projects.map((p) => (
+                  {visibleProjects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
                     </option>
@@ -1031,7 +1074,7 @@ export default function TasksPage() {
                   <option value="">Unassigned</option>
                   {activeUsers.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name}
+                      {u.name}{u.id === currentUserId ? " (You)" : ""}
                     </option>
                   ))}
                 </Select>
