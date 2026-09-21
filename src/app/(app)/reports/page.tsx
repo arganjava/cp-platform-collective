@@ -97,7 +97,7 @@ function isDateInRange(value: string, range: ReturnType<typeof getPeriodRange>) 
   return (!range.start || date >= range.start) && (!range.end || date <= range.end);
 }
 
-function taskIntersectsRange(task: { startDate?: string; dueDate?: string }, range: ReturnType<typeof getPeriodRange>) {
+function taskIntersectsRange(task: { startDate?: string; dueDate?: string | null }, range: ReturnType<typeof getPeriodRange>) {
   if (!range.start || !range.end) return true;
   if (!task.dueDate || !task.startDate) return true;
   return new Date(task.dueDate) >= range.start && new Date(task.startDate) <= range.end;
@@ -220,7 +220,7 @@ export default function ReportsPage() {
   const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.amount, 0);
   const completedTasks = filteredTasks.filter((task) => task.status === "done").length;
   const activeProjects = filteredProjects.filter((project) => project.status === "active").length;
-  const overdueTasks = filteredTasks.filter((task) => task.status !== "done" && new Date(task.dueDate) < new Date());
+  const overdueTasks = filteredTasks.filter((task) => task.status !== "done" && task.dueDate && new Date(task.dueDate) < new Date());
 
   const revenueData = useMemo<RevenuePoint[]>(() => {
     const monthlySales = new Map<string, { label: string; revenue: number; date: number }>();
@@ -250,7 +250,7 @@ export default function ReportsPage() {
       const projectTasks = filteredTasks.filter((task) => task.projectId === project.id);
       const projectSales = filteredSales.filter((sale) => sale.projectId === project.id);
       const completed = projectTasks.filter((task) => task.status === "done").length;
-      const overdue = projectTasks.filter((task) => task.status !== "done" && new Date(task.dueDate) < new Date()).length;
+      const overdue = projectTasks.filter((task) => task.status !== "done" && task.dueDate && new Date(task.dueDate) < new Date()).length;
       return {
         id: project.id,
         title: project.title,
@@ -289,7 +289,11 @@ export default function ReportsPage() {
         const projectTasks = filteredTasks.filter((task) => task.projectId === project.id);
         const nextTask = [...projectTasks]
           .filter((task) => task.status !== "done")
-          .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+          .sort((a, b) => {
+            if (!a.dueDate) return 1;
+            if (!b.dueDate) return -1;
+            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+          })[0];
         const owner = getUserById(projects.find((item) => item.id === project.id)?.ownerId || "");
         return {
           id: project.id,

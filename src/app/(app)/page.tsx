@@ -41,16 +41,27 @@ export default function DashboardPage() {
   const query = searchQuery.trim().toLowerCase();
   const matchesQuery = (text: string) => !query || text.toLowerCase().includes(query);
 
-  const visibleTasks = isAdmin ? tasks : tasks.filter((t) => t.assigneeId === currentUserId);
-
-  const userProjectIds = React.useMemo(() => {
+  const userMemberProjectIds = React.useMemo(() => {
     if (isAdmin) return null;
-    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
-  }, [tasks, isAdmin, currentUserId]);
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      projects
+        .filter((p) => p.memberIds?.includes(currentUserId) || p.ownerId === currentUserId)
+        .map((p) => p.id)
+    );
+  }, [projects, isAdmin, currentUserId]);
 
   const baseProjects = isAdmin
     ? projects
-    : projects.filter((p) => userProjectIds?.has(p.id));
+    : projects.filter((p) => userMemberProjectIds?.has(p.id));
+
+  const visibleTasks = React.useMemo(() => {
+    if (isAdmin) return tasks;
+    if (!currentUserId) return [];
+    return tasks.filter(
+      (t) => (userMemberProjectIds && userMemberProjectIds.has(t.projectId)) || t.assigneeId === currentUserId
+    );
+  }, [tasks, isAdmin, currentUserId, userMemberProjectIds]);
 
   const activeProjects = baseProjects.filter((p) => p.status === "active");
   const visibleProjects = activeProjects.filter((p) => matchesQuery(p.title));
@@ -58,7 +69,7 @@ export default function DashboardPage() {
   const completedTasks = visibleTasks.filter((t) => t.status === "done").length;
   const completionPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const overdueTasks = visibleTasks.filter((t) => {
-    if (t.status === "done") return false;
+    if (t.status === "done" || !t.dueDate) return false;
     return new Date(t.dueDate) < new Date();
   }).length;
   const totalRevenue = sales.reduce((sum, s) => sum + s.amount, 0);
@@ -70,13 +81,13 @@ export default function DashboardPage() {
   const thisMonthRevenue = thisMonthSales.reduce((sum, s) => sum + s.amount, 0);
 
   const upcomingDeadlines = [...visibleTasks]
-    .filter((t) => t.status !== "done")
+    .filter((t) => t.status !== "done" && t.dueDate)
     .filter((t) => {
       if (!query) return true;
       const project = baseProjects.find((p) => p.id === t.projectId);
       return matchesQuery(`${t.title} ${project?.title ?? ""}`);
     })
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
     .slice(0, 5);
 
   const today = new Date();
@@ -144,7 +155,7 @@ export default function DashboardPage() {
                 <div className="divide-y divide-border">
                   {upcomingDeadlines.map((task) => {
                     const project = projects.find((p) => p.id === task.projectId);
-                    const daysLeft = Math.ceil((new Date(task.dueDate).getTime() - new Date().getTime()) / 86400000);
+                    const daysLeft = Math.ceil((new Date(task.dueDate!).getTime() - new Date().getTime()) / 86400000);
                     const isOverdue = daysLeft < 0;
                     return (
                       <div key={task.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
@@ -157,7 +168,7 @@ export default function DashboardPage() {
                           <p className={cn("text-xs font-semibold tabular", isOverdue ? "text-destructive" : daysLeft <= 3 ? "text-destructive" : "text-muted-foreground")}>
                             {isOverdue ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
                           </p>
-                          <p className="text-xs text-subtle-foreground">{formatDate(task.dueDate)}</p>
+                          <p className="text-xs text-subtle-foreground">{formatDate(task.dueDate!)}</p>
                         </div>
                       </div>
                     );

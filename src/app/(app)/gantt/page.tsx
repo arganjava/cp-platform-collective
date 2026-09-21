@@ -130,9 +130,9 @@ export default function GanttPage() {
 
   const totalDays = Math.max(1, Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / 86400000));
 
-  function getBarPosition(startDate: string, endDate: string) {
+  function getBarPosition(startDate: string, endDate: string | null) {
     const start = new Date(startDate);
-    const end = new Date(endDate);
+    const end = endDate ? new Date(endDate) : new Date(start.getTime() + 86400000);
     const startOffset = Math.max(0, (start.getTime() - timelineStart.getTime()) / 86400000);
     const duration = Math.max(1, (end.getTime() - start.getTime()) / 86400000);
     const left = (startOffset / totalDays) * 100;

@@ -181,7 +181,7 @@ describe("row → app type mappers", () => {
       priority: "medium",
       assigneeId: null,
       startDate: "",
-      dueDate: "",
+      dueDate: null,
       checkDate: null,
       link: null,
       tags: [],

@@ -2,6 +2,7 @@ import { getSupabase, isSupabaseConfigured } from "./client";
 import type {
   ProfileRow,
   ProjectRow,
+  ProjectProfileRow,
   TaskRow,
   SaleRow,
   SaleStageRow,
@@ -73,7 +74,7 @@ export function fromTaskRow(r: TaskRow): Task {
     priority: (r.priority as Priority) || "medium",
     assigneeId: r.assignee_id ?? null,
     startDate: r.start_date ?? "",
-    dueDate: r.due_date ?? "",
+    dueDate: r.due_date ?? null,
     checkDate: r.check_date ?? null,
     link: r.link ?? null,
     tags: r.tags ?? [],
@@ -271,9 +272,30 @@ async function fetchSaleStagesSafe(supabase: ReturnType<typeof getSupabase>): Pr
   }
 }
 
+async function fetchProjectProfilesSafe(
+  supabase: ReturnType<typeof getSupabase>
+): Promise<ProjectProfileRow[]> {
+  try {
+    const res = await supabase.from("project_profiles").select("*");
+    if (!res.error && res.data) return res.data as ProjectProfileRow[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchTeamData(): Promise<TeamData> {
   const supabase = getSupabase();
-  const [profiles, projects, tasks, notifications, salesRows, clientsRows, saleStageRows] = await Promise.all([
+  const [
+    profiles,
+    projects,
+    tasks,
+    notifications,
+    salesRows,
+    clientsRows,
+    saleStageRows,
+    projectProfilesRows,
+  ] = await Promise.all([
     supabase.from("profiles").select("*").order("name"),
     supabase.from("projects").select("*").order("created_at"),
     supabase.from("tasks").select("*").order("sort_order", { ascending: true }).order("created_at"),
@@ -281,11 +303,31 @@ export async function fetchTeamData(): Promise<TeamData> {
     fetchSalesSafe(supabase),
     fetchClientsSafe(supabase),
     fetchSaleStagesSafe(supabase),
+    fetchProjectProfilesSafe(supabase),
   ]);
+
+  const projectProfileMap = new Map<string, string[]>();
+  for (const pp of projectProfilesRows) {
+    const existing = projectProfileMap.get(pp.project_id) || [];
+    if (!existing.includes(pp.profile_id)) {
+      existing.push(pp.profile_id);
+    }
+    projectProfileMap.set(pp.project_id, existing);
+  }
+
+  const mappedProjects = (unwrap(projects, "load projects") as ProjectRow[]).map((r) => {
+    const project = fromProjectRow(r);
+    const ppMembers = projectProfileMap.get(r.id);
+    if (ppMembers && ppMembers.length > 0) {
+      const combined = Array.from(new Set([...project.memberIds, ...ppMembers]));
+      project.memberIds = combined;
+    }
+    return project;
+  });
 
   return {
     users: (unwrap(profiles, "load profiles") as ProfileRow[]).map(fromProfileRow),
-    projects: (unwrap(projects, "load projects") as ProjectRow[]).map(fromProjectRow),
+    projects: mappedProjects,
     tasks: (unwrap(tasks, "load tasks") as TaskRow[]).map(fromTaskRow),
     sales: salesRows.map(fromSaleRow),
     saleStages: saleStageRows.map(fromSaleStageRow),
@@ -362,11 +404,30 @@ export async function ensureProfile(authUser: {
 
 /* ─────────────────────────── Mutations ─────────────────────────── */
 
+export async function syncProjectProfiles(projectId: string, memberIds: string[]) {
+  const supabase = getSupabase();
+  try {
+    await supabase.from("project_profiles").delete().eq("project_id", projectId);
+    if (memberIds && memberIds.length > 0) {
+      const rows = memberIds.map((profileId) => ({
+        project_id: projectId,
+        profile_id: profileId,
+      }));
+      await supabase.from("project_profiles").insert(rows);
+    }
+  } catch (err) {
+    console.warn("Failed to sync project_profiles:", err);
+  }
+}
+
 export async function insertProject(project: Project) {
   const { error } = await getSupabase()
     .from("projects")
     .insert(projectColumns(project));
   if (error) throw error;
+  if (project.memberIds && project.memberIds.length > 0) {
+    await syncProjectProfiles(project.id, project.memberIds);
+  }
 }
 
 export async function updateProjectRow(id: string, updates: Partial<Project>) {
@@ -375,6 +436,9 @@ export async function updateProjectRow(id: string, updates: Partial<Project>) {
     .update(projectColumns(updates))
     .eq("id", id);
   if (error) throw error;
+  if (updates.memberIds !== undefined) {
+    await syncProjectProfiles(id, updates.memberIds);
+  }
 }
 
 export async function deleteProjectRow(id: string) {

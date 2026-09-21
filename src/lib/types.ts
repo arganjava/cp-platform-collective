@@ -31,6 +31,13 @@ export interface Project {
   createdAt: string;
 }
 
+export interface ProjectProfile {
+  id: string;
+  projectId: string;
+  profileId: string;
+  createdAt?: string;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -40,7 +47,7 @@ export interface Task {
   priority: Priority;
   assigneeId: string | null;
   startDate: string;
-  dueDate: string;
+  dueDate: string | null;
   checkDate?: string | null;
   link?: string | null;
   tags: string[];

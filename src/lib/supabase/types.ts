@@ -31,6 +31,13 @@ export interface ProjectRow {
   created_at: string;
 }
 
+export interface ProjectProfileRow {
+  id: string;
+  project_id: string;
+  profile_id: string;
+  created_at?: string;
+}
+
 export interface TaskRow {
   id: string;
   project_id: string | null;

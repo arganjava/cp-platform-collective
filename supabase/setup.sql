@@ -45,6 +45,14 @@ create table if not exists public.projects (
   created_at  timestamptz not null default now()
 );
 
+create table if not exists public.project_profiles (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects (id) on delete cascade,
+  profile_id  uuid not null references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  constraint uq_project_profiles_project_profile unique (project_id, profile_id)
+);
+
 create table if not exists public.tasks (
   id          uuid primary key default gen_random_uuid(),
   project_id  uuid references public.projects (id) on delete cascade,
@@ -87,6 +95,8 @@ create table if not exists public.notifications (
 
 create index if not exists idx_profiles_email        on public.profiles (email);
 create index if not exists idx_projects_owner        on public.projects (owner_id);
+create index if not exists idx_project_profiles_project on public.project_profiles (project_id);
+create index if not exists idx_project_profiles_profile on public.project_profiles (profile_id);
 create index if not exists idx_tasks_project         on public.tasks (project_id);
 create index if not exists idx_tasks_assignee        on public.tasks (assignee_id);
 create index if not exists idx_sales_project         on public.sales (project_id);
@@ -99,11 +109,12 @@ create index if not exists idx_notifications_user    on public.notifications (us
 -- member can create/update only their own profile (or claim a seeded roster
 -- entry whose email matches theirs).
 
-alter table public.profiles      enable row level security;
-alter table public.projects      enable row level security;
-alter table public.tasks         enable row level security;
-alter table public.sales         enable row level security;
-alter table public.notifications enable row level security;
+alter table public.profiles         enable row level security;
+alter table public.projects         enable row level security;
+alter table public.project_profiles enable row level security;
+alter table public.tasks            enable row level security;
+alter table public.sales            enable row level security;
+alter table public.notifications    enable row level security;
 
 -- Profiles
 drop policy if exists "profiles_select_team" on public.profiles;
@@ -134,6 +145,29 @@ create policy "profiles_update_self" on public.profiles
 -- Projects
 drop policy if exists "projects_all" on public.projects;
 create policy "projects_all" on public.projects
+  for all to authenticated using (true) with check (true);
+
+-- Ensure non-admins cannot delete projects
+drop policy if exists "projects_delete_admin_only" on public.projects;
+create policy "projects_delete_admin_only" on public.projects
+  for delete to authenticated
+  using (
+    exists (
+      select 1 from public.profiles
+      where auth_user_id = auth.uid()
+        and role = 'admin'
+        and deleted_at is null
+        and (is_deleted is null or is_deleted = false)
+    )
+  );
+
+-- Project Profiles (membership junction)
+drop policy if exists "project_profiles_select" on public.project_profiles;
+create policy "project_profiles_select" on public.project_profiles
+  for select to authenticated using (true);
+
+drop policy if exists "project_profiles_all" on public.project_profiles;
+create policy "project_profiles_all" on public.project_profiles
   for all to authenticated using (true) with check (true);
 
 -- Tasks

@@ -84,9 +84,7 @@ export default function TasksPage() {
   const [newTaskProject, setNewTaskProject] = useState("");
   const [newTaskAssignee, setNewTaskAssignee] = useState(currentUserId || "");
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
-  const [newTaskDueDate, setNewTaskDueDate] = useState(
-    new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0]
-  );
+  const [newTaskDueDate, setNewTaskDueDate] = useState<string>("");
   const [newTaskCheckDate, setNewTaskCheckDate] = useState<string>("");
   const [newTaskLink, setNewTaskLink] = useState<string>("");
 
@@ -119,21 +117,29 @@ export default function TasksPage() {
 
   const query = (localSearch || globalSearchQuery).trim().toLowerCase();
 
-  // Role-based visibility: admin can view all data, member and guest are filtered by tasks.assignee_id
-  const visibleTasks = useMemo(() => {
-    if (isAdmin) return tasks;
-    return tasks.filter((t) => t.assigneeId === currentUserId);
-  }, [tasks, isAdmin, currentUserId]);
-
-  const userProjectIds = useMemo(() => {
+  // Role-based visibility: admin can view all data; member/guest view tasks for projects where they are in project_profiles (memberIds/ownerId) or assigned
+  const userMemberProjectIds = useMemo(() => {
     if (isAdmin) return null;
-    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
-  }, [tasks, isAdmin, currentUserId]);
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      projects
+        .filter((p) => p.memberIds?.includes(currentUserId) || p.ownerId === currentUserId)
+        .map((p) => p.id)
+    );
+  }, [projects, isAdmin, currentUserId]);
 
   const visibleProjects = useMemo(() => {
     if (isAdmin) return projects;
-    return projects.filter((p) => userProjectIds?.has(p.id));
-  }, [projects, isAdmin, userProjectIds]);
+    return projects.filter((p) => userMemberProjectIds?.has(p.id));
+  }, [projects, isAdmin, userMemberProjectIds]);
+
+  const visibleTasks = useMemo(() => {
+    if (isAdmin) return tasks;
+    if (!currentUserId) return [];
+    return tasks.filter(
+      (t) => (userMemberProjectIds && userMemberProjectIds.has(t.projectId)) || t.assigneeId === currentUserId
+    );
+  }, [tasks, isAdmin, currentUserId, userMemberProjectIds]);
 
   useEffect(() => {
     if (filterProject !== "all" && !visibleProjects.some((p) => p.id === filterProject)) {
@@ -286,7 +292,7 @@ export default function TasksPage() {
       priority: newTaskPriority,
       assigneeId: taskAssignee,
       startDate: new Date().toISOString().split("T")[0],
-      dueDate: newTaskDueDate || new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
+      dueDate: newTaskDueDate.trim() ? newTaskDueDate.trim() : null,
       checkDate: newTaskCheckDate.trim() ? newTaskCheckDate : null,
       link: newTaskLink.trim() ? newTaskLink.trim() : null,
       tags: [],
@@ -296,6 +302,7 @@ export default function TasksPage() {
 
     setNewTaskTitle("");
     setNewTaskDescription("");
+    setNewTaskDueDate("");
     setNewTaskCheckDate("");
     setNewTaskLink("");
     setNewTaskAssignee(currentUserId || "");
@@ -326,7 +333,7 @@ export default function TasksPage() {
       status: editForm.status,
       priority: editForm.priority,
       assigneeId: editForm.assigneeId || null,
-      dueDate: editForm.dueDate,
+      dueDate: editForm.dueDate.trim() ? editForm.dueDate.trim() : null,
       checkDate: editForm.checkDate.trim() ? editForm.checkDate : null,
       link: editForm.link.trim() ? editForm.link.trim() : null,
     });
@@ -679,11 +686,13 @@ export default function TasksPage() {
                   filteredTasks.map((task) => {
                     const project = projects.find((p) => p.id === task.projectId);
                     const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
-                    const daysLeft = Math.ceil(
-                      (new Date(task.dueDate).getTime() - new Date(todayStr).getTime()) / 86400000
-                    );
-                    const isOverdue = daysLeft < 0 && task.status !== "done";
-                    const isDueToday = daysLeft === 0 && task.status !== "done";
+                    const daysLeft = task.dueDate
+                      ? Math.ceil(
+                          (new Date(task.dueDate).getTime() - new Date(todayStr).getTime()) / 86400000
+                        )
+                      : null;
+                    const isOverdue = daysLeft !== null && daysLeft < 0 && task.status !== "done";
+                    const isDueToday = daysLeft !== null && daysLeft === 0 && task.status !== "done";
 
                     return (
                       <tr
@@ -961,8 +970,9 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label htmlFor="input-new-task-deadline" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  Due Date
+                <label htmlFor="input-new-task-deadline" className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <span>Due Date</span>
+                  <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
                 </label>
                 <Input
                   id="input-new-task-deadline"
@@ -1126,8 +1136,9 @@ export default function TasksPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="edit-task-due" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  Due Date
+                <label htmlFor="edit-task-due" className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <span>Due Date</span>
+                  <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
                 </label>
                 <Input
                   id="edit-task-due"

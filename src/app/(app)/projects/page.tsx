@@ -20,6 +20,7 @@ import {
   List,
   Pencil,
   Trash2,
+  Users,
 } from "lucide-react";
 
 const statusConfig = {
@@ -47,6 +48,8 @@ export default function ProjectsPage() {
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [newProjectMemberIds, setNewProjectMemberIds] = useState<string[]>([]);
+  const [editProjectMemberIds, setEditProjectMemberIds] = useState<string[]>([]);
   const [editProject, setEditProject] = useState<{
     title: string;
     description: string;
@@ -54,18 +57,24 @@ export default function ProjectsPage() {
     color: string;
   }>({ title: "", description: "", status: "active", color: "var(--primary)" });
 
-  const userProjectIds = useMemo(() => {
-    if (isAdmin) return null;
-    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
-  }, [tasks, isAdmin, currentUserId]);
+  const eligibleUsers = useMemo(() => {
+    return users.filter((u) => !u.isDeleted && !u.deletedAt);
+  }, [users]);
 
   const visibleProjects = useMemo(() => {
     if (isAdmin) return projects;
-    return projects.filter((p) => userProjectIds?.has(p.id));
-  }, [projects, isAdmin, userProjectIds]);
+    return projects.filter(
+      (p) => p.memberIds?.includes(currentUserId!) || p.ownerId === currentUserId
+    );
+  }, [projects, isAdmin, currentUserId]);
 
   const activeProjects = visibleProjects.filter((p) => p.status === "active");
-  const visibleTasks = isAdmin ? tasks : tasks.filter((t) => t.assigneeId === currentUserId);
+  const visibleTasks = useMemo(() => {
+    if (isAdmin) return tasks;
+    const allowedProjectIds = new Set(visibleProjects.map((p) => p.id));
+    return tasks.filter((t) => allowedProjectIds.has(t.projectId) || t.assigneeId === currentUserId);
+  }, [tasks, isAdmin, visibleProjects, currentUserId]);
+
   const effectiveSelectedProject = selectedProject && visibleProjects.some((p) => p.id === selectedProject)
     ? selectedProject
     : null;
@@ -101,7 +110,7 @@ export default function ProjectsPage() {
       priority: newTaskPriority,
       assigneeId: newTaskAssignee || (!isAdmin ? currentUserId : null),
       startDate: new Date().toISOString().split("T")[0],
-      dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0],
+      dueDate: null,
       tags: [],
       createdAt: new Date().toISOString(),
       order: tasksByStatus.todo.length,
@@ -114,14 +123,17 @@ export default function ProjectsPage() {
 
   function handleCreateProject() {
     if (!isAdmin || !newProjectTitle.trim() || !currentUserId) return;
+    const assignedMembers = newProjectMemberIds.length > 0
+      ? newProjectMemberIds
+      : [currentUserId];
     const project = {
       id: generateId(),
-      title: newProjectTitle,
-      description: newProjectDesc,
+      title: newProjectTitle.trim(),
+      description: newProjectDesc.trim(),
       status: "active" as const,
       color: ["var(--primary)", "var(--brand)", "var(--muted-foreground)", "var(--destructive)"][Math.floor(Math.random() * 4)],
       ownerId: currentUserId,
-      memberIds: [currentUserId],
+      memberIds: assignedMembers,
       startDate: new Date().toISOString().split("T")[0],
       endDate: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
       createdAt: new Date().toISOString(),
@@ -129,6 +141,7 @@ export default function ProjectsPage() {
     addProject(project);
     setNewProjectTitle("");
     setNewProjectDesc("");
+    setNewProjectMemberIds(currentUserId ? [currentUserId] : []);
     setShowNewProject(false);
   }
 
@@ -165,6 +178,7 @@ export default function ProjectsPage() {
       status: project.status,
       color: project.color,
     });
+    setEditProjectMemberIds(project.memberIds || []);
   }
 
   function handleSaveProject() {
@@ -174,6 +188,7 @@ export default function ProjectsPage() {
       description: editProject.description,
       status: editProject.status,
       color: editProject.color,
+      memberIds: editProjectMemberIds,
     });
     setEditingProjectId(null);
   }
@@ -306,7 +321,7 @@ export default function ProjectsPage() {
                     {columnTasks.map((task) => {
                       const project = projects.find((p) => p.id === task.projectId);
                       const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
-                      const daysLeft = Math.ceil((new Date(task.dueDate).getTime() - Date.now()) / 86400000);
+                      const daysLeft = task.dueDate ? Math.ceil((new Date(task.dueDate).getTime() - Date.now()) / 86400000) : null;
                       return (
                         <div
                           key={task.id}
@@ -348,7 +363,7 @@ export default function ProjectsPage() {
                               <Badge variant={priorityVariant[task.priority]} className="text-xs px-1.5 py-0">
                                 {task.priority}
                               </Badge>
-                              {task.status !== "done" && (
+                              {task.status !== "done" && daysLeft !== null && (
                                 <span className={cn("text-xs", daysLeft < 0 ? "text-destructive font-medium" : daysLeft <= 3 ? "text-destructive" : "text-subtle-foreground")}>
                                   {daysLeft < 0 ? `${Math.abs(daysLeft)}d late` : `${daysLeft}d left`}
                                 </span>
@@ -433,7 +448,7 @@ export default function ProjectsPage() {
                             <span className="text-sm text-subtle-foreground">Unassigned</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{formatDate(task.dueDate)}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{task.dueDate ? formatDate(task.dueDate) : "—"}</td>
                         <td className="py-2 px-4">
                           <div className="flex items-center justify-end">
                             <button
@@ -519,21 +534,110 @@ export default function ProjectsPage() {
 
       {/* New Project Dialog */}
       <Dialog open={showNewProject} onOpenChange={setShowNewProject}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
-            <DialogDescription>Start a new project for the team</DialogDescription>
+            <DialogDescription>Start a new project and assign team members &amp; guests.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Project Name</label>
-              <Input placeholder="e.g., DARE Festival 2027" value={newProjectTitle} onChange={(e) => setNewProjectTitle(e.target.value)} />
+              <label htmlFor="new-project-title" className="text-sm font-medium mb-1.5 block">Project Name</label>
+              <Input
+                id="new-project-title"
+                placeholder="e.g., DARE Festival 2027"
+                value={newProjectTitle}
+                onChange={(e) => setNewProjectTitle(e.target.value)}
+              />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Description</label>
-              <Textarea placeholder="Brief description of the project..." value={newProjectDesc} onChange={(e) => setNewProjectDesc(e.target.value)} />
+              <label htmlFor="new-project-desc" className="text-sm font-medium mb-1.5 block">Description</label>
+              <Textarea
+                id="new-project-desc"
+                placeholder="Brief description of the project..."
+                value={newProjectDesc}
+                onChange={(e) => setNewProjectDesc(e.target.value)}
+              />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            {/* Members & Guests Multi-Select */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-subtle-foreground" />
+                  <span>Project Members &amp; Guests</span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewProjectMemberIds(eligibleUsers.map((u) => u.id))}
+                    className="text-xs text-primary hover:underline cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setNewProjectMemberIds(currentUserId ? [currentUserId] : [])}
+                    className="text-xs text-muted-foreground hover:underline cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <div className="border border-border max-h-48 overflow-y-auto divide-y divide-border bg-card">
+                {eligibleUsers.map((u) => {
+                  const isSelected = newProjectMemberIds.includes(u.id);
+                  return (
+                    <label
+                      key={u.id}
+                      className="flex items-center justify-between p-2.5 hover:bg-secondary/60 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setNewProjectMemberIds((prev) => [...prev, u.id]);
+                            } else {
+                              setNewProjectMemberIds((prev) => prev.filter((id) => id !== u.id));
+                            }
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
+                          style={{ backgroundColor: u.avatarColor || "var(--primary)" }}
+                        >
+                          {getInitials(u.name)}
+                        </div>
+                        <span className="text-sm font-medium">
+                          {u.name}
+                          {u.id === currentUserId && <span className="text-xs text-muted-foreground ml-1">(You)</span>}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border",
+                          u.role === "admin"
+                            ? "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                            : u.role === "guest"
+                            ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                            : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                        )}
+                      >
+                        {u.role}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {newProjectMemberIds.length} team member(s) assigned. Members and guests can view this project and related tasks, but cannot delete it.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
               <Button variant="outline" onClick={() => setShowNewProject(false)}>Cancel</Button>
               <Button onClick={handleCreateProject} disabled={!newProjectTitle.trim() || !currentUserId}>Create Project</Button>
             </div>
@@ -543,24 +647,38 @@ export default function ProjectsPage() {
 
       {/* Edit Project Dialog */}
       <Dialog open={editingProjectId !== null} onOpenChange={(open) => { if (!open) setEditingProjectId(null); }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Project</DialogTitle>
-            <DialogDescription>Update the project details.</DialogDescription>
+            <DialogDescription>Update project details and manage assigned members &amp; guests.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Project Name</label>
-              <Input placeholder="e.g., DARE Festival 2027" value={editProject.title} onChange={(e) => setEditProject({ ...editProject, title: e.target.value })} />
+              <label htmlFor="edit-project-title" className="text-sm font-medium mb-1.5 block">Project Name</label>
+              <Input
+                id="edit-project-title"
+                placeholder="e.g., DARE Festival 2027"
+                value={editProject.title}
+                onChange={(e) => setEditProject({ ...editProject, title: e.target.value })}
+              />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Description</label>
-              <Textarea placeholder="Brief description of the project..." value={editProject.description} onChange={(e) => setEditProject({ ...editProject, description: e.target.value })} />
+              <label htmlFor="edit-project-desc" className="text-sm font-medium mb-1.5 block">Description</label>
+              <Textarea
+                id="edit-project-desc"
+                placeholder="Brief description of the project..."
+                value={editProject.description}
+                onChange={(e) => setEditProject({ ...editProject, description: e.target.value })}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium mb-1.5 block">Status</label>
-                <Select value={editProject.status} onChange={(e) => setEditProject({ ...editProject, status: e.target.value as Project["status"] })}>
+                <label htmlFor="edit-project-status" className="text-sm font-medium mb-1.5 block">Status</label>
+                <Select
+                  id="edit-project-status"
+                  value={editProject.status}
+                  onChange={(e) => setEditProject({ ...editProject, status: e.target.value as Project["status"] })}
+                >
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
                   <option value="completed">Completed</option>
@@ -568,8 +686,12 @@ export default function ProjectsPage() {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium mb-1.5 block">Colour</label>
-                <Select value={editProject.color} onChange={(e) => setEditProject({ ...editProject, color: e.target.value })}>
+                <label htmlFor="edit-project-color" className="text-sm font-medium mb-1.5 block">Colour</label>
+                <Select
+                  id="edit-project-color"
+                  value={editProject.color}
+                  onChange={(e) => setEditProject({ ...editProject, color: e.target.value })}
+                >
                   <option value="var(--primary)">Primary</option>
                   <option value="var(--brand)">Brand</option>
                   <option value="var(--muted-foreground)">Neutral</option>
@@ -577,7 +699,86 @@ export default function ProjectsPage() {
                 </Select>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            {/* Members & Guests Multi-Select */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-subtle-foreground" />
+                  <span>Project Members &amp; Guests</span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditProjectMemberIds(eligibleUsers.map((u) => u.id))}
+                    className="text-xs text-primary hover:underline cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditProjectMemberIds([])}
+                    className="text-xs text-muted-foreground hover:underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              <div className="border border-border max-h-48 overflow-y-auto divide-y divide-border bg-card">
+                {eligibleUsers.map((u) => {
+                  const isSelected = editProjectMemberIds.includes(u.id);
+                  return (
+                    <label
+                      key={u.id}
+                      className="flex items-center justify-between p-2.5 hover:bg-secondary/60 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditProjectMemberIds((prev) => [...prev, u.id]);
+                            } else {
+                              setEditProjectMemberIds((prev) => prev.filter((id) => id !== u.id));
+                            }
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
+                          style={{ backgroundColor: u.avatarColor || "var(--primary)" }}
+                        >
+                          {getInitials(u.name)}
+                        </div>
+                        <span className="text-sm font-medium">
+                          {u.name}
+                          {u.id === currentUserId && <span className="text-xs text-muted-foreground ml-1">(You)</span>}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border",
+                          u.role === "admin"
+                            ? "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                            : u.role === "guest"
+                            ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                            : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                        )}
+                      >
+                        {u.role}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {editProjectMemberIds.length} team member(s) assigned. Members and guests can view this project and related tasks, but cannot delete it.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
               <Button variant="outline" onClick={() => setEditingProjectId(null)}>Cancel</Button>
               <Button onClick={handleSaveProject} disabled={!editProject.title.trim()}>Save changes</Button>
             </div>
