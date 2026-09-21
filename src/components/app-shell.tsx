@@ -17,6 +17,7 @@ import {
   seedSaleStages,
   seedNotifications,
   seedClients,
+  seedProjectProfiles,
 } from "@/lib/seed-data";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -43,6 +44,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         saleStages: seedSaleStages,
         notifications: seedNotifications,
         clients: seedClients,
+        projectProfiles: seedProjectProfiles,
         currentUserId: seedUsers[0].id,
       });
       setStatus("ready");
@@ -129,6 +131,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         saleStages: seedSaleStages,
         notifications: seedNotifications,
         clients: seedClients,
+        projectProfiles: seedProjectProfiles,
         currentUserId: seedUsers[0].id,
       });
       setStatus("ready");

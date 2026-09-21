@@ -34,7 +34,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { projects, tasks, sales, users, getUserById, currentUserId, searchQuery } = useStore();
+  const { projects, tasks, sales, users, projectProfiles, getUserById, currentUserId, searchQuery } = useStore();
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
 
@@ -45,23 +45,34 @@ export default function DashboardPage() {
     if (isAdmin) return null;
     if (!currentUserId) return new Set<string>();
     return new Set(
-      projects
-        .filter((p) => p.memberIds?.includes(currentUserId) || p.ownerId === currentUserId)
-        .map((p) => p.id)
+      projectProfiles
+        .filter((pp) => pp.profileId === currentUserId)
+        .map((pp) => pp.projectId)
     );
-  }, [projects, isAdmin, currentUserId]);
+  }, [projectProfiles, isAdmin, currentUserId]);
+
+  const userAssignedProjectIds = React.useMemo(() => {
+    if (isAdmin) return null;
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId)
+    );
+  }, [tasks, isAdmin, currentUserId]);
 
   const baseProjects = isAdmin
     ? projects
-    : projects.filter((p) => userMemberProjectIds?.has(p.id));
+    : projects.filter(
+        (p) =>
+          (userMemberProjectIds && userMemberProjectIds.has(p.id)) ||
+          (userAssignedProjectIds && userAssignedProjectIds.has(p.id)) ||
+          p.ownerId === currentUserId
+      );
 
   const visibleTasks = React.useMemo(() => {
     if (isAdmin) return tasks;
     if (!currentUserId) return [];
-    return tasks.filter(
-      (t) => (userMemberProjectIds && userMemberProjectIds.has(t.projectId)) || t.assigneeId === currentUserId
-    );
-  }, [tasks, isAdmin, currentUserId, userMemberProjectIds]);
+    return tasks.filter((t) => t.assigneeId === currentUserId);
+  }, [tasks, isAdmin, currentUserId]);
 
   const activeProjects = baseProjects.filter((p) => p.status === "active");
   const visibleProjects = activeProjects.filter((p) => matchesQuery(p.title));

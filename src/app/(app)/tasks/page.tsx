@@ -54,6 +54,7 @@ export default function TasksPage() {
     tasks,
     projects,
     users,
+    projectProfiles,
     currentUserId,
     getUserById,
     getActiveUsers,
@@ -117,29 +118,41 @@ export default function TasksPage() {
 
   const query = (localSearch || globalSearchQuery).trim().toLowerCase();
 
-  // Role-based visibility: admin can view all data; member/guest view tasks for projects where they are in project_profiles (memberIds/ownerId) or assigned
+  // Role-based visibility: admin can view all data; member/guest base on tasks.assignee_id and project_profiles
   const userMemberProjectIds = useMemo(() => {
     if (isAdmin) return null;
     if (!currentUserId) return new Set<string>();
     return new Set(
-      projects
-        .filter((p) => p.memberIds?.includes(currentUserId) || p.ownerId === currentUserId)
-        .map((p) => p.id)
+      projectProfiles
+        .filter((pp) => pp.profileId === currentUserId)
+        .map((pp) => pp.projectId)
     );
-  }, [projects, isAdmin, currentUserId]);
+  }, [projectProfiles, isAdmin, currentUserId]);
+
+  const userAssignedProjectIds = useMemo(() => {
+    if (isAdmin) return null;
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId)
+    );
+  }, [tasks, isAdmin, currentUserId]);
 
   const visibleProjects = useMemo(() => {
     if (isAdmin) return projects;
-    return projects.filter((p) => userMemberProjectIds?.has(p.id));
-  }, [projects, isAdmin, userMemberProjectIds]);
+    if (!currentUserId) return [];
+    return projects.filter(
+      (p) =>
+        (userMemberProjectIds && userMemberProjectIds.has(p.id)) ||
+        (userAssignedProjectIds && userAssignedProjectIds.has(p.id)) ||
+        p.ownerId === currentUserId
+    );
+  }, [projects, isAdmin, currentUserId, userMemberProjectIds, userAssignedProjectIds]);
 
   const visibleTasks = useMemo(() => {
     if (isAdmin) return tasks;
     if (!currentUserId) return [];
-    return tasks.filter(
-      (t) => (userMemberProjectIds && userMemberProjectIds.has(t.projectId)) || t.assigneeId === currentUserId
-    );
-  }, [tasks, isAdmin, currentUserId, userMemberProjectIds]);
+    return tasks.filter((t) => t.assigneeId === currentUserId);
+  }, [tasks, isAdmin, currentUserId]);
 
   useEffect(() => {
     if (filterProject !== "all" && !visibleProjects.some((p) => p.id === filterProject)) {

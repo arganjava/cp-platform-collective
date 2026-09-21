@@ -23,6 +23,7 @@ import type {
   ProjectStatus,
   SaleType,
   Client,
+  ProjectProfile,
 } from "../types";
 
 type RowResult<T> = { data: T | null; error: { message: string } | null };
@@ -57,7 +58,7 @@ export function fromProjectRow(r: ProjectRow): Project {
     status: (r.status as ProjectStatus) || "active",
     color: r.color ?? "var(--primary)",
     ownerId: r.owner_id ?? "",
-    memberIds: r.member_ids ?? [],
+    memberIds: [], // loaded exclusively from project_profiles
     startDate: r.start_date ?? "",
     endDate: r.end_date ?? "",
     createdAt: r.created_at ?? new Date().toISOString(),
@@ -239,6 +240,7 @@ export interface TeamData {
   saleStages: SaleStage[];
   notifications: Notification[];
   clients: Client[];
+  projectProfiles: ProjectProfile[];
 }
 
 async function fetchSalesSafe(supabase: ReturnType<typeof getSupabase>): Promise<SaleRow[]> {
@@ -306,22 +308,26 @@ export async function fetchTeamData(): Promise<TeamData> {
     fetchProjectProfilesSafe(supabase),
   ]);
 
+  const mappedProjectProfiles: ProjectProfile[] = (projectProfilesRows || []).map((pp) => ({
+    id: pp.id,
+    projectId: pp.project_id,
+    profileId: pp.profile_id,
+    createdAt: pp.created_at,
+  }));
+
   const projectProfileMap = new Map<string, string[]>();
-  for (const pp of projectProfilesRows) {
-    const existing = projectProfileMap.get(pp.project_id) || [];
-    if (!existing.includes(pp.profile_id)) {
-      existing.push(pp.profile_id);
+  for (const pp of mappedProjectProfiles) {
+    const existing = projectProfileMap.get(pp.projectId) || [];
+    if (!existing.includes(pp.profileId)) {
+      existing.push(pp.profileId);
     }
-    projectProfileMap.set(pp.project_id, existing);
+    projectProfileMap.set(pp.projectId, existing);
   }
 
+  // Load project memberIds strictly from project_profiles, NOT from projects.member_ids
   const mappedProjects = (unwrap(projects, "load projects") as ProjectRow[]).map((r) => {
     const project = fromProjectRow(r);
-    const ppMembers = projectProfileMap.get(r.id);
-    if (ppMembers && ppMembers.length > 0) {
-      const combined = Array.from(new Set([...project.memberIds, ...ppMembers]));
-      project.memberIds = combined;
-    }
+    project.memberIds = projectProfileMap.get(r.id) || [];
     return project;
   });
 
@@ -335,6 +341,7 @@ export async function fetchTeamData(): Promise<TeamData> {
       fromNotificationRow
     ),
     clients: clientsRows.map(fromClientRow),
+    projectProfiles: mappedProjectProfiles,
   };
 }
 
@@ -425,7 +432,7 @@ export async function insertProject(project: Project) {
     .from("projects")
     .insert(projectColumns(project));
   if (error) throw error;
-  if (project.memberIds && project.memberIds.length > 0) {
+  if (project.memberIds !== undefined) {
     await syncProjectProfiles(project.id, project.memberIds);
   }
 }

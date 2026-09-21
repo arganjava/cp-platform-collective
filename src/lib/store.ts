@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   ProjectStatus,
   Client,
+  ProjectProfile,
 } from "./types";
 import {
   insertTask,
@@ -60,6 +61,7 @@ interface AppState {
   saleStages: SaleStage[];
   notifications: Notification[];
   clients: Client[];
+  projectProfiles: ProjectProfile[];
   currentUserId: string | null;
   loading: boolean;
   initialized: boolean;
@@ -79,6 +81,7 @@ interface AppState {
     saleStages?: SaleStage[];
     notifications: Notification[];
     clients?: Client[];
+    projectProfiles?: ProjectProfile[];
     currentUserId: string | null;
   }) => void;
   setCurrentUser: (id: string | null) => void;
@@ -142,6 +145,8 @@ interface AppState {
   getSalesByProject: (projectId: string) => Sale[];
   getSaleStagesBySaleId: (saleId: string) => SaleStage[];
   getProjectsByStatus: (status: ProjectStatus) => Project[];
+  getProjectMemberIds: (projectId: string) => string[];
+  getProjectProfilesByProjectId: (projectId: string) => ProjectProfile[];
 }
 
 const initialDataState = {
@@ -152,6 +157,7 @@ const initialDataState = {
   saleStages: [] as SaleStage[],
   notifications: [] as Notification[],
   clients: [] as Client[],
+  projectProfiles: [] as ProjectProfile[],
   currentUserId: null as string | null,
   loading: true,
   initialized: false,
@@ -167,7 +173,7 @@ export const useStore = create<AppState>((set, get) => ({
   selectedProjectId: null,
 
   // Hydration
-  initialize: ({ users, projects, tasks, sales, saleStages, notifications, clients, currentUserId }) =>
+  initialize: ({ users, projects, tasks, sales, saleStages, notifications, clients, projectProfiles, currentUserId }) =>
     set({
       users,
       projects,
@@ -176,6 +182,7 @@ export const useStore = create<AppState>((set, get) => ({
       saleStages: saleStages ?? [],
       notifications,
       clients: clients ?? [],
+      projectProfiles: projectProfiles ?? [],
       currentUserId,
       loading: false,
       initialized: true,
@@ -222,13 +229,34 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Project actions
   addProject: (project) => {
-    set((s) => ({ projects: [...s.projects, project] }));
+    const newProfiles: ProjectProfile[] = (project.memberIds || []).map((profileId) => ({
+      id: `pp-${project.id}-${profileId}`,
+      projectId: project.id,
+      profileId,
+    }));
+    set((s) => ({
+      projects: [...s.projects, project],
+      projectProfiles: [...s.projectProfiles, ...newProfiles],
+    }));
     persist(insertProject(project));
   },
   updateProject: (id, updates) => {
-    set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
-    }));
+    set((s) => {
+      let updatedProfiles = s.projectProfiles;
+      if (updates.memberIds !== undefined) {
+        const remaining = s.projectProfiles.filter((pp) => pp.projectId !== id);
+        const added = updates.memberIds.map((profileId) => ({
+          id: `pp-${id}-${profileId}`,
+          projectId: id,
+          profileId,
+        }));
+        updatedProfiles = [...remaining, ...added];
+      }
+      return {
+        projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+        projectProfiles: updatedProfiles,
+      };
+    });
     persist(updateProjectRow(id, updates));
   },
   updateProjectStatus: (id, status) => {
@@ -240,6 +268,7 @@ export const useStore = create<AppState>((set, get) => ({
   deleteProject: (id) => {
     set((s) => ({
       projects: s.projects.filter((p) => p.id !== id),
+      projectProfiles: s.projectProfiles.filter((pp) => pp.projectId !== id),
       tasks: s.tasks.filter((t) => t.projectId !== id),
       sales: s.sales.filter((sl) => sl.projectId !== id),
     }));
@@ -415,4 +444,8 @@ export const useStore = create<AppState>((set, get) => ({
       .saleStages.filter((st) => st.saleId === saleId)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
   getProjectsByStatus: (status) => get().projects.filter((p) => p.status === status),
+  getProjectMemberIds: (projectId) =>
+    get().projectProfiles.filter((pp) => pp.projectId === projectId).map((pp) => pp.profileId),
+  getProjectProfilesByProjectId: (projectId) =>
+    get().projectProfiles.filter((pp) => pp.projectId === projectId),
 }));

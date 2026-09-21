@@ -20,25 +20,7 @@ create table if not exists public.project_profiles (
 create index if not exists idx_project_profiles_project on public.project_profiles (project_id);
 create index if not exists idx_project_profiles_profile on public.project_profiles (profile_id);
 
--- 3. Backfill from existing projects (owner_id and member_ids)
-do $$
-begin
-  -- From owner_id
-  insert into public.project_profiles (project_id, profile_id)
-  select id as project_id, owner_id as profile_id
-  from public.projects
-  where owner_id is not null
-  on conflict (project_id, profile_id) do nothing;
-
-  -- From member_ids array
-  insert into public.project_profiles (project_id, profile_id)
-  select p.id as project_id, unnest(p.member_ids) as profile_id
-  from public.projects p
-  where p.member_ids is not null and array_length(p.member_ids, 1) > 0
-  on conflict (project_id, profile_id) do nothing;
-end $$;
-
--- 4. Enable Row Level Security
+-- 3. Enable Row Level Security
 alter table public.project_profiles enable row level security;
 
 -- Authenticated users can view project memberships

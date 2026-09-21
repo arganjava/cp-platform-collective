@@ -31,7 +31,7 @@ const statusConfig = {
 };
 
 export default function ProjectsPage() {
-  const { projects, tasks, users, currentUserId, getUserById, updateTaskStatus, addTask, deleteTask, addProject, updateProject, deleteProject, searchQuery } = useStore();
+  const { projects, tasks, users, projectProfiles, currentUserId, getUserById, updateTaskStatus, addTask, deleteTask, addProject, updateProject, deleteProject, searchQuery } = useStore();
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
 
@@ -58,22 +58,47 @@ export default function ProjectsPage() {
   }>({ title: "", description: "", status: "active", color: "var(--primary)" });
 
   const eligibleUsers = useMemo(() => {
-    return users.filter((u) => !u.isDeleted && !u.deletedAt);
+    return users.filter(
+      (u) => !u.isDeleted && !u.deletedAt && (u.role === "member" || u.role === "guest")
+    );
   }, [users]);
+
+  // Role-based visibility: admin can view all data; member/guest base on tasks.assignee_id and project_profiles
+  const userMemberProjectIds = useMemo(() => {
+    if (isAdmin) return null;
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      projectProfiles
+        .filter((pp) => pp.profileId === currentUserId)
+        .map((pp) => pp.projectId)
+    );
+  }, [projectProfiles, isAdmin, currentUserId]);
+
+  const userAssignedProjectIds = useMemo(() => {
+    if (isAdmin) return null;
+    if (!currentUserId) return new Set<string>();
+    return new Set(
+      tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId)
+    );
+  }, [tasks, isAdmin, currentUserId]);
 
   const visibleProjects = useMemo(() => {
     if (isAdmin) return projects;
+    if (!currentUserId) return [];
     return projects.filter(
-      (p) => p.memberIds?.includes(currentUserId!) || p.ownerId === currentUserId
+      (p) =>
+        (userMemberProjectIds && userMemberProjectIds.has(p.id)) ||
+        (userAssignedProjectIds && userAssignedProjectIds.has(p.id)) ||
+        p.ownerId === currentUserId
     );
-  }, [projects, isAdmin, currentUserId]);
+  }, [projects, isAdmin, currentUserId, userMemberProjectIds, userAssignedProjectIds]);
 
   const activeProjects = visibleProjects.filter((p) => p.status === "active");
   const visibleTasks = useMemo(() => {
     if (isAdmin) return tasks;
-    const allowedProjectIds = new Set(visibleProjects.map((p) => p.id));
-    return tasks.filter((t) => allowedProjectIds.has(t.projectId) || t.assigneeId === currentUserId);
-  }, [tasks, isAdmin, visibleProjects, currentUserId]);
+    if (!currentUserId) return [];
+    return tasks.filter((t) => t.assigneeId === currentUserId);
+  }, [tasks, isAdmin, currentUserId]);
 
   const effectiveSelectedProject = selectedProject && visibleProjects.some((p) => p.id === selectedProject)
     ? selectedProject
@@ -123,9 +148,6 @@ export default function ProjectsPage() {
 
   function handleCreateProject() {
     if (!isAdmin || !newProjectTitle.trim() || !currentUserId) return;
-    const assignedMembers = newProjectMemberIds.length > 0
-      ? newProjectMemberIds
-      : [currentUserId];
     const project = {
       id: generateId(),
       title: newProjectTitle.trim(),
@@ -133,7 +155,7 @@ export default function ProjectsPage() {
       status: "active" as const,
       color: ["var(--primary)", "var(--brand)", "var(--muted-foreground)", "var(--destructive)"][Math.floor(Math.random() * 4)],
       ownerId: currentUserId,
-      memberIds: assignedMembers,
+      memberIds: newProjectMemberIds,
       startDate: new Date().toISOString().split("T")[0],
       endDate: new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0],
       createdAt: new Date().toISOString(),
@@ -141,7 +163,7 @@ export default function ProjectsPage() {
     addProject(project);
     setNewProjectTitle("");
     setNewProjectDesc("");
-    setNewProjectMemberIds(currentUserId ? [currentUserId] : []);
+    setNewProjectMemberIds([]);
     setShowNewProject(false);
   }
 
@@ -178,7 +200,11 @@ export default function ProjectsPage() {
       status: project.status,
       color: project.color,
     });
-    setEditProjectMemberIds(project.memberIds || []);
+    // Load members strictly from project_profiles (not from projects.member_ids)
+    const membersFromProfiles = projectProfiles
+      .filter((pp) => pp.projectId === project.id)
+      .map((pp) => pp.profileId);
+    setEditProjectMemberIds(membersFromProfiles);
   }
 
   function handleSaveProject() {
@@ -226,13 +252,7 @@ export default function ProjectsPage() {
                   <Plus className="w-4 h-4 mr-1.5" /> Create Project
                 </Button>
               )}
-              <Button
-                id="btn-create-task"
-                size="sm"
-                onClick={() => setShowNewTask(true)}
-              >
-                <Plus className="w-4 h-4 mr-1.5" /> New Task
-              </Button>
+             
             </>
           }
         />
@@ -566,74 +586,77 @@ export default function ProjectsPage() {
                   <Users className="w-4 h-4 text-subtle-foreground" />
                   <span>Project Members &amp; Guests</span>
                 </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewProjectMemberIds(eligibleUsers.map((u) => u.id))}
-                    className="text-xs text-primary hover:underline cursor-pointer"
-                  >
-                    Select All
-                  </button>
-                  <span className="text-xs text-muted-foreground">•</span>
-                  <button
-                    type="button"
-                    onClick={() => setNewProjectMemberIds(currentUserId ? [currentUserId] : [])}
-                    className="text-xs text-muted-foreground hover:underline cursor-pointer"
-                  >
-                    Reset
-                  </button>
-                </div>
+                {eligibleUsers.length > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewProjectMemberIds(eligibleUsers.map((u) => u.id))}
+                      className="text-xs text-primary hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-xs text-muted-foreground">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setNewProjectMemberIds([])}
+                      className="text-xs text-muted-foreground hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="border border-border max-h-48 overflow-y-auto divide-y divide-border bg-card">
-                {eligibleUsers.map((u) => {
-                  const isSelected = newProjectMemberIds.includes(u.id);
-                  return (
-                    <label
-                      key={u.id}
-                      className="flex items-center justify-between p-2.5 hover:bg-secondary/60 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setNewProjectMemberIds((prev) => [...prev, u.id]);
-                            } else {
-                              setNewProjectMemberIds((prev) => prev.filter((id) => id !== u.id));
-                            }
-                          }}
-                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                        />
-                        <div
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
-                          style={{ backgroundColor: u.avatarColor || "var(--primary)" }}
-                        >
-                          {getInitials(u.name)}
-                        </div>
-                        <span className="text-sm font-medium">
-                          {u.name}
-                          {u.id === currentUserId && <span className="text-xs text-muted-foreground ml-1">(You)</span>}
-                        </span>
-                      </div>
-                      <span
-                        className={cn(
-                          "text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border",
-                          u.role === "admin"
-                            ? "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
-                            : u.role === "guest"
-                            ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
-                            : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
-                        )}
+                {eligibleUsers.length === 0 ? (
+                  <div className="p-3 text-xs text-muted-foreground text-center">
+                    No users with Member or Guest roles available.
+                  </div>
+                ) : (
+                  eligibleUsers.map((u) => {
+                    const isSelected = newProjectMemberIds.includes(u.id);
+                    return (
+                      <label
+                        key={u.id}
+                        className="flex items-center justify-between p-2.5 hover:bg-secondary/60 cursor-pointer transition-colors"
                       >
-                        {u.role}
-                      </span>
-                    </label>
-                  );
-                })}
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewProjectMemberIds((prev) => [...prev, u.id]);
+                              } else {
+                                setNewProjectMemberIds((prev) => prev.filter((id) => id !== u.id));
+                              }
+                            }}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                          />
+                          <div
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
+                            style={{ backgroundColor: u.avatarColor || "var(--primary)" }}
+                          >
+                            {getInitials(u.name)}
+                          </div>
+                          <span className="text-sm font-medium">{u.name}</span>
+                        </div>
+                        <span
+                          className={cn(
+                            "text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border",
+                            u.role === "guest"
+                              ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                              : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                          )}
+                        >
+                          {u.role}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {newProjectMemberIds.length} team member(s) assigned. Members and guests can view this project and related tasks, but cannot delete it.
+                {newProjectMemberIds.length} member(s)/guest(s) assigned. Assigned members and guests can view this project and related tasks, but cannot delete it.
               </p>
             </div>
 
@@ -707,74 +730,77 @@ export default function ProjectsPage() {
                   <Users className="w-4 h-4 text-subtle-foreground" />
                   <span>Project Members &amp; Guests</span>
                 </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditProjectMemberIds(eligibleUsers.map((u) => u.id))}
-                    className="text-xs text-primary hover:underline cursor-pointer"
-                  >
-                    Select All
-                  </button>
-                  <span className="text-xs text-muted-foreground">•</span>
-                  <button
-                    type="button"
-                    onClick={() => setEditProjectMemberIds([])}
-                    className="text-xs text-muted-foreground hover:underline cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                </div>
+                {eligibleUsers.length > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditProjectMemberIds(eligibleUsers.map((u) => u.id))}
+                      className="text-xs text-primary hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-xs text-muted-foreground">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditProjectMemberIds([])}
+                      className="text-xs text-muted-foreground hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="border border-border max-h-48 overflow-y-auto divide-y divide-border bg-card">
-                {eligibleUsers.map((u) => {
-                  const isSelected = editProjectMemberIds.includes(u.id);
-                  return (
-                    <label
-                      key={u.id}
-                      className="flex items-center justify-between p-2.5 hover:bg-secondary/60 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditProjectMemberIds((prev) => [...prev, u.id]);
-                            } else {
-                              setEditProjectMemberIds((prev) => prev.filter((id) => id !== u.id));
-                            }
-                          }}
-                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                        />
-                        <div
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
-                          style={{ backgroundColor: u.avatarColor || "var(--primary)" }}
-                        >
-                          {getInitials(u.name)}
-                        </div>
-                        <span className="text-sm font-medium">
-                          {u.name}
-                          {u.id === currentUserId && <span className="text-xs text-muted-foreground ml-1">(You)</span>}
-                        </span>
-                      </div>
-                      <span
-                        className={cn(
-                          "text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border",
-                          u.role === "admin"
-                            ? "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
-                            : u.role === "guest"
-                            ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
-                            : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
-                        )}
+                {eligibleUsers.length === 0 ? (
+                  <div className="p-3 text-xs text-muted-foreground text-center">
+                    No users with Member or Guest roles available.
+                  </div>
+                ) : (
+                  eligibleUsers.map((u) => {
+                    const isSelected = editProjectMemberIds.includes(u.id);
+                    return (
+                      <label
+                        key={u.id}
+                        className="flex items-center justify-between p-2.5 hover:bg-secondary/60 cursor-pointer transition-colors"
                       >
-                        {u.role}
-                      </span>
-                    </label>
-                  );
-                })}
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditProjectMemberIds((prev) => [...prev, u.id]);
+                              } else {
+                                setEditProjectMemberIds((prev) => prev.filter((id) => id !== u.id));
+                              }
+                            }}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                          />
+                          <div
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground"
+                            style={{ backgroundColor: u.avatarColor || "var(--primary)" }}
+                          >
+                            {getInitials(u.name)}
+                          </div>
+                          <span className="text-sm font-medium">{u.name}</span>
+                        </div>
+                        <span
+                          className={cn(
+                            "text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border",
+                            u.role === "guest"
+                              ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                              : "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                          )}
+                        >
+                          {u.role}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {editProjectMemberIds.length} team member(s) assigned. Members and guests can view this project and related tasks, but cannot delete it.
+                {editProjectMemberIds.length} member(s)/guest(s) assigned. Assigned members and guests can view this project and related tasks, but cannot delete it.
               </p>
             </div>
 

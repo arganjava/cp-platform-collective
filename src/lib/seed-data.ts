@@ -1,4 +1,4 @@
-import type { User, Project, Task, Sale, Notification, Client, SaleStage } from "./types";
+import type { User, Project, Task, Sale, Notification, Client, SaleStage, ProjectProfile } from "./types";
 
 export const seedUsers: User[] = [
   { id: "user-1", name: "Vincent Lim", email: "vincent@collectivep.com", avatarColor: "var(--primary)", role: "admin", isDeleted: false },
@@ -175,4 +175,25 @@ export const seedSaleStages: SaleStage[] = [
   { id: "stage-10-1", saleId: "sale-10", status: "Opportunity", date: "2026-07-15T10:00:00Z", picProfileId: "user-2", value: 950, createdAt: "2026-07-15T10:00:00Z", updatedAt: "2026-07-15T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
   { id: "stage-10-2", saleId: "sale-10", status: "Discussion", date: "2026-07-20T10:00:00Z", picProfileId: "user-2", value: 950, createdAt: "2026-07-20T10:00:00Z", updatedAt: "2026-07-20T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
   { id: "stage-10-3", saleId: "sale-10", status: "Lost", date: "2026-07-25T10:00:00Z", picProfileId: "user-2", value: 950, createdAt: "2026-07-25T10:00:00Z", updatedAt: "2026-07-25T10:00:00Z", createdBy: "user-2", updatedBy: "user-2" },
+];
+
+export const seedProjectProfiles: ProjectProfile[] = [
+  // proj-1 DARE Festival (members/guests: user-3, user-4, user-5)
+  { id: "pp-1-3", projectId: "proj-1", profileId: "user-3" },
+  { id: "pp-1-4", projectId: "proj-1", profileId: "user-4" },
+  { id: "pp-1-5", projectId: "proj-1", profileId: "user-5" },
+  // proj-2 Ville of Joy (members/guests: user-3, user-7, user-8)
+  { id: "pp-2-3", projectId: "proj-2", profileId: "user-3" },
+  { id: "pp-2-7", projectId: "proj-2", profileId: "user-7" },
+  { id: "pp-2-8", projectId: "proj-2", profileId: "user-8" },
+  // proj-3 Shades (members/guests: user-7, user-8)
+  { id: "pp-3-7", projectId: "proj-3", profileId: "user-7" },
+  { id: "pp-3-8", projectId: "proj-3", profileId: "user-8" },
+  // proj-4 Corporate Training (members/guests: user-4, user-5, user-6)
+  { id: "pp-4-4", projectId: "proj-4", profileId: "user-4" },
+  { id: "pp-4-5", projectId: "proj-4", profileId: "user-5" },
+  { id: "pp-4-6", projectId: "proj-4", profileId: "user-6" },
+  // proj-5 Digital Content Hub (members/guests: user-5, user-6)
+  { id: "pp-5-5", projectId: "proj-5", profileId: "user-5" },
+  { id: "pp-5-6", projectId: "proj-5", profileId: "user-6" },
 ];

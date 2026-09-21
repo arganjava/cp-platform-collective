@@ -18,7 +18,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function GanttPage() {
-  const { projects, tasks, getUserById, getActiveUsers, currentUserId, searchQuery } = useStore();
+  const { projects, tasks, projectProfiles, getUserById, getActiveUsers, currentUserId, searchQuery } = useStore();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomLevel>("week");
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
@@ -38,11 +38,14 @@ export default function GanttPage() {
 
   const effectiveAssignee = isAdmin ? filterAssignee : (currentUserId || "all");
 
-  // For member and guest roles: filter projects related to tasks where tasks.assignee_id = current user
+  // For member and guest roles: filter projects related to tasks where tasks.assignee_id = current user or in project_profiles
   const userProjectIds = useMemo(() => {
     if (isAdmin) return null;
-    return new Set(tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId));
-  }, [tasks, isAdmin, currentUserId]);
+    if (!currentUserId) return new Set<string>();
+    const fromTasks = tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId);
+    const fromProfiles = projectProfiles.filter((pp) => pp.profileId === currentUserId).map((pp) => pp.projectId);
+    return new Set([...fromTasks, ...fromProfiles]);
+  }, [tasks, projectProfiles, isAdmin, currentUserId]);
 
   const visibleProjects = useMemo(() => {
     const active = projects.filter((p) => p.status === "active");
