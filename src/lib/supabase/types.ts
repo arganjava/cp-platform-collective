@@ -50,6 +50,7 @@ export interface TaskRow {
   due_date: string | null;
   check_date?: string | null;
   link?: string | null;
+  links?: unknown | null;
   tags: string[] | null;
   sort_order: number;
   created_at: string;

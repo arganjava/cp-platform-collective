@@ -38,6 +38,12 @@ export interface ProjectProfile {
   createdAt?: string;
 }
 
+export interface TaskLink {
+  id?: string;
+  label: string;
+  url: string;
+}
+
 export interface Task {
   id: string;
   projectId: string;
@@ -50,6 +56,7 @@ export interface Task {
   dueDate: string | null;
   checkDate?: string | null;
   link?: string | null;
+  links?: TaskLink[];
   tags: string[];
   createdAt: string;
   order: number;

@@ -68,6 +68,20 @@ describe("taskColumns", () => {
     expect(cols).not.toHaveProperty("title");
     expect(cols).not.toHaveProperty("assignee_id");
   });
+
+  it("maps multiple labeled links into links JSON and fallback link column", () => {
+    const cols = taskColumns({
+      links: [
+        { id: "l-1", label: "Figma", url: "https://figma.com/file" },
+        { id: "l-2", label: "Spec", url: "https://docs.google.com/spec" },
+      ],
+    });
+    expect(cols.links).toEqual([
+      { id: "l-1", label: "Figma", url: "https://figma.com/file" },
+      { id: "l-2", label: "Spec", url: "https://docs.google.com/spec" },
+    ]);
+    expect(cols.link).toBe("https://figma.com/file");
+  });
 });
 
 describe("projectColumns", () => {
@@ -212,9 +226,39 @@ describe("row → app type mappers", () => {
       assigneeId: "u-1",
       checkDate: "2026-08-15",
       link: "https://example.com/brief",
+      links: [{ id: "link-1", label: "Link", url: "https://example.com/brief" }],
       tags: ["sales"],
       order: 1,
     });
+  });
+
+  it("fromTaskRow parses multiple links with custom labels", () => {
+    const row: TaskRow = {
+      id: "t-2",
+      project_id: "p-1",
+      title: "Task with links",
+      description: "",
+      status: "todo",
+      priority: "medium",
+      assignee_id: "u-1",
+      start_date: "2026-08-01",
+      due_date: null,
+      check_date: null,
+      link: null,
+      links: [
+        { id: "l-1", label: "Figma Mockup", url: "https://figma.com/design" },
+        { id: "l-2", label: "PR Document", url: "https://github.com/pull/1" },
+      ],
+      tags: [],
+      sort_order: 2,
+      created_at: "2026-07-20T09:00:00Z",
+    };
+    const task = fromTaskRow(row);
+    expect(task.links).toEqual([
+      { id: "l-1", label: "Figma Mockup", url: "https://figma.com/design" },
+      { id: "l-2", label: "PR Document", url: "https://github.com/pull/1" },
+    ]);
+    expect(task.link).toBe("https://figma.com/design");
   });
 
   it("fromProjectRow defaults color, status, and roster fields", () => {

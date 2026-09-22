@@ -364,18 +364,39 @@ export default function GanttPage() {
                                   style={{ backgroundColor: priorityColors[task.priority] }}
                                 />
                                 <span className="text-sm truncate">{task.title}</span>
-                                {task.link && (
-                                  <a
-                                    href={task.link.startsWith("http://") || task.link.startsWith("https://") ? task.link : `https://${task.link}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center text-primary shrink-0 hover:text-primary/80"
-                                    title={`Open link: ${task.link}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </a>
-                                )}
+                                {(() => {
+                                  const displayLinks =
+                                    task.links && task.links.length > 0
+                                      ? task.links
+                                      : task.link
+                                      ? [{ id: "link-1", label: "Link", url: task.link }]
+                                      : [];
+                                  if (displayLinks.length === 0) return null;
+                                  return (
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {displayLinks.map((lnk, idx) => {
+                                        const href =
+                                          lnk.url.startsWith("http://") || lnk.url.startsWith("https://")
+                                            ? lnk.url
+                                            : `https://${lnk.url}`;
+                                        return (
+                                          <a
+                                            key={lnk.id || idx}
+                                            href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-0.5 text-primary shrink-0 hover:text-primary/80 hover:underline text-[11px]"
+                                            title={`${lnk.label}: ${lnk.url}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <ExternalLink className="w-3 h-3" />
+                                            <span className="max-w-[70px] truncate">{lnk.label}</span>
+                                          </a>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
                                 {task.checkDate && (
                                   <span
                                     className="inline-flex items-center text-blue-600 dark:text-blue-400 shrink-0"

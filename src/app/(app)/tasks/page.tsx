@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
-import type { Task, Priority, TaskStatus } from "@/lib/types";
+import type { Task, Priority, TaskStatus, TaskLink } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
@@ -87,7 +87,7 @@ export default function TasksPage() {
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>("");
   const [newTaskCheckDate, setNewTaskCheckDate] = useState<string>("");
-  const [newTaskLink, setNewTaskLink] = useState<string>("");
+  const [newTaskLinks, setNewTaskLinks] = useState<{ id: string; label: string; url: string }[]>([]);
 
   // Edit Task State
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export default function TasksPage() {
     assigneeId: string;
     dueDate: string;
     checkDate: string;
-    link: string;
+    links: { id: string; label: string; url: string }[];
   }>({
     title: "",
     description: "",
@@ -110,7 +110,7 @@ export default function TasksPage() {
     assigneeId: "",
     dueDate: "",
     checkDate: "",
-    link: "",
+    links: [],
   });
 
   // Delete Task State
@@ -296,6 +296,16 @@ export default function TasksPage() {
       ? newTaskAssignee || null
       : newTaskAssignee || currentUserId || null;
 
+    const sanitizedLinks = newTaskLinks
+      .map((l, idx) => ({
+        id: l.id || `link-${idx + 1}`,
+        label: l.label.trim() || "Link",
+        url: l.url.trim(),
+      }))
+      .filter((l) => l.url.length > 0);
+
+    const primaryLink = sanitizedLinks.length > 0 ? sanitizedLinks[0].url : null;
+
     addTask({
       id: generateId(),
       projectId,
@@ -307,7 +317,8 @@ export default function TasksPage() {
       startDate: new Date().toISOString().split("T")[0],
       dueDate: newTaskDueDate.trim() ? newTaskDueDate.trim() : null,
       checkDate: newTaskCheckDate.trim() ? newTaskCheckDate : null,
-      link: newTaskLink.trim() ? newTaskLink.trim() : null,
+      link: primaryLink,
+      links: sanitizedLinks,
       tags: [],
       createdAt: new Date().toISOString(),
       order: tasks.length,
@@ -317,13 +328,24 @@ export default function TasksPage() {
     setNewTaskDescription("");
     setNewTaskDueDate("");
     setNewTaskCheckDate("");
-    setNewTaskLink("");
+    setNewTaskLinks([]);
     setNewTaskAssignee(currentUserId || "");
     setShowNewTask(false);
   }
 
   function openEditTask(task: Task) {
     setEditingTaskId(task.id);
+    const resolvedLinks: { id: string; label: string; url: string }[] =
+      task.links && task.links.length > 0
+        ? task.links.map((l, i) => ({
+            id: l.id || `link-${i + 1}`,
+            label: l.label || "Link",
+            url: l.url || "",
+          }))
+        : task.link
+        ? [{ id: "link-1", label: "Link", url: task.link }]
+        : [];
+
     setEditForm({
       title: task.title,
       description: task.description || "",
@@ -333,12 +355,22 @@ export default function TasksPage() {
       assigneeId: task.assigneeId ?? "",
       dueDate: task.dueDate ? task.dueDate.split("T")[0] : "",
       checkDate: task.checkDate ? task.checkDate.split("T")[0] : "",
-      link: task.link || "",
+      links: resolvedLinks,
     });
   }
 
   function handleSaveTask() {
     if (!editingTaskId || !editForm.title.trim() || !editForm.projectId) return;
+    const sanitizedLinks = editForm.links
+      .map((l, idx) => ({
+        id: l.id || `link-${idx + 1}`,
+        label: l.label.trim() || "Link",
+        url: l.url.trim(),
+      }))
+      .filter((l) => l.url.length > 0);
+
+    const primaryLink = sanitizedLinks.length > 0 ? sanitizedLinks[0].url : null;
+
     updateTask(editingTaskId, {
       title: editForm.title.trim(),
       description: editForm.description,
@@ -348,7 +380,8 @@ export default function TasksPage() {
       assigneeId: editForm.assigneeId || null,
       dueDate: editForm.dueDate.trim() ? editForm.dueDate.trim() : null,
       checkDate: editForm.checkDate.trim() ? editForm.checkDate : null,
-      link: editForm.link.trim() ? editForm.link.trim() : null,
+      link: primaryLink,
+      links: sanitizedLinks,
     });
     setEditingTaskId(null);
   }
@@ -747,23 +780,41 @@ export default function TasksPage() {
                                 >
                                   {task.title}
                                 </span>
-                                {task.link && (
-                                  <a
-                                    href={
-                                      task.link.startsWith("http://") || task.link.startsWith("https://")
-                                        ? task.link
-                                        : `https://${task.link}`
-                                    }
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                                    title={task.link}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                    <span>Link</span>
-                                  </a>
-                                )}
+                                {(() => {
+                                  const displayLinks: TaskLink[] =
+                                    task.links && task.links.length > 0
+                                      ? task.links
+                                      : task.link
+                                      ? [{ id: "link-1", label: "Link", url: task.link }]
+                                      : [];
+
+                                  if (displayLinks.length === 0) return null;
+
+                                  return (
+                                    <div className="inline-flex items-center gap-1.5 flex-wrap">
+                                      {displayLinks.map((lnk, idx) => {
+                                        const href =
+                                          lnk.url.startsWith("http://") || lnk.url.startsWith("https://")
+                                            ? lnk.url
+                                            : `https://${lnk.url}`;
+                                        return (
+                                          <a
+                                            key={lnk.id || idx}
+                                            href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-primary/10 text-primary hover:bg-primary/20 hover:underline transition-colors"
+                                            title={`${lnk.label}: ${lnk.url}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <ExternalLink className="h-3 w-3 shrink-0" />
+                                            <span className="truncate max-w-[120px]">{lnk.label || "Link"}</span>
+                                          </a>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               {task.description && (
                                 <p className="truncate text-xs text-muted-foreground max-w-xs sm:max-w-sm">
@@ -891,7 +942,7 @@ export default function TasksPage() {
 
       {/* New Task Dialog */}
       <Dialog open={showNewTask} onOpenChange={setShowNewTask}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
             <DialogDescription>Add a new actionable item to your workflow with priority and assignee.</DialogDescription>
@@ -1012,20 +1063,80 @@ export default function TasksPage() {
               />
             </div>
 
-            <div>
-              <label htmlFor="input-new-task-link" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                <ExternalLink className="h-3.5 w-3.5 text-primary" />
-                <span>Link</span>
-                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional URL)</span>
-              </label>
-              <Input
-                id="input-new-task-link"
-                type="url"
-                placeholder="https://..."
-                value={newTaskLink}
-                onChange={(e) => setNewTaskLink(e.target.value)}
-                className="w-full"
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                  <span>Links & Resources</span>
+                  {newTaskLinks.length > 0 && (
+                    <span className="text-[11px] font-normal text-muted-foreground">({newTaskLinks.length})</span>
+                  )}
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setNewTaskLinks((prev) => [...prev, { id: generateId(), label: "", url: "" }])}
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Add Link</span>
+                </Button>
+              </div>
+
+              {newTaskLinks.length === 0 ? (
+                <div className="flex items-center justify-between p-2.5 border border-dashed border-border rounded-lg bg-card/40">
+                  <span className="text-xs text-muted-foreground">No links added yet.</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                    onClick={() => setNewTaskLinks([{ id: generateId(), label: "", url: "" }])}
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Attach a link</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {newTaskLinks.map((lnk, idx) => (
+                    <div key={lnk.id || idx} className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="Label (e.g. Figma, PR)"
+                        value={lnk.label}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewTaskLinks((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, label: val } : item))
+                          );
+                        }}
+                        className="w-1/3 shrink-0 text-xs h-9"
+                      />
+                      <Input
+                        type="url"
+                        placeholder="https://..."
+                        value={lnk.url}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewTaskLinks((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, url: val } : item))
+                          );
+                        }}
+                        className="flex-1 text-xs h-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNewTaskLinks((prev) => prev.filter((_, i) => i !== idx))}
+                        className="h-9 w-9 shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                        title="Remove link"
+                        aria-label="Remove link"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
@@ -1042,7 +1153,7 @@ export default function TasksPage() {
 
       {/* Edit Task Dialog */}
       <Dialog open={editingTaskId !== null} onOpenChange={(open) => !open && setEditingTaskId(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Task</DialogTitle>
             <DialogDescription>Update task details, assignment, status, and deadlines.</DialogDescription>
@@ -1175,20 +1286,101 @@ export default function TasksPage() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="edit-task-link" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                <ExternalLink className="h-3.5 w-3.5 text-primary" />
-                <span>Link</span>
-                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional URL)</span>
-              </label>
-              <Input
-                id="edit-task-link"
-                type="url"
-                placeholder="https://..."
-                value={editForm.link}
-                onChange={(e) => setEditForm({ ...editForm, link: e.target.value })}
-                className="w-full"
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                  <span>Links & Resources</span>
+                  {editForm.links.length > 0 && (
+                    <span className="text-[11px] font-normal text-muted-foreground">({editForm.links.length})</span>
+                  )}
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      links: [...prev.links, { id: generateId(), label: "", url: "" }],
+                    }))
+                  }
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Add Link</span>
+                </Button>
+              </div>
+
+              {editForm.links.length === 0 ? (
+                <div className="flex items-center justify-between p-2.5 border border-dashed border-border rounded-lg bg-card/40">
+                  <span className="text-xs text-muted-foreground">No links added yet.</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                    onClick={() =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        links: [{ id: generateId(), label: "", url: "" }],
+                      }))
+                    }
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Attach a link</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {editForm.links.map((lnk, idx) => (
+                    <div key={lnk.id || idx} className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="Label (e.g. Figma, PR)"
+                        value={lnk.label}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditForm((prev) => ({
+                            ...prev,
+                            links: prev.links.map((item, i) =>
+                              i === idx ? { ...item, label: val } : item
+                            ),
+                          }));
+                        }}
+                        className="w-1/3 shrink-0 text-xs h-9"
+                      />
+                      <Input
+                        type="url"
+                        placeholder="https://..."
+                        value={lnk.url}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditForm((prev) => ({
+                            ...prev,
+                            links: prev.links.map((item, i) =>
+                              i === idx ? { ...item, url: val } : item
+                            ),
+                          }));
+                        }}
+                        className="flex-1 text-xs h-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            links: prev.links.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        className="h-9 w-9 shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                        title="Remove link"
+                        aria-label="Remove link"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">

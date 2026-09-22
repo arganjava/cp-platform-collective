@@ -14,6 +14,7 @@ import type {
   UserRole,
   Project,
   Task,
+  TaskLink,
   Sale,
   SaleStage,
   SaleStageStatus,
@@ -66,6 +67,21 @@ export function fromProjectRow(r: ProjectRow): Project {
 }
 
 export function fromTaskRow(r: TaskRow): Task {
+  const rawLinks = r.links;
+  let links: TaskLink[] = [];
+  if (Array.isArray(rawLinks)) {
+    links = rawLinks
+      .filter((l): l is Record<string, unknown> => Boolean(l && typeof l === "object"))
+      .map((l, idx) => ({
+        id: typeof l.id === "string" && l.id ? l.id : `link-${idx + 1}`,
+        label: typeof l.label === "string" && l.label.trim() ? l.label.trim() : "Link",
+        url: typeof l.url === "string" ? l.url.trim() : "",
+      }))
+      .filter((l) => l.url.length > 0);
+  } else if (r.link && r.link.trim()) {
+    links = [{ id: "link-1", label: "Link", url: r.link.trim() }];
+  }
+
   return {
     id: r.id,
     projectId: r.project_id ?? "",
@@ -77,7 +93,8 @@ export function fromTaskRow(r: TaskRow): Task {
     startDate: r.start_date ?? "",
     dueDate: r.due_date ?? null,
     checkDate: r.check_date ?? null,
-    link: r.link ?? null,
+    link: r.link ?? (links.length > 0 ? links[0].url : null),
+    links,
     tags: r.tags ?? [],
     createdAt: r.created_at ?? new Date().toISOString(),
     order: r.sort_order ?? 0,
@@ -164,7 +181,12 @@ export function taskColumns(t: Partial<Task>): Record<string, unknown> {
   if (t.startDate !== undefined) cols.start_date = t.startDate || null;
   if (t.dueDate !== undefined) cols.due_date = t.dueDate || null;
   if (t.checkDate !== undefined) cols.check_date = t.checkDate || null;
-  if (t.link !== undefined) cols.link = t.link || null;
+  if (t.links !== undefined) {
+    cols.links = t.links;
+    cols.link = t.links.length > 0 ? t.links[0].url : (t.link || null);
+  } else if (t.link !== undefined) {
+    cols.link = t.link || null;
+  }
   if (t.tags !== undefined) cols.tags = t.tags;
   if (t.order !== undefined) cols.sort_order = t.order;
   return cols;
