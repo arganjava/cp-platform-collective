@@ -34,6 +34,7 @@ import {
   softDeleteProfileRow,
   restoreProfileRow,
   createUserViaFunction,
+  fetchTeamData,
 } from "./supabase/data";
 import { isSupabaseConfigured } from "./supabase/client";
 
@@ -71,6 +72,7 @@ interface AppState {
   searchQuery: string;
   selectedProjectId: string | null;
   lastError: string | null;
+  isSyncing: boolean;
 
   // Hydration
   initialize: (data: {
@@ -84,6 +86,7 @@ interface AppState {
     projectProfiles?: ProjectProfile[];
     currentUserId: string | null;
   }) => void;
+  loadDataFromDatabase: () => Promise<void>;
   setCurrentUser: (id: string | null) => void;
   reset: () => void;
 
@@ -162,6 +165,7 @@ const initialDataState = {
   loading: true,
   initialized: false,
   lastError: null as string | null,
+  isSyncing: false,
 };
 
 export const useStore = create<AppState>((set, get) => ({
@@ -187,6 +191,22 @@ export const useStore = create<AppState>((set, get) => ({
       loading: false,
       initialized: true,
     }),
+  loadDataFromDatabase: async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      set({ isSyncing: true });
+      const data = await fetchTeamData();
+      const currentUserId = get().currentUserId;
+      get().initialize({
+        ...data,
+        currentUserId,
+      });
+    } catch (err) {
+      console.warn("Could not reload data from database:", err);
+    } finally {
+      set({ isSyncing: false });
+    }
+  },
   setCurrentUser: (id) => set({ currentUserId: id }),
   reset: () => set({ ...initialDataState, loading: false }),
 

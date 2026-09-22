@@ -22,7 +22,7 @@ const pageTitles: Record<string, string> = {
 
 export function TopBar() {
   const pathname = usePathname();
-  const { searchQuery, setSearchQuery, notifications, markNotificationRead, markAllNotificationsRead, getUnreadCount, currentUserId } = useStore();
+  const { searchQuery, setSearchQuery, notifications, markNotificationRead, markAllNotificationsRead, getUnreadCount, currentUserId, isSyncing } = useStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -84,6 +84,16 @@ export function TopBar() {
 
       {/* Right: actions */}
       <div className="ml-auto flex items-center gap-1.5 sm:gap-3">
+        {isSyncing && (
+          <div
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground animate-pulse"
+            role="status"
+            aria-label="Loading data from database"
+          >
+            <span className="h-2 w-2 rounded-full bg-brand animate-ping" />
+            <span className="hidden sm:inline text-[11px] font-medium text-subtle-foreground">Syncing…</span>
+          </div>
+        )}
         <ThemeToggle />
 
         <div className="relative" ref={notifRef}>

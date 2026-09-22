@@ -32,6 +32,8 @@ export function Sidebar() {
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const currentUserId = useStore((s) => s.currentUserId);
   const getUserById = useStore((s) => s.getUserById);
+  const isSyncing = useStore((s) => s.isSyncing);
+  const loadDataFromDatabase = useStore((s) => s.loadDataFromDatabase);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const currentUser = getUserById(currentUserId);
@@ -41,6 +43,11 @@ export function Sidebar() {
     if (!isAdmin && item.adminOnly) return false;
     return true;
   });
+
+  const handleNavClick = () => {
+    setMobileOpen(false);
+    void loadDataFromDatabase();
+  };
 
   return (
     <>
@@ -68,15 +75,22 @@ export function Sidebar() {
         )}
       >
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-4">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center bg-brand text-white" aria-hidden="true">
-            <span className="font-heading text-lg font-bold">CP</span>
-          </div>
-          {(!sidebarCollapsed || mobileOpen) && (
-            <div className="min-w-0 overflow-hidden">
-              <p className="font-heading text-sm font-bold leading-tight text-white">CP Platform</p>
-              <p className="text-xs leading-tight text-sidebar-foreground">Collective Perspectives</p>
+          <Link
+            href="/"
+            onClick={handleNavClick}
+            className="flex min-w-0 items-center gap-3 transition-opacity hover:opacity-90"
+            title="Go to Dashboard & Refresh data"
+          >
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center bg-brand text-white" aria-hidden="true">
+              <span className="font-heading text-lg font-bold">CP</span>
             </div>
-          )}
+            {(!sidebarCollapsed || mobileOpen) && (
+              <div className="min-w-0 overflow-hidden text-left">
+                <p className="font-heading text-sm font-bold leading-tight text-white">CP Platform</p>
+                <p className="text-xs leading-tight text-sidebar-foreground">Collective Perspectives</p>
+              </div>
+            )}
+          </Link>
           <button type="button" aria-label="Close navigation menu" onClick={() => setMobileOpen(false)} className="ml-auto flex h-10 w-10 items-center justify-center text-sidebar-foreground hover:bg-sidebar-accent hover:text-white md:hidden">
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -89,7 +103,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setMobileOpen(false)}
+                onClick={handleNavClick}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "group relative flex min-h-11 items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors",
@@ -110,6 +124,19 @@ export function Sidebar() {
         </nav>
 
         <div className="border-t border-white/10 p-2">
+          {isSyncing && (
+            <div
+              className={cn(
+                "mb-1.5 flex items-center gap-2 px-3 py-1 text-xs text-sidebar-active animate-pulse",
+                sidebarCollapsed && "justify-center px-1"
+              )}
+              role="status"
+              aria-label="Loading data from database"
+            >
+              <span className="inline-block h-2 w-2 rounded-full bg-sidebar-active animate-ping" />
+              {!sidebarCollapsed && <span className="text-[11px] font-medium">Syncing database…</span>}
+            </div>
+          )}
           <button type="button" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"} className="flex min-h-11 w-full items-center justify-center text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-white">
             {sidebarCollapsed ? <ChevronRight className="h-5 w-5" aria-hidden="true" /> : <span className="flex items-center gap-2 text-sm"><ChevronLeft className="h-4 w-4" aria-hidden="true" /> Collapse</span>}
           </button>

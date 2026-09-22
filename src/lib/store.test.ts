@@ -20,6 +20,16 @@ const mocks = vi.hoisted(() => ({
   updateAllNotificationsRead: vi.fn(async () => {}),
   updateProfileRow: vi.fn(async () => {}),
   createUserViaFunction: vi.fn(async () => ({ id: "u-created" })),
+  fetchTeamData: vi.fn(async () => ({
+    users: [],
+    projects: [],
+    tasks: [],
+    sales: [],
+    saleStages: [],
+    notifications: [],
+    clients: [],
+    projectProfiles: [],
+  })),
 }));
 
 vi.mock("./supabase/data", () => mocks);
@@ -383,5 +393,26 @@ describe("persistence error surfacing", () => {
 
     useStore.getState().reset();
     expect(useStore.getState().lastError).toBeNull();
+  });
+
+  it("loadDataFromDatabase fetches data from database and initializes store", async () => {
+    mocks.fetchTeamData.mockResolvedValueOnce({
+      users: [user],
+      projects: [project],
+      tasks: [task],
+      sales: [sale],
+      saleStages: [stage],
+      notifications: [notification],
+      clients: [],
+      projectProfiles: [],
+    });
+
+    useStore.getState().setCurrentUser("u-1");
+    await useStore.getState().loadDataFromDatabase();
+
+    expect(mocks.fetchTeamData).toHaveBeenCalled();
+    expect(useStore.getState().projects).toHaveLength(1);
+    expect(useStore.getState().tasks).toHaveLength(1);
+    expect(useStore.getState().isSyncing).toBe(false);
   });
 });
