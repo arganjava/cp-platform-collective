@@ -452,6 +452,44 @@ create trigger tr_task_assignment_notification
   execute function public.handle_task_assignment_notification();
 
 -- ────────────────────────────────────────────────────────────────────────────
+-- Application Configuration Table
+-- ────────────────────────────────────────────────────────────────────────────
+create table if not exists public.app_config (
+  key         text primary key,
+  value       text not null,
+  description text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.app_config enable row level security;
+drop policy if exists "app_config_read_authenticated" on public.app_config;
+create policy "app_config_read_authenticated" on public.app_config
+  for select to authenticated using (true);
+
+drop policy if exists "app_config_admin_manage" on public.app_config;
+create policy "app_config_admin_manage" on public.app_config
+  for all to authenticated
+  using (
+    exists (
+      select 1 from public.profiles
+      where auth_user_id = auth.uid()
+        and role = 'admin'
+        and deleted_at is null
+        and (is_deleted is null or is_deleted = false)
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles
+      where auth_user_id = auth.uid()
+        and role = 'admin'
+        and deleted_at is null
+        and (is_deleted is null or is_deleted = false)
+    )
+  );
+
+-- ────────────────────────────────────────────────────────────────────────────
 -- Trigger: Notifications Table -> Webhook Listener & Email Dispatch
 -- ────────────────────────────────────────────────────────────────────────────
 create or replace function public.handle_notification_webhook()
@@ -461,11 +499,13 @@ security definer
 set search_path = public, extensions
 as $$
 declare
-  v_user_email text;
-  v_user_name text;
+  v_user_email        text;
+  v_user_name         text;
+  v_base_url          text;
+  v_service_key       text;
   v_edge_function_url text;
-  v_service_key text;
-  v_payload jsonb;
+  v_payload           jsonb;
+  v_headers           jsonb;
 begin
   select email, name into v_user_email, v_user_name
   from public.profiles
@@ -474,6 +514,27 @@ begin
     and (is_deleted is null or is_deleted = false);
 
   if v_user_email is not null and v_user_email <> '' then
+    -- Read BASE_URL and SERVICE_ROLE_KEY directly from public.app_config
+    select value into v_base_url
+    from public.app_config
+    where key in ('BASE_URL', 'base_url')
+    limit 1;
+
+    select value into v_service_key
+    from public.app_config
+    where key in ('SERVICE_ROLE_KEY', 'service_role_key')
+    limit 1;
+
+    if v_base_url is null or v_base_url = '' then
+      v_base_url := 'http://127.0.0.1:54321';
+    end if;
+
+    if v_base_url like '%/functions/v1%' then
+      v_edge_function_url := rtrim(v_base_url, '/') || '/send-notification-email';
+    else
+      v_edge_function_url := rtrim(v_base_url, '/') || '/functions/v1/send-notification-email';
+    end if;
+
     v_payload := jsonb_build_object(
       'type', TG_OP,
       'table', TG_TABLE_NAME,
@@ -511,16 +572,16 @@ begin
       now()
     );
 
-    v_edge_function_url := coalesce(
-      nullif(current_setting('app.settings.edge_function_base_url', true), ''),
-      nullif(current_setting('app.settings.supabase_functions_url', true), ''),
-      'http://127.0.0.1:54321/functions/v1'
-    ) || '/send-notification-email';
-
-    v_service_key := coalesce(
-      nullif(current_setting('app.settings.service_role_key', true), ''),
-      ''
-    );
+    if v_service_key is not null and v_service_key <> '' then
+      v_headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || v_service_key
+      );
+    else
+      v_headers := jsonb_build_object(
+        'Content-Type', 'application/json'
+      );
+    end if;
 
     begin
       if exists (
@@ -530,10 +591,7 @@ begin
       ) then
         perform extensions.http_post(
           url := v_edge_function_url,
-          headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || v_service_key
-          ),
+          headers := v_headers,
           body := v_payload,
           timeout_milliseconds := 5000
         );

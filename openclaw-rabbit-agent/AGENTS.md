@@ -240,7 +240,13 @@ create table public.notifications (
 2. **Webhook Listener Trigger (`tr_notifications_webhook_listener` on `public.notifications`)**:
    - Upon insert into `public.notifications`, an automated trigger retrieves the recipient's email and name from `public.profiles` (`where id = NEW.user_id`).
    - Inserts a pending tracking row into `public.notification_webhook_logs`.
-   - Asynchronously dispatches an HTTP POST webhook via `pg_net` to the Supabase Edge Function (`/functions/v1/send-notification-email`).
+   - Reads `BASE_URL` and `SERVICE_ROLE_KEY` directly from `public.app_config`:
+     ```sql
+     -- public.app_config stores key-value pairs:
+     -- key = 'BASE_URL',         value = 'https://<your-project-ref>.supabase.co'
+     -- key = 'SERVICE_ROLE_KEY', value = 'eyJhbGciOi...'
+     ```
+   - Automatically appends `/functions/v1/send-notification-email` and dispatches an asynchronous HTTP POST webhook via `pg_net` (`extensions.http_post`).
 3. **Audit Log Table (`public.notification_webhook_logs`)**:
    ```sql
    create table public.notification_webhook_logs (
