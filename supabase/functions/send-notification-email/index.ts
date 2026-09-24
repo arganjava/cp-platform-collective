@@ -68,7 +68,7 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const appUrl = Deno.env.get("APP_URL") || "https://cp-platform.collectivep.com";
+    const appUrl = Deno.env.get("APP_URL") || "https://cockpit.collectivep.com";
     let resendApiKey = Deno.env.get("RESEND_API_KEY");
     const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "Collective Perspectives <notifications@collectivep.com>";
 
