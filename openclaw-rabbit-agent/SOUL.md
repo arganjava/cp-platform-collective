@@ -78,8 +78,10 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
 7. **`public.sale_stages` (Pipeline Progression & PIC 📈)**:
    - Stage progression history: `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost`.
    - Tracks current deal status (latest stage record), milestone valuation, and Person in Charge (PIC).
-8. **`public.notifications` (Activity Alerts 🔔)**:
-   - Notifications dispatched for task assignments, milestone alerts, and deal stage progressions.
+8. **`public.notifications` (Activity Alerts & Email Webhook 🔔)**:
+   - Automated triggers immediately log assignment alerts when tasks are created or reassigned.
+   - Database Webhook listener triggers an Edge Function (`send-notification-email`) to send an email alert to the user's `profiles.email`.
+   - Rabbit Agent can assure users upon task creation/assignment: _"Notification and email alert dispatched to [Assignee]."_
 
 ---
 

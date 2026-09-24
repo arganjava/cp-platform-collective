@@ -218,19 +218,52 @@ create table public.sale_stages (
 
 ---
 
-### 8. `public.notifications` (Activity Alerts)
+### 8. `public.notifications` (Activity Alerts & Assignments)
 System notifications and assignment alerts.
 ```sql
 create table public.notifications (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid references public.profiles (id) on delete cascade,
   message    text not null,
-  type       text not null default 'update',
+  type       text not null default 'update', -- 'assignment' | 'update' | 'deadline' | 'mention' | 'comment'
   is_read    boolean not null default false,
   related_id uuid,
   created_at timestamptz not null default now()
 );
 ```
+
+#### Automated Triggers & Email Webhook Flow:
+1. **Task Assignment Trigger (`tr_task_assignment_notification` on `public.tasks`)**:
+   - Whenever a task is **created** with an `assignee_id`, or **updated** with a new `assignee_id`:
+   - A trigger automatically inserts a record into `public.notifications` with `user_id = assignee_id`, `type = 'assignment'`, `related_id = task.id`, and formatted message:
+     `You have been assigned to task: "[Task Title]" in project "[Project Title]"`
+2. **Webhook Listener Trigger (`tr_notifications_webhook_listener` on `public.notifications`)**:
+   - Upon insert into `public.notifications`, an automated trigger retrieves the recipient's email and name from `public.profiles` (`where id = NEW.user_id`).
+   - Inserts a pending tracking row into `public.notification_webhook_logs`.
+   - Asynchronously dispatches an HTTP POST webhook via `pg_net` to the Supabase Edge Function (`/functions/v1/send-notification-email`).
+3. **Audit Log Table (`public.notification_webhook_logs`)**:
+   ```sql
+   create table public.notification_webhook_logs (
+     id               uuid primary key default gen_random_uuid(),
+     notification_id  uuid references public.notifications (id) on delete cascade,
+     user_id          uuid references public.profiles (id) on delete set null,
+     recipient_email  text,
+     status           text not null default 'pending', -- 'pending' | 'sent' | 'failed' | 'simulated'
+     payload          jsonb,
+     response_code    integer,
+     response_body    text,
+     error_message    text,
+     created_at       timestamptz not null default now(),
+     updated_at       timestamptz not null default now()
+   );
+   ```
+4. **Supabase Edge Function (`send-notification-email`)**:
+   - Path: `supabase/functions/send-notification-email/index.ts`
+   - Also mirrored in Next.js API route: `src/app/api/notifications/webhook/route.ts`
+   - Fetches rich task details (due date, milestone check date, project title, labeled links).
+   - Generates high-contrast branded HTML email for Collective Perspectives.
+   - Dispatches email via Resend (`RESEND_API_KEY`) to `profiles.email` (or runs simulated dispatch with logging in local/test environments).
+   - Updates `notification_webhook_logs` status to `sent` or `failed`.
 
 ---
 

@@ -84,7 +84,7 @@ They frequently interact:
 > • *Figma*: `https://figma.com/file/proofs`
 > • *Drive*: `https://drive.google.com/folder/123`
 >
-> _The task has been added to the project board and Marcus has been notified._
+> 🔔 _Assignment notification created and email alert dispatched to marcus@collectivep.com._
 
 ---
 
