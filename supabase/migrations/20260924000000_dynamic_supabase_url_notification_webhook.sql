@@ -158,18 +158,12 @@ begin
 
     -- 7. Call the Edge Function via pg_net (extensions.http_post)
     begin
-      if exists (
-        select 1 from pg_proc p
-        join pg_namespace n on p.pronamespace = n.oid
-        where n.nspname in ('net', 'extensions') and p.proname = 'http_post'
-      ) then
-        perform extensions.http_post(
+      perform net.http_post(
           url := v_edge_function_url,
           headers := v_headers,
           body := v_payload,
           timeout_milliseconds := 5000
         );
-      end if;
     exception when others then
       -- Record failure in log without rolling back the notification creation
       update public.notification_webhook_logs
