@@ -245,6 +245,7 @@ create table public.notifications (
      -- public.app_config stores key-value pairs:
      -- key = 'BASE_URL',         value = 'https://<your-project-ref>.supabase.co'
      -- key = 'SERVICE_ROLE_KEY', value = 'eyJhbGciOi...'
+     -- key = 'RESEND_API_KEY',   value = 're_123456789...'
      ```
    - Automatically appends `/functions/v1/send-notification-email` and dispatches an asynchronous HTTP POST webhook via `pg_net` (`extensions.http_post`).
 3. **Audit Log Table (`public.notification_webhook_logs`)**:
@@ -266,6 +267,7 @@ create table public.notifications (
 4. **Supabase Edge Function (`send-notification-email`)**:
    - Path: `supabase/functions/send-notification-email/index.ts`
    - Also mirrored in Next.js API route: `src/app/api/notifications/webhook/route.ts`
+   - Fetches `RESEND_API_KEY` from `public.app_config` (falling back to environment variable if not present).
    - Fetches rich task details (due date, milestone check date, project title, labeled links).
    - Generates high-contrast branded HTML email for Collective Perspectives.
    - Dispatches email via Resend (`RESEND_API_KEY`) to `profiles.email` (or runs simulated dispatch with logging in local/test environments).

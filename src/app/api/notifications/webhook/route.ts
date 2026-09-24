@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://cp-platform.collectivep.com";
-    const resendApiKey = process.env.RESEND_API_KEY;
+    let resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || "Collective Perspectives <notifications@collectivep.com>";
 
     let recipientEmail = body.recipient?.email;
@@ -66,6 +66,22 @@ export async function POST(req: NextRequest) {
       supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
+    }
+
+    if (supabaseAdmin) {
+      try {
+        const { data: configData } = await supabaseAdmin
+          .from("app_config")
+          .select("value")
+          .eq("key", "RESEND_API_KEY")
+          .maybeSingle();
+
+        if (configData?.value) {
+          resendApiKey = configData.value;
+        }
+      } catch (err) {
+        console.warn("Could not retrieve RESEND_API_KEY from app_config:", err);
+      }
     }
 
     if (!recipientEmail && supabaseAdmin) {

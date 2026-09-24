@@ -69,7 +69,7 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const appUrl = Deno.env.get("APP_URL") || "https://cp-platform.collectivep.com";
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    let resendApiKey = Deno.env.get("RESEND_API_KEY");
     const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "Collective Perspectives <notifications@collectivep.com>";
 
     const body: WebhookPayload = await req.json().catch(() => ({}));
@@ -102,6 +102,23 @@ serve(async (req: Request) => {
       supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
+    }
+
+    // Attempt to load RESEND_API_KEY from public.app_config if configured
+    if (supabaseAdmin) {
+      try {
+        const { data: configData } = await supabaseAdmin
+          .from("app_config")
+          .select("value")
+          .eq("key", "RESEND_API_KEY")
+          .maybeSingle();
+
+        if (configData?.value) {
+          resendApiKey = configData.value;
+        }
+      } catch (err) {
+        console.warn("Could not retrieve RESEND_API_KEY from app_config:", err);
+      }
     }
 
     // If recipient email is not in payload, look up from public.profiles
