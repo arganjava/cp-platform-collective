@@ -61,13 +61,25 @@ create table if not exists public.tasks (
   status      text not null default 'todo',
   priority    text not null default 'medium',
   assignee_id uuid references public.profiles (id) on delete set null,
-  start_date  date,
-  due_date    date,
-  check_date  date,
-  link        text,
-  tags        text[] not null default '{}'::text[],
-  sort_order  integer not null default 0,
-  created_at  timestamptz not null default now()
+  start_date         date,
+  due_date           date,
+  check_date         date,
+  check_start_time   timestamptz,
+  check_end_time     timestamptz,
+  google_calendar_id text,
+  link               text,
+  links              jsonb default '[]'::jsonb,
+  tags               text[] not null default '{}'::text[],
+  sort_order         integer not null default 0,
+  created_at         timestamptz not null default now()
+);
+
+create table if not exists public.task_profiles (
+  id          uuid primary key default gen_random_uuid(),
+  task_id     uuid not null references public.tasks (id) on delete cascade,
+  profile_id  uuid not null references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  constraint uq_task_profiles_task_profile unique (task_id, profile_id)
 );
 
 create table if not exists public.sales (
@@ -99,6 +111,8 @@ create index if not exists idx_project_profiles_project on public.project_profil
 create index if not exists idx_project_profiles_profile on public.project_profiles (profile_id);
 create index if not exists idx_tasks_project         on public.tasks (project_id);
 create index if not exists idx_tasks_assignee        on public.tasks (assignee_id);
+create index if not exists idx_task_profiles_task    on public.task_profiles (task_id);
+create index if not exists idx_task_profiles_profile on public.task_profiles (profile_id);
 create index if not exists idx_sales_project         on public.sales (project_id);
 create index if not exists idx_notifications_user    on public.notifications (user_id);
 
@@ -113,6 +127,7 @@ alter table public.profiles         enable row level security;
 alter table public.projects         enable row level security;
 alter table public.project_profiles enable row level security;
 alter table public.tasks            enable row level security;
+alter table public.task_profiles    enable row level security;
 alter table public.sales            enable row level security;
 alter table public.notifications    enable row level security;
 
@@ -173,6 +188,15 @@ create policy "project_profiles_all" on public.project_profiles
 -- Tasks
 drop policy if exists "tasks_all" on public.tasks;
 create policy "tasks_all" on public.tasks
+  for all to authenticated using (true) with check (true);
+
+-- Task Profiles (multiple assignees junction)
+drop policy if exists "task_profiles_select" on public.task_profiles;
+create policy "task_profiles_select" on public.task_profiles
+  for select to authenticated using (true);
+
+drop policy if exists "task_profiles_all" on public.task_profiles;
+create policy "task_profiles_all" on public.task_profiles
   for all to authenticated using (true) with check (true);
 
 -- Sales
@@ -395,7 +419,7 @@ create policy "notification_webhook_logs_all" on public.notification_webhook_log
   for all to authenticated using (true) with check (true);
 
 -- ────────────────────────────────────────────────────────────────────────────
--- Trigger: Task Assignment -> Notifications Table
+-- Trigger: Task Assignment -> Notifications Table (Multi-User)
 -- ────────────────────────────────────────────────────────────────────────────
 create or replace function public.handle_task_assignment_notification()
 returns trigger
@@ -404,40 +428,82 @@ security definer
 set search_path = public
 as $$
 declare
-  v_project_title text;
-  v_message text;
+  v_task_id        uuid;
+  v_task_title     text;
+  v_project_id     uuid;
+  v_project_title  text;
+  v_message        text;
+  v_recipient_id   uuid;
 begin
-  if NEW.assignee_id is not null and (
-    TG_OP = 'INSERT' or 
-    (TG_OP = 'UPDATE' and (OLD.assignee_id is distinct from NEW.assignee_id))
-  ) then
-    select title into v_project_title 
-    from public.projects 
-    where id = NEW.project_id;
+  if TG_TABLE_NAME = 'tasks' then
+    v_task_id    := NEW.id;
+    v_task_title := NEW.title;
+    v_project_id := NEW.project_id;
+  elsif TG_TABLE_NAME = 'task_profiles' then
+    v_task_id := NEW.task_id;
+    select title, project_id into v_task_title, v_project_id
+    from public.tasks
+    where id = v_task_id;
+  end if;
 
-    if v_project_title is not null and v_project_title <> '' then
-      v_message := 'You have been assigned to task: "' || NEW.title || '" in project "' || v_project_title || '"';
-    else
-      v_message := 'You have been assigned to task: "' || NEW.title || '"';
+  if v_task_id is null then
+    return coalesce(NEW, OLD);
+  end if;
+
+  if v_project_id is not null then
+    select title into v_project_title
+    from public.projects
+    where id = v_project_id;
+  end if;
+
+  if v_project_title is not null and v_project_title <> '' then
+    v_message := 'You have been assigned to task: "' || coalesce(v_task_title, 'Untitled') || '" in project "' || v_project_title || '"';
+  else
+    v_message := 'You have been assigned to task: "' || coalesce(v_task_title, 'Untitled') || '"';
+  end if;
+
+  if TG_TABLE_NAME = 'task_profiles' then
+    if NEW.profile_id is not null then
+      if not exists (
+        select 1 from public.notifications
+        where user_id = NEW.profile_id
+          and related_id = v_task_id
+          and created_at > now() - interval '1 minute'
+      ) then
+        insert into public.notifications (
+          id, user_id, message, type, is_read, related_id, created_at
+        ) values (
+          gen_random_uuid(), NEW.profile_id, v_message, 'assignment', false, v_task_id, now()
+        );
+      end if;
     end if;
-
-    insert into public.notifications (
-      id,
-      user_id,
-      message,
-      type,
-      is_read,
-      related_id,
-      created_at
-    ) values (
-      gen_random_uuid(),
-      NEW.assignee_id,
-      v_message,
-      'assignment',
-      false,
-      NEW.id,
-      now()
-    );
+  elsif TG_TABLE_NAME = 'tasks' then
+    for v_recipient_id in
+      select distinct u.profile_id from (
+        select NEW.assignee_id as profile_id where NEW.assignee_id is not null
+        union
+        select tp.profile_id from public.task_profiles tp where tp.task_id = v_task_id and tp.profile_id is not null
+      ) u
+      where exists (
+        select 1 from public.profiles p
+        where p.id = u.profile_id
+          and p.deleted_at is null
+          and (p.is_deleted is null or p.is_deleted = false)
+      )
+    loop
+      if not exists (
+        select 1 from public.notifications
+        where user_id = v_recipient_id
+          and related_id = v_task_id
+          and created_at > now() - interval '1 minute'
+      ) then
+        insert into public.notifications (
+          id, user_id, message, type, is_read, related_id, created_at
+        ) values (
+          gen_random_uuid(), v_recipient_id, v_message, 'assignment', false, v_task_id, now()
+        );
+      end if;
+    end loop;
   end if;
 
   return NEW;
@@ -448,6 +514,13 @@ drop trigger if exists tr_task_assignment_notification on public.tasks;
 create trigger tr_task_assignment_notification
   after insert or update of assignee_id, title, project_id
   on public.tasks
+  for each row
+  execute function public.handle_task_assignment_notification();
+
+drop trigger if exists tr_task_profiles_assignment_notification on public.task_profiles;
+drop trigger if exists tr_task_profile_assignment_notification on public.task_profiles;
+create trigger tr_task_profiles_assignment_notification
+  after insert on public.task_profiles
   for each row
   execute function public.handle_task_assignment_notification();
 

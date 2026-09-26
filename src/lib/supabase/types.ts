@@ -38,6 +38,13 @@ export interface ProjectProfileRow {
   created_at?: string;
 }
 
+export interface TaskProfileRow {
+  id: string;
+  task_id: string;
+  profile_id: string;
+  created_at?: string;
+}
+
 export interface TaskRow {
   id: string;
   project_id: string | null;
@@ -49,6 +56,9 @@ export interface TaskRow {
   start_date: string | null;
   due_date: string | null;
   check_date?: string | null;
+  check_start_time?: string | null;
+  check_end_time?: string | null;
+  google_calendar_id?: string | null;
   link?: string | null;
   links?: unknown | null;
   tags: string[] | null;
@@ -106,7 +116,9 @@ export type Database = {
     Tables: {
       profiles: { Row: ProfileRow; Insert: Partial<ProfileRow>; Update: Partial<ProfileRow>; Relationships: [] };
       projects: { Row: ProjectRow; Insert: Partial<ProjectRow>; Update: Partial<ProjectRow>; Relationships: [] };
+      project_profiles: { Row: ProjectProfileRow; Insert: Partial<ProjectProfileRow>; Update: Partial<ProjectProfileRow>; Relationships: [] };
       tasks: { Row: TaskRow; Insert: Partial<TaskRow>; Update: Partial<TaskRow>; Relationships: [] };
+      task_profiles: { Row: TaskProfileRow; Insert: Partial<TaskProfileRow>; Update: Partial<TaskProfileRow>; Relationships: [] };
       clients: { Row: ClientRow; Insert: Partial<ClientRow>; Update: Partial<ClientRow>; Relationships: [] };
       sales: { Row: SaleRow; Insert: Partial<SaleRow>; Update: Partial<SaleRow>; Relationships: [] };
       sale_stages: { Row: SaleStageRow; Insert: Partial<SaleStageRow>; Update: Partial<SaleStageRow>; Relationships: [] };

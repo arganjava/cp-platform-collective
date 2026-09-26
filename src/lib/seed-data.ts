@@ -1,4 +1,4 @@
-import type { User, Project, Task, Sale, Notification, Client, SaleStage, ProjectProfile } from "./types";
+import type { User, Project, Task, Sale, Notification, Client, SaleStage, ProjectProfile, TaskProfile } from "./types";
 
 export const seedUsers: User[] = [
   { id: "user-1", name: "Vincent Lim", email: "vincent@collectivep.com", avatarColor: "var(--primary)", role: "admin", isDeleted: false },
@@ -76,34 +76,34 @@ export const seedProjects: Project[] = [
 
 export const seedTasks: Task[] = [
   // DARE Festival tasks
-  { id: "task-1", projectId: "proj-1", title: "Secure venue booking for DARE Festival", description: "Negotiate with National Gallery / Drama Centre for Nov dates", status: "done", priority: "high", assigneeId: "user-1", startDate: "2026-06-01", dueDate: "2026-06-30", tags: ["logistics", "venue"], createdAt: "2026-06-01T09:00:00Z", order: 0 },
-  { id: "task-2", projectId: "proj-1", title: "Finalise artist lineup and schedule", description: "Confirm performers, workshop leaders, exhibition artists", status: "done", priority: "high", assigneeId: "user-3", startDate: "2026-06-15", dueDate: "2026-07-31", tags: ["artists", "programming"], createdAt: "2026-06-15T09:00:00Z", order: 1 },
-  { id: "task-3", projectId: "proj-1", title: "Design festival marketing materials", description: "Poster, social media assets, programme booklet", status: "in_progress", priority: "high", assigneeId: "user-8", startDate: "2026-07-01", dueDate: "2026-08-15", checkDate: "2026-07-20", tags: ["design", "marketing"], createdAt: "2026-07-01T09:00:00Z", order: 0 },
-  { id: "task-4", projectId: "proj-1", title: "Apply for NAC grant funding", description: "National Arts Council project grant application", status: "review", priority: "urgent", assigneeId: "user-2", startDate: "2026-07-10", dueDate: "2026-07-31", checkDate: null, tags: ["funding", "admin"], createdAt: "2026-07-10T09:00:00Z", order: 0 },
-  { id: "task-5", projectId: "proj-1", title: "Set up accessibility arrangements", description: "Wheelchair access, sign language interpreters, audio descriptions", status: "in_progress", priority: "high", assigneeId: "user-4", startDate: "2026-07-15", dueDate: "2026-09-30", checkDate: "2026-08-15", tags: ["accessibility"], createdAt: "2026-07-15T09:00:00Z", order: 1 },
-  { id: "task-6", projectId: "proj-1", title: "Launch ticket sales", description: "Set up Eventbrite / Peatix and begin early bird sales", status: "todo", priority: "medium", assigneeId: "user-5", startDate: "2026-08-01", dueDate: "2026-08-31", tags: ["ticketing", "sales"], createdAt: "2026-07-20T09:00:00Z", order: 0 },
-  { id: "task-7", projectId: "proj-1", title: "Coordinate volunteer team", description: "Recruit and brief 50+ volunteers for festival days", status: "todo", priority: "medium", assigneeId: "user-6", startDate: "2026-09-01", dueDate: "2026-10-31", tags: ["volunteers"], createdAt: "2026-07-22T09:00:00Z", order: 1 },
+  { id: "task-1", projectId: "proj-1", title: "Secure venue booking for DARE Festival", description: "Negotiate with National Gallery / Drama Centre for Nov dates", status: "done", priority: "high", assigneeId: "user-1", assigneeIds: ["user-1"], startDate: "2026-06-01", dueDate: "2026-06-30", tags: ["logistics", "venue"], createdAt: "2026-06-01T09:00:00Z", order: 0 },
+  { id: "task-2", projectId: "proj-1", title: "Finalise artist lineup and schedule", description: "Confirm performers, workshop leaders, exhibition artists", status: "done", priority: "high", assigneeId: "user-3", assigneeIds: ["user-3", "user-4"], startDate: "2026-06-15", dueDate: "2026-07-31", tags: ["artists", "programming"], createdAt: "2026-06-15T09:00:00Z", order: 1 },
+  { id: "task-3", projectId: "proj-1", title: "Design festival marketing materials", description: "Poster, social media assets, programme booklet", status: "in_progress", priority: "high", assigneeId: "user-8", assigneeIds: ["user-8"], startDate: "2026-07-01", dueDate: "2026-08-15", checkDate: "2026-07-20", checkStartTime: "2026-07-20T09:00:00Z", checkEndTime: "2026-07-20T10:30:00Z", tags: ["design", "marketing"], createdAt: "2026-07-01T09:00:00Z", order: 0 },
+  { id: "task-4", projectId: "proj-1", title: "Apply for NAC grant funding", description: "National Arts Council project grant application", status: "review", priority: "urgent", assigneeId: "user-2", assigneeIds: ["user-2"], startDate: "2026-07-10", dueDate: "2026-07-31", checkDate: null, tags: ["funding", "admin"], createdAt: "2026-07-10T09:00:00Z", order: 0 },
+  { id: "task-5", projectId: "proj-1", title: "Set up accessibility arrangements", description: "Wheelchair access, sign language interpreters, audio descriptions", status: "in_progress", priority: "high", assigneeId: "user-4", assigneeIds: ["user-4", "user-5"], startDate: "2026-07-15", dueDate: "2026-09-30", checkDate: "2026-08-15", checkStartTime: "2026-08-15T14:00:00Z", checkEndTime: "2026-08-15T16:00:00Z", tags: ["accessibility"], createdAt: "2026-07-15T09:00:00Z", order: 1 },
+  { id: "task-6", projectId: "proj-1", title: "Launch ticket sales", description: "Set up Eventbrite / Peatix and begin early bird sales", status: "todo", priority: "medium", assigneeId: "user-5", assigneeIds: ["user-5"], startDate: "2026-08-01", dueDate: "2026-08-31", tags: ["ticketing", "sales"], createdAt: "2026-07-20T09:00:00Z", order: 0 },
+  { id: "task-7", projectId: "proj-1", title: "Coordinate volunteer team", description: "Recruit and brief 50+ volunteers for festival days", status: "todo", priority: "medium", assigneeId: "user-6", assigneeIds: ["user-6"], startDate: "2026-09-01", dueDate: "2026-10-31", tags: ["volunteers"], createdAt: "2026-07-22T09:00:00Z", order: 1 },
 
   // Ville of Joy tasks
-  { id: "task-8", projectId: "proj-2", title: "Finalise fragrance formulations", description: "Work with Lynk Artisan on scent profiles", status: "done", priority: "high", assigneeId: "user-3", startDate: "2026-04-15", dueDate: "2026-05-31", tags: ["product"], createdAt: "2026-04-15T09:00:00Z", order: 0 },
-  { id: "task-9", projectId: "proj-2", title: "Design packaging and labels", description: "Bottle design, box design, label copy", status: "in_progress", priority: "high", assigneeId: "user-8", startDate: "2026-06-01", dueDate: "2026-07-31", checkDate: "2026-07-01", tags: ["design", "packaging"], createdAt: "2026-06-01T09:00:00Z", order: 0 },
-  { id: "task-10", projectId: "proj-2", title: "Set up e-commerce store page", description: "Product listing, photos, descriptions on Shopify", status: "todo", priority: "medium", assigneeId: "user-7", startDate: "2026-07-15", dueDate: "2026-08-31", tags: ["e-commerce"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
-  { id: "task-11", projectId: "proj-2", title: "Plan launch event", description: "Intimate launch with media, influencers, and partners", status: "todo", priority: "medium", assigneeId: "user-3", startDate: "2026-08-01", dueDate: "2026-09-15", tags: ["event", "PR"], createdAt: "2026-07-20T09:00:00Z", order: 1 },
+  { id: "task-8", projectId: "proj-2", title: "Finalise fragrance formulations", description: "Work with Lynk Artisan on scent profiles", status: "done", priority: "high", assigneeId: "user-3", assigneeIds: ["user-3"], startDate: "2026-04-15", dueDate: "2026-05-31", tags: ["product"], createdAt: "2026-04-15T09:00:00Z", order: 0 },
+  { id: "task-9", projectId: "proj-2", title: "Design packaging and labels", description: "Bottle design, box design, label copy", status: "in_progress", priority: "high", assigneeId: "user-8", assigneeIds: ["user-8", "user-7"], startDate: "2026-06-01", dueDate: "2026-07-31", checkDate: "2026-07-01", checkStartTime: "2026-07-01T10:00:00Z", checkEndTime: "2026-07-01T11:30:00Z", tags: ["design", "packaging"], createdAt: "2026-06-01T09:00:00Z", order: 0 },
+  { id: "task-10", projectId: "proj-2", title: "Set up e-commerce store page", description: "Product listing, photos, descriptions on Shopify", status: "todo", priority: "medium", assigneeId: "user-7", assigneeIds: ["user-7"], startDate: "2026-07-15", dueDate: "2026-08-31", tags: ["e-commerce"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
+  { id: "task-11", projectId: "proj-2", title: "Plan launch event", description: "Intimate launch with media, influencers, and partners", status: "todo", priority: "medium", assigneeId: "user-3", assigneeIds: ["user-3", "user-8"], startDate: "2026-08-01", dueDate: "2026-09-15", tags: ["event", "PR"], createdAt: "2026-07-20T09:00:00Z", order: 1 },
 
   // Shades Poetry Book tasks
-  { id: "task-12", projectId: "proj-3", title: "Complete manuscript editing", description: "Final proofreading and copy editing", status: "review", priority: "high", assigneeId: "user-7", startDate: "2026-05-01", dueDate: "2026-06-30", tags: ["editing"], createdAt: "2026-05-01T09:00:00Z", order: 0 },
-  { id: "task-13", projectId: "proj-3", title: "Book cover design", description: "Collaborate with artist for cover illustration", status: "in_progress", priority: "medium", assigneeId: "user-8", startDate: "2026-06-15", dueDate: "2026-07-31", tags: ["design"], createdAt: "2026-06-15T09:00:00Z", order: 0 },
-  { id: "task-14", projectId: "proj-3", title: "Arrange printing", description: "Get quotes from local printers, select paper stock", status: "todo", priority: "medium", assigneeId: "user-2", startDate: "2026-07-15", dueDate: "2026-08-15", tags: ["printing"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
-  { id: "task-15", projectId: "proj-3", title: "Plan book launch", description: "Venue, readings, media invite", status: "todo", priority: "low", assigneeId: "user-7", startDate: "2026-08-01", dueDate: "2026-08-31", tags: ["event"], createdAt: "2026-07-20T09:00:00Z", order: 1 },
+  { id: "task-12", projectId: "proj-3", title: "Complete manuscript editing", description: "Final proofreading and copy editing", status: "review", priority: "high", assigneeId: "user-7", assigneeIds: ["user-7"], startDate: "2026-05-01", dueDate: "2026-06-30", tags: ["editing"], createdAt: "2026-05-01T09:00:00Z", order: 0 },
+  { id: "task-13", projectId: "proj-3", title: "Book cover design", description: "Collaborate with artist for cover illustration", status: "in_progress", priority: "medium", assigneeId: "user-8", assigneeIds: ["user-8"], startDate: "2026-06-15", dueDate: "2026-07-31", tags: ["design"], createdAt: "2026-06-15T09:00:00Z", order: 0 },
+  { id: "task-14", projectId: "proj-3", title: "Arrange printing", description: "Get quotes from local printers, select paper stock", status: "todo", priority: "medium", assigneeId: "user-2", assigneeIds: ["user-2"], startDate: "2026-07-15", dueDate: "2026-08-15", tags: ["printing"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
+  { id: "task-15", projectId: "proj-3", title: "Plan book launch", description: "Venue, readings, media invite", status: "todo", priority: "low", assigneeId: "user-7", assigneeIds: ["user-7", "user-8"], startDate: "2026-08-01", dueDate: "2026-08-31", tags: ["event"], createdAt: "2026-07-20T09:00:00Z", order: 1 },
 
   // Corporate Training tasks
-  { id: "task-16", projectId: "proj-4", title: "Develop workshop curriculum", description: "4-module programme on disability inclusion", status: "in_progress", priority: "high", assigneeId: "user-4", startDate: "2026-07-01", dueDate: "2026-08-15", tags: ["curriculum"], createdAt: "2026-07-01T09:00:00Z", order: 0 },
-  { id: "task-17", projectId: "proj-4", title: "Create training materials", description: "Slide decks, handouts, video content", status: "todo", priority: "medium", assigneeId: "user-5", startDate: "2026-08-01", dueDate: "2026-09-30", tags: ["materials"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
-  { id: "task-18", projectId: "proj-4", title: "Pilot workshop with TBWA", description: "Run first session, collect feedback", status: "todo", priority: "high", assigneeId: "user-4", startDate: "2026-10-01", dueDate: "2026-10-31", tags: ["pilot", "delivery"], createdAt: "2026-07-20T09:00:00Z", order: 1 },
+  { id: "task-16", projectId: "proj-4", title: "Develop workshop curriculum", description: "4-module programme on disability inclusion", status: "in_progress", priority: "high", assigneeId: "user-4", assigneeIds: ["user-4"], startDate: "2026-07-01", dueDate: "2026-08-15", tags: ["curriculum"], createdAt: "2026-07-01T09:00:00Z", order: 0 },
+  { id: "task-17", projectId: "proj-4", title: "Create training materials", description: "Slide decks, handouts, video content", status: "todo", priority: "medium", assigneeId: "user-5", assigneeIds: ["user-5", "user-6"], startDate: "2026-08-01", dueDate: "2026-09-30", tags: ["materials"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
+  { id: "task-18", projectId: "proj-4", title: "Pilot workshop with TBWA", description: "Run first session, collect feedback", status: "todo", priority: "high", assigneeId: "user-4", assigneeIds: ["user-4"], startDate: "2026-10-01", dueDate: "2026-10-31", tags: ["pilot", "delivery"], createdAt: "2026-07-20T09:00:00Z", order: 1 },
 
   // Digital Content Hub tasks
-  { id: "task-19", projectId: "proj-5", title: "Research platform options", description: "Compare Vimeo OTT, custom build, YouTube", status: "in_progress", priority: "medium", assigneeId: "user-6", startDate: "2026-07-01", dueDate: "2026-08-15", tags: ["research", "tech"], createdAt: "2026-07-01T09:00:00Z", order: 0 },
-  { id: "task-20", projectId: "proj-5", title: "Content strategy document", description: "Define content pillars, upload schedule, monetisation", status: "todo", priority: "low", assigneeId: "user-2", startDate: "2026-08-01", dueDate: "2026-09-30", tags: ["strategy"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
+  { id: "task-19", projectId: "proj-5", title: "Research platform options", description: "Compare Vimeo OTT, custom build, YouTube", status: "in_progress", priority: "medium", assigneeId: "user-6", assigneeIds: ["user-6"], startDate: "2026-07-01", dueDate: "2026-08-15", tags: ["research", "tech"], createdAt: "2026-07-01T09:00:00Z", order: 0 },
+  { id: "task-20", projectId: "proj-5", title: "Content strategy document", description: "Define content pillars, upload schedule, monetisation", status: "todo", priority: "low", assigneeId: "user-2", assigneeIds: ["user-2", "user-5"], startDate: "2026-08-01", dueDate: "2026-09-30", tags: ["strategy"], createdAt: "2026-07-15T09:00:00Z", order: 0 },
 ];
 
 export const seedClients: Client[] = [
@@ -196,4 +196,34 @@ export const seedProjectProfiles: ProjectProfile[] = [
   // proj-5 Digital Content Hub (members/guests: user-5, user-6)
   { id: "pp-5-5", projectId: "proj-5", profileId: "user-5" },
   { id: "pp-5-6", projectId: "proj-5", profileId: "user-6" },
+];
+
+export const seedTaskProfiles: TaskProfile[] = [
+  { id: "tp-1-1", taskId: "task-1", profileId: "user-1" },
+  { id: "tp-2-3", taskId: "task-2", profileId: "user-3" },
+  { id: "tp-2-4", taskId: "task-2", profileId: "user-4" },
+  { id: "tp-3-8", taskId: "task-3", profileId: "user-8" },
+  { id: "tp-4-2", taskId: "task-4", profileId: "user-2" },
+  { id: "tp-5-4", taskId: "task-5", profileId: "user-4" },
+  { id: "tp-5-5", taskId: "task-5", profileId: "user-5" },
+  { id: "tp-6-5", taskId: "task-6", profileId: "user-5" },
+  { id: "tp-7-6", taskId: "task-7", profileId: "user-6" },
+  { id: "tp-8-3", taskId: "task-8", profileId: "user-3" },
+  { id: "tp-9-8", taskId: "task-9", profileId: "user-8" },
+  { id: "tp-9-7", taskId: "task-9", profileId: "user-7" },
+  { id: "tp-10-7", taskId: "task-10", profileId: "user-7" },
+  { id: "tp-11-3", taskId: "task-11", profileId: "user-3" },
+  { id: "tp-11-8", taskId: "task-11", profileId: "user-8" },
+  { id: "tp-12-7", taskId: "task-12", profileId: "user-7" },
+  { id: "tp-13-8", taskId: "task-13", profileId: "user-8" },
+  { id: "tp-14-2", taskId: "task-14", profileId: "user-2" },
+  { id: "tp-15-7", taskId: "task-15", profileId: "user-7" },
+  { id: "tp-15-8", taskId: "task-15", profileId: "user-8" },
+  { id: "tp-16-4", taskId: "task-16", profileId: "user-4" },
+  { id: "tp-17-5", taskId: "task-17", profileId: "user-5" },
+  { id: "tp-17-6", taskId: "task-17", profileId: "user-6" },
+  { id: "tp-18-4", taskId: "task-18", profileId: "user-4" },
+  { id: "tp-19-6", taskId: "task-19", profileId: "user-6" },
+  { id: "tp-20-2", taskId: "task-20", profileId: "user-2" },
+  { id: "tp-20-5", taskId: "task-20", profileId: "user-5" },
 ];

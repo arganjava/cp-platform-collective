@@ -38,6 +38,13 @@ export interface ProjectProfile {
   createdAt?: string;
 }
 
+export interface TaskProfile {
+  id: string;
+  taskId: string;
+  profileId: string;
+  createdAt?: string;
+}
+
 export interface TaskLink {
   id?: string;
   label: string;
@@ -52,9 +59,13 @@ export interface Task {
   status: TaskStatus;
   priority: Priority;
   assigneeId: string | null;
+  assigneeIds?: string[];
   startDate: string;
   dueDate: string | null;
   checkDate?: string | null;
+  checkStartTime?: string | null;
+  checkEndTime?: string | null;
+  googleCalendarId?: string | null;
   link?: string | null;
   links?: TaskLink[];
   tags: string[];

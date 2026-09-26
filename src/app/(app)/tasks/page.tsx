@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate, generateId } from "@/lib/utils";
-import type { Task, Priority, TaskStatus, TaskLink } from "@/lib/types";
+import type { Task, Priority, TaskStatus, TaskLink, User } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Flag,
   ExternalLink,
+  Users,
 } from "lucide-react";
 
 const priorityVariant: Record<string, "neutral" | "warning" | "accent" | "danger"> = {
@@ -55,6 +56,7 @@ export default function TasksPage() {
     projects,
     users,
     projectProfiles,
+    taskProfiles,
     currentUserId,
     getUserById,
     getActiveUsers,
@@ -68,6 +70,40 @@ export default function TasksPage() {
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
   const activeUsers = getActiveUsers();
+
+  function formatTimeOnly(str?: string | null): string {
+    if (!str) return "";
+    if (str.includes("T")) {
+      const time = str.split("T")[1];
+      return time.substring(0, 5);
+    }
+    return str.substring(0, 5);
+  }
+
+  const isTaskAssignee = useCallback(
+    (t: Task, profileId: string) => {
+      if (t.assigneeId === profileId) return true;
+      if (t.assigneeIds && t.assigneeIds.includes(profileId)) return true;
+      if (taskProfiles.some((tp) => tp.taskId === t.id && tp.profileId === profileId)) return true;
+      return false;
+    },
+    [taskProfiles]
+  );
+
+  const getTaskAssigneeList = useCallback(
+    (t: Task): User[] => {
+      const fromStore = taskProfiles
+        .filter((tp) => tp.taskId === t.id)
+        .map((tp) => getUserById(tp.profileId))
+        .filter(Boolean) as User[];
+      if (fromStore.length > 0) return fromStore;
+      if (t.assigneeIds && t.assigneeIds.length > 0) {
+        return t.assigneeIds.map((id) => getUserById(id)).filter(Boolean) as User[];
+      }
+      return [t.assigneeId ? getUserById(t.assigneeId) : null].filter(Boolean) as User[];
+    },
+    [taskProfiles, getUserById]
+  );
 
   // Multi-filter states
   const [localSearch, setLocalSearch] = useState("");
@@ -83,10 +119,14 @@ export default function TasksPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskProject, setNewTaskProject] = useState("");
-  const [newTaskAssignee, setNewTaskAssignee] = useState(currentUserId || "");
+  const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>(
+    currentUserId ? [currentUserId] : []
+  );
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>("");
   const [newTaskCheckDate, setNewTaskCheckDate] = useState<string>("");
+  const [newTaskCheckStartTime, setNewTaskCheckStartTime] = useState<string>("09:00");
+  const [newTaskCheckEndTime, setNewTaskCheckEndTime] = useState<string>("10:00");
   const [newTaskLinks, setNewTaskLinks] = useState<{ id: string; label: string; url: string }[]>([]);
 
   // Edit Task State
@@ -97,9 +137,12 @@ export default function TasksPage() {
     projectId: string;
     status: TaskStatus;
     priority: Priority;
-    assigneeId: string;
+    assigneeIds: string[];
     dueDate: string;
     checkDate: string;
+    checkStartTime: string;
+    checkEndTime: string;
+    googleCalendarId?: string | null;
     links: { id: string; label: string; url: string }[];
   }>({
     title: "",
@@ -107,9 +150,12 @@ export default function TasksPage() {
     projectId: "",
     status: "todo",
     priority: "medium",
-    assigneeId: "",
+    assigneeIds: [],
     dueDate: "",
     checkDate: "",
+    checkStartTime: "",
+    checkEndTime: "",
+    googleCalendarId: null,
     links: [],
   });
 
@@ -133,9 +179,9 @@ export default function TasksPage() {
     if (isAdmin) return null;
     if (!currentUserId) return new Set<string>();
     return new Set(
-      tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId)
+      tasks.filter((t) => isTaskAssignee(t, currentUserId)).map((t) => t.projectId)
     );
-  }, [tasks, isAdmin, currentUserId]);
+  }, [tasks, isAdmin, currentUserId, isTaskAssignee]);
 
   const visibleProjects = useMemo(() => {
     if (isAdmin) return projects;
@@ -151,8 +197,8 @@ export default function TasksPage() {
   const visibleTasks = useMemo(() => {
     if (isAdmin) return tasks;
     if (!currentUserId) return [];
-    return tasks.filter((t) => t.assigneeId === currentUserId);
-  }, [tasks, isAdmin, currentUserId]);
+    return tasks.filter((t) => isTaskAssignee(t, currentUserId));
+  }, [tasks, isAdmin, currentUserId, isTaskAssignee]);
 
   useEffect(() => {
     if (filterProject !== "all" && !visibleProjects.some((p) => p.id === filterProject)) {
@@ -173,13 +219,15 @@ export default function TasksPage() {
         // 1. Search Query
         if (query) {
           const project = projects.find((p) => p.id === t.projectId);
-          const assignee = t.assigneeId ? getUserById(t.assigneeId) : null;
+          const assignees = getTaskAssigneeList(t);
+          const assigneeNames = assignees.map((u) => u.name).join(" ");
+          const assigneeEmails = assignees.map((u) => u.email).join(" ");
           const haystack = [
             t.title,
             t.description || "",
             project?.title ?? "",
-            assignee?.name ?? "",
-            assignee?.email ?? "",
+            assigneeNames,
+            assigneeEmails,
             ...t.tags,
           ]
             .join(" ")
@@ -199,11 +247,12 @@ export default function TasksPage() {
         // 5. Assignee Filter (for admin)
         if (isAdmin) {
           if (filterAssignee === "unassigned") {
-            if (t.assigneeId) return false;
+            const assignees = getTaskAssigneeList(t);
+            if (assignees.length > 0 || t.assigneeId) return false;
           } else if (filterAssignee === "mine") {
-            if (t.assigneeId !== currentUserId) return false;
+            if (!currentUserId || !isTaskAssignee(t, currentUserId)) return false;
           } else if (filterAssignee !== "all") {
-            if (t.assigneeId !== filterAssignee) return false;
+            if (!isTaskAssignee(t, filterAssignee)) return false;
           }
         }
 
@@ -262,7 +311,8 @@ export default function TasksPage() {
     filterDeadline,
     sortBy,
     projects,
-    getUserById,
+    getTaskAssigneeList,
+    isTaskAssignee,
     currentUserId,
     todayStr,
     nextWeekMs,
@@ -292,9 +342,26 @@ export default function TasksPage() {
     const projectId = newTaskProject || availableProjects[0]?.id;
     if (!newTaskTitle.trim() || !projectId) return;
 
-    const taskAssignee = isAdmin
-      ? newTaskAssignee || null
-      : newTaskAssignee || currentUserId || null;
+    const finalAssignees =
+      newTaskAssignees.length > 0
+        ? newTaskAssignees
+        : currentUserId && !isAdmin
+        ? [currentUserId]
+        : [];
+
+    const checkDate = newTaskCheckDate.trim() ? newTaskCheckDate.trim() : null;
+    const checkStartTime =
+      checkDate && newTaskCheckStartTime.trim()
+        ? `${checkDate}T${newTaskCheckStartTime.trim()}:00`
+        : checkDate
+        ? `${checkDate}T09:00:00`
+        : null;
+    const checkEndTime =
+      checkDate && newTaskCheckEndTime.trim()
+        ? `${checkDate}T${newTaskCheckEndTime.trim()}:00`
+        : checkDate
+        ? `${checkDate}T10:00:00`
+        : null;
 
     const sanitizedLinks = newTaskLinks
       .map((l, idx) => ({
@@ -313,10 +380,13 @@ export default function TasksPage() {
       description: newTaskDescription.trim(),
       status: "todo",
       priority: newTaskPriority,
-      assigneeId: taskAssignee,
+      assigneeId: finalAssignees[0] || null,
+      assigneeIds: finalAssignees,
       startDate: new Date().toISOString().split("T")[0],
       dueDate: newTaskDueDate.trim() ? newTaskDueDate.trim() : null,
-      checkDate: newTaskCheckDate.trim() ? newTaskCheckDate : null,
+      checkDate,
+      checkStartTime,
+      checkEndTime,
       link: primaryLink,
       links: sanitizedLinks,
       tags: [],
@@ -328,8 +398,10 @@ export default function TasksPage() {
     setNewTaskDescription("");
     setNewTaskDueDate("");
     setNewTaskCheckDate("");
+    setNewTaskCheckStartTime("09:00");
+    setNewTaskCheckEndTime("10:00");
     setNewTaskLinks([]);
-    setNewTaskAssignee(currentUserId || "");
+    setNewTaskAssignees(currentUserId ? [currentUserId] : []);
     setShowNewTask(false);
   }
 
@@ -346,15 +418,37 @@ export default function TasksPage() {
         ? [{ id: "link-1", label: "Link", url: task.link }]
         : [];
 
+    const rawCheckDate = task.checkDate ? task.checkDate.split("T")[0] : "";
+    let startTimeStr = "09:00";
+    let endTimeStr = "10:00";
+    if (task.checkStartTime) {
+      startTimeStr = formatTimeOnly(task.checkStartTime);
+    }
+    if (task.checkEndTime) {
+      endTimeStr = formatTimeOnly(task.checkEndTime);
+    }
+
+    const initialAssignees =
+      task.assigneeIds && task.assigneeIds.length > 0
+        ? task.assigneeIds
+        : task.assigneeId
+        ? [task.assigneeId]
+        : taskProfiles
+            .filter((tp) => tp.taskId === task.id)
+            .map((tp) => tp.profileId);
+
     setEditForm({
       title: task.title,
       description: task.description || "",
       projectId: task.projectId,
       status: task.status,
       priority: task.priority,
-      assigneeId: task.assigneeId ?? "",
+      assigneeIds: initialAssignees,
       dueDate: task.dueDate ? task.dueDate.split("T")[0] : "",
-      checkDate: task.checkDate ? task.checkDate.split("T")[0] : "",
+      checkDate: rawCheckDate,
+      checkStartTime: startTimeStr,
+      checkEndTime: endTimeStr,
+      googleCalendarId: task.googleCalendarId || null,
       links: resolvedLinks,
     });
   }
@@ -371,15 +465,32 @@ export default function TasksPage() {
 
     const primaryLink = sanitizedLinks.length > 0 ? sanitizedLinks[0].url : null;
 
+    const checkDate = editForm.checkDate.trim() ? editForm.checkDate.trim() : null;
+    const checkStartTime =
+      checkDate && editForm.checkStartTime.trim()
+        ? `${checkDate}T${editForm.checkStartTime.trim()}:00`
+        : checkDate
+        ? `${checkDate}T09:00:00`
+        : null;
+    const checkEndTime =
+      checkDate && editForm.checkEndTime.trim()
+        ? `${checkDate}T${editForm.checkEndTime.trim()}:00`
+        : checkDate
+        ? `${checkDate}T10:00:00`
+        : null;
+
     updateTask(editingTaskId, {
       title: editForm.title.trim(),
       description: editForm.description,
       projectId: editForm.projectId,
       status: editForm.status,
       priority: editForm.priority,
-      assigneeId: editForm.assigneeId || null,
+      assigneeId: editForm.assigneeIds[0] || null,
+      assigneeIds: editForm.assigneeIds,
       dueDate: editForm.dueDate.trim() ? editForm.dueDate.trim() : null,
-      checkDate: editForm.checkDate.trim() ? editForm.checkDate : null,
+      checkDate,
+      checkStartTime,
+      checkEndTime,
       link: primaryLink,
       links: sanitizedLinks,
     });
@@ -407,7 +518,7 @@ export default function TasksPage() {
                 if ((!newTaskProject || !visibleProjects.some((p) => p.id === newTaskProject)) && visibleProjects.length > 0) {
                   setNewTaskProject(visibleProjects[0].id);
                 }
-                setNewTaskAssignee(currentUserId || "");
+                setNewTaskAssignees(currentUserId ? [currentUserId] : []);
                 setShowNewTask(true);
               }}
               className="flex items-center gap-2"
@@ -861,22 +972,32 @@ export default function TasksPage() {
                         </td>
 
                         <td className="px-4 py-3.5">
-                          {assignee ? (
-                            <div className="flex items-center gap-2">
-                              <Avatar
-                                color={assignee.avatarColor || "var(--primary)"}
-                                size="sm"
-                                className="h-6 w-6 text-[10px]"
-                              >
-                                {getInitials(assignee.name)}
-                              </Avatar>
-                              <span className="truncate text-xs font-medium text-foreground">
-                                {assignee.name}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-subtle-foreground italic">Unassigned</span>
-                          )}
+                          {(() => {
+                            const taskAssignees = getTaskAssigneeList(task);
+                            if (taskAssignees.length === 0) {
+                              return <span className="text-xs text-subtle-foreground italic">Unassigned</span>;
+                            }
+                            return (
+                              <div className="flex items-center gap-2" title={taskAssignees.map((u) => u.name).join(", ")}>
+                                <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                  {taskAssignees.map((u) => (
+                                    <Avatar
+                                      key={u.id}
+                                      color={u.avatarColor || "var(--primary)"}
+                                      size="sm"
+                                      className="h-6 w-6 text-[10px] ring-1 ring-background"
+                                      aria-label={u.name}
+                                    >
+                                      {getInitials(u.name)}
+                                    </Avatar>
+                                  ))}
+                                </div>
+                                <span className="truncate text-xs font-medium text-foreground max-w-[130px]">
+                                  {taskAssignees.map((u) => u.name).join(", ")}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         <td className="px-4 py-3.5">
@@ -893,18 +1014,42 @@ export default function TasksPage() {
                             </span>
                           </div>
                           {task.checkDate && (
-                            <div className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium mt-0.5" title={`Check Date: ${formatDate(task.checkDate)}`}>
-                              <Flag className="h-3 w-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400 shrink-0" />
-                              <span className="tabular">Check: {formatDate(task.checkDate)}</span>
+                            <div className="mt-0.5 space-y-0.5">
+                              <div
+                                className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium"
+                                title={`Check Date: ${formatDate(task.checkDate)}${task.checkStartTime ? ` (${formatTimeOnly(task.checkStartTime)}${task.checkEndTime ? ` - ${formatTimeOnly(task.checkEndTime)}` : ""})` : ""}`}
+                              >
+                                <Flag className="h-3 w-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400 shrink-0" />
+                                <span className="tabular">Check: {formatDate(task.checkDate)}</span>
+                              </div>
+                              {(task.checkStartTime || task.checkEndTime) && (
+                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground pl-4">
+                                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                                  <span className="tabular font-mono">
+                                    {formatTimeOnly(task.checkStartTime) || "09:00"}
+                                    {" - "}
+                                    {formatTimeOnly(task.checkEndTime) || "10:00"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {task.googleCalendarId && (
+                            <div
+                              className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5"
+                              title={`Google Calendar ID: ${task.googleCalendarId}`}
+                            >
+                              <CalendarDays className="h-2.5 w-2.5 shrink-0" />
+                              <span>Calendar Synced</span>
                             </div>
                           )}
                           {isOverdue && (
-                            <span className="text-[10px] font-semibold text-destructive uppercase tracking-wider">
+                            <span className="text-[10px] font-semibold text-destructive uppercase tracking-wider block mt-0.5">
                               Overdue by {Math.abs(daysLeft)}d
                             </span>
                           )}
                           {isDueToday && (
-                            <span className="text-[10px] font-semibold text-accent uppercase tracking-wider">
+                            <span className="text-[10px] font-semibold text-accent uppercase tracking-wider block mt-0.5">
                               Due Today
                             </span>
                           )}
@@ -1013,54 +1158,164 @@ export default function TasksPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="select-new-task-assignee" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  Assignee
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <Users className="h-3.5 w-3.5 text-primary" />
+                  <span>Assignees</span>
+                  <span className="text-[11px] font-normal text-muted-foreground">({newTaskAssignees.length} selected)</span>
                 </label>
-                <Select
-                  id="select-new-task-assignee"
-                  value={newTaskAssignee}
-                  onChange={(e) => setNewTaskAssignee(e.target.value)}
-                  className="w-full"
-                >
-                  <option value="">Unassigned</option>
-                  {activeUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}{u.id === currentUserId ? " (You)" : ""}
-                    </option>
-                  ))}
-                </Select>
+                {currentUserId && !newTaskAssignees.includes(currentUserId) && (
+                  <button
+                    type="button"
+                    onClick={() => setNewTaskAssignees((prev) => [...prev, currentUserId])}
+                    className="text-[11px] text-primary hover:underline font-medium"
+                  >
+                    + Assign to Me
+                  </button>
+                )}
               </div>
 
-              <div>
-                <label htmlFor="input-new-task-deadline" className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  <span>Due Date</span>
-                  <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
-                </label>
-                <Input
-                  id="input-new-task-deadline"
-                  type="date"
-                  value={newTaskDueDate}
-                  onChange={(e) => setNewTaskDueDate(e.target.value)}
-                  className="w-full"
-                />
+              {/* Selected Assignees Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 p-2 min-h-10 border border-border rounded-lg bg-card/50 mb-2">
+                {newTaskAssignees.length === 0 ? (
+                  <span className="text-xs text-muted-foreground italic">No assignees selected (Unassigned)</span>
+                ) : (
+                  newTaskAssignees.map((userId) => {
+                    const u = getUserById(userId);
+                    if (!u) return null;
+                    return (
+                      <span
+                        key={u.id}
+                        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 text-xs bg-secondary border border-border text-foreground rounded-md font-medium"
+                      >
+                        <Avatar
+                          color={u.avatarColor || "var(--primary)"}
+                          size="sm"
+                          className="h-4 w-4 text-[9px]"
+                        >
+                          {getInitials(u.name)}
+                        </Avatar>
+                        <span>{u.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewTaskAssignees((prev) => prev.filter((id) => id !== u.id))}
+                          className="hover:text-destructive text-muted-foreground ml-0.5"
+                          aria-label={`Remove ${u.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* User Selection List */}
+              <div className="max-h-36 overflow-y-auto border border-border rounded-lg p-1.5 divide-y divide-border/40 bg-card/30">
+                {activeUsers.map((u) => {
+                  const isSelected = newTaskAssignees.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() =>
+                        setNewTaskAssignees((prev) =>
+                          isSelected ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                        )
+                      }
+                      className={cn(
+                        "w-full flex items-center justify-between p-1.5 text-xs rounded hover:bg-secondary/70 transition-colors text-left",
+                        isSelected && "bg-secondary font-medium"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar
+                          color={u.avatarColor || "var(--primary)"}
+                          size="sm"
+                          className="h-5 w-5 text-[10px]"
+                        >
+                          {getInitials(u.name)}
+                        </Avatar>
+                        <span>
+                          {u.name}
+                          {u.id === currentUserId ? " (You)" : ""}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center text-[10px]",
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border"
+                        )}
+                      >
+                        {isSelected ? "✓" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div>
-              <label htmlFor="input-new-task-check-date" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                <Flag className="h-3.5 w-3.5 text-blue-600 fill-blue-600 dark:text-blue-400 dark:fill-blue-400" />
-                <span>Check Date</span>
-                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional milestone flag)</span>
+              <label htmlFor="input-new-task-deadline" className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                <span>Due Date</span>
+                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
               </label>
               <Input
-                id="input-new-task-check-date"
+                id="input-new-task-deadline"
                 type="date"
-                value={newTaskCheckDate}
-                onChange={(e) => setNewTaskCheckDate(e.target.value)}
+                value={newTaskDueDate}
+                onChange={(e) => setNewTaskDueDate(e.target.value)}
                 className="w-full"
               />
+            </div>
+
+            {/* Check Date & Milestone Start/End Times */}
+            <div className="border border-border/80 rounded-lg p-3 bg-secondary/20 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="input-new-task-check-date" className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <Flag className="h-3.5 w-3.5 text-blue-600 fill-blue-600 dark:text-blue-400 dark:fill-blue-400" />
+                  <span>Check Date & Milestone Times</span>
+                </label>
+                <span className="text-[11px] font-normal text-muted-foreground">(optional calendar milestone)</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <span className="block text-[11px] text-muted-foreground font-medium mb-1">Date</span>
+                  <Input
+                    id="input-new-task-check-date"
+                    type="date"
+                    value={newTaskCheckDate}
+                    onChange={(e) => setNewTaskCheckDate(e.target.value)}
+                    className="w-full text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="block text-[11px] text-muted-foreground font-medium mb-1">Start Time</span>
+                  <Input
+                    id="input-new-task-check-start-time"
+                    type="time"
+                    disabled={!newTaskCheckDate}
+                    value={newTaskCheckStartTime}
+                    onChange={(e) => setNewTaskCheckStartTime(e.target.value)}
+                    className="w-full text-xs disabled:opacity-50"
+                  />
+                </div>
+                <div>
+                  <span className="block text-[11px] text-muted-foreground font-medium mb-1">End Time</span>
+                  <Input
+                    id="input-new-task-check-end-time"
+                    type="time"
+                    disabled={!newTaskCheckDate}
+                    value={newTaskCheckEndTime}
+                    onChange={(e) => setNewTaskCheckEndTime(e.target.value)}
+                    className="w-full text-xs disabled:opacity-50"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1220,69 +1475,192 @@ export default function TasksPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="edit-task-priority" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  Priority
+            <div>
+              <label htmlFor="edit-task-priority" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                Priority
+              </label>
+              <Select
+                id="edit-task-priority"
+                value={editForm.priority}
+                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
+                className="w-full"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </Select>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <Users className="h-3.5 w-3.5 text-primary" />
+                  <span>Assignees</span>
+                  <span className="text-[11px] font-normal text-muted-foreground">({editForm.assigneeIds.length} selected)</span>
                 </label>
-                <Select
-                  id="edit-task-priority"
-                  value={editForm.priority}
-                  onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
-                  className="w-full"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </Select>
+                {currentUserId && !editForm.assigneeIds.includes(currentUserId) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        assigneeIds: [...prev.assigneeIds, currentUserId],
+                      }))
+                    }
+                    className="text-[11px] text-primary hover:underline font-medium"
+                  >
+                    + Assign to Me
+                  </button>
+                )}
               </div>
 
-              <div>
-                <label htmlFor="edit-task-assignee" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  Assignee
-                </label>
-                <Select
-                  id="edit-task-assignee"
-                  value={editForm.assigneeId}
-                  onChange={(e) => setEditForm({ ...editForm, assigneeId: e.target.value })}
-                  className="w-full"
-                >
-                  <option value="">Unassigned</option>
-                  {activeUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}{u.id === currentUserId ? " (You)" : ""}
-                    </option>
-                  ))}
-                </Select>
+              {/* Selected Assignees Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 p-2 min-h-10 border border-border rounded-lg bg-card/50 mb-2">
+                {editForm.assigneeIds.length === 0 ? (
+                  <span className="text-xs text-muted-foreground italic">No assignees selected (Unassigned)</span>
+                ) : (
+                  editForm.assigneeIds.map((userId) => {
+                    const u = getUserById(userId);
+                    if (!u) return null;
+                    return (
+                      <span
+                        key={u.id}
+                        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 text-xs bg-secondary border border-border text-foreground rounded-md font-medium"
+                      >
+                        <Avatar
+                          color={u.avatarColor || "var(--primary)"}
+                          size="sm"
+                          className="h-4 w-4 text-[9px]"
+                        >
+                          {getInitials(u.name)}
+                        </Avatar>
+                        <span>{u.name}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              assigneeIds: prev.assigneeIds.filter((id) => id !== u.id),
+                            }))
+                          }
+                          className="hover:text-destructive text-muted-foreground ml-0.5"
+                          aria-label={`Remove ${u.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* User Selection List */}
+              <div className="max-h-36 overflow-y-auto border border-border rounded-lg p-1.5 divide-y divide-border/40 bg-card/30">
+                {activeUsers.map((u) => {
+                  const isSelected = editForm.assigneeIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          assigneeIds: isSelected
+                            ? prev.assigneeIds.filter((id) => id !== u.id)
+                            : [...prev.assigneeIds, u.id],
+                        }))
+                      }
+                      className={cn(
+                        "w-full flex items-center justify-between p-1.5 text-xs rounded hover:bg-secondary/70 transition-colors text-left",
+                        isSelected && "bg-secondary font-medium"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar
+                          color={u.avatarColor || "var(--primary)"}
+                          size="sm"
+                          className="h-5 w-5 text-[10px]"
+                        >
+                          {getInitials(u.name)}
+                        </Avatar>
+                        <span>
+                          {u.name}
+                          {u.id === currentUserId ? " (You)" : ""}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center text-[10px]",
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border"
+                        )}
+                      >
+                        {isSelected ? "✓" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="edit-task-due" className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  <span>Due Date</span>
-                  <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
+            <div>
+              <label htmlFor="edit-task-due" className="mb-1.5 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                <span>Due Date</span>
+                <span className="text-[11px] font-normal lowercase text-muted-foreground">(optional)</span>
+              </label>
+              <Input
+                id="edit-task-due"
+                type="date"
+                value={editForm.dueDate}
+                onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
+              />
+            </div>
+
+            {/* Check Date & Milestone Start/End Times */}
+            <div className="border border-border/80 rounded-lg p-3 bg-secondary/20 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="edit-task-check-date" className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                  <Flag className="h-3.5 w-3.5 text-blue-600 fill-blue-600 dark:text-blue-400 dark:fill-blue-400" />
+                  <span>Check Date & Milestone Times</span>
                 </label>
-                <Input
-                  id="edit-task-due"
-                  type="date"
-                  value={editForm.dueDate}
-                  onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
-                />
+                <span className="text-[11px] font-normal text-muted-foreground">(optional calendar milestone)</span>
               </div>
 
-              <div>
-                <label htmlFor="edit-task-check-date" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
-                  <Flag className="h-3.5 w-3.5 text-blue-600 fill-blue-600 dark:text-blue-400 dark:fill-blue-400" />
-                  <span>Check Date</span>
-                </label>
-                <Input
-                  id="edit-task-check-date"
-                  type="date"
-                  value={editForm.checkDate}
-                  onChange={(e) => setEditForm({ ...editForm, checkDate: e.target.value })}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <span className="block text-[11px] text-muted-foreground font-medium mb-1">Date</span>
+                  <Input
+                    id="edit-task-check-date"
+                    type="date"
+                    value={editForm.checkDate}
+                    onChange={(e) => setEditForm({ ...editForm, checkDate: e.target.value })}
+                    className="w-full text-xs"
+                  />
+                </div>
+                <div>
+                  <span className="block text-[11px] text-muted-foreground font-medium mb-1">Start Time</span>
+                  <Input
+                    id="edit-task-check-start-time"
+                    type="time"
+                    disabled={!editForm.checkDate}
+                    value={editForm.checkStartTime}
+                    onChange={(e) => setEditForm({ ...editForm, checkStartTime: e.target.value })}
+                    className="w-full text-xs disabled:opacity-50"
+                  />
+                </div>
+                <div>
+                  <span className="block text-[11px] text-muted-foreground font-medium mb-1">End Time</span>
+                  <Input
+                    id="edit-task-check-end-time"
+                    type="time"
+                    disabled={!editForm.checkDate}
+                    value={editForm.checkEndTime}
+                    onChange={(e) => setEditForm({ ...editForm, checkEndTime: e.target.value })}
+                    className="w-full text-xs disabled:opacity-50"
+                  />
+                </div>
               </div>
             </div>
 

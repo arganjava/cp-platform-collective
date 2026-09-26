@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import { cn, getInitials, formatDate } from "@/lib/utils";
+import type { User } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { PageFrame, PageHeader, Toolbar } from "@/components/page-layout";
 import { Select } from "@/components/ui/select";
@@ -18,7 +19,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function GanttPage() {
-  const { projects, tasks, projectProfiles, getUserById, getActiveUsers, currentUserId, searchQuery } = useStore();
+  const { projects, tasks, projectProfiles, taskProfiles, getUserById, getActiveUsers, currentUserId, searchQuery } = useStore();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomLevel>("week");
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
@@ -26,6 +27,25 @@ export default function GanttPage() {
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
   const activeUsers = getActiveUsers();
+
+  function formatTimeOnly(str?: string | null): string {
+    if (!str) return "";
+    if (str.includes("T")) {
+      const time = str.split("T")[1];
+      return time.substring(0, 5);
+    }
+    return str.substring(0, 5);
+  }
+
+  const isTaskAssignee = useCallback(
+    (t: { id: string; assigneeId?: string | null; assigneeIds?: string[] }, profileId: string) => {
+      if (t.assigneeId === profileId) return true;
+      if (t.assigneeIds && t.assigneeIds.includes(profileId)) return true;
+      if (taskProfiles.some((tp) => tp.taskId === t.id && tp.profileId === profileId)) return true;
+      return false;
+    },
+    [taskProfiles]
+  );
 
   // Assignee filter: for admin, defaults to "all"; for member/guest, defaults to self and is disabled
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
@@ -38,20 +58,39 @@ export default function GanttPage() {
 
   const effectiveAssignee = isAdmin ? filterAssignee : (currentUserId || "all");
 
-  // For member and guest roles: filter projects related to tasks where tasks.assignee_id = current user or in project_profiles
-  const userProjectIds = useMemo(() => {
-    if (isAdmin) return null;
-    if (!currentUserId) return new Set<string>();
-    const fromTasks = tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId);
-    const fromProfiles = projectProfiles.filter((pp) => pp.profileId === currentUserId).map((pp) => pp.projectId);
-    return new Set([...fromTasks, ...fromProfiles]);
-  }, [tasks, projectProfiles, isAdmin, currentUserId]);
-
+  // Timeline filter assignee profile_id effect to list of projects project_profiles.profile_id
   const visibleProjects = useMemo(() => {
     const active = projects.filter((p) => p.status === "active");
-    if (isAdmin) return active;
-    return active.filter((p) => userProjectIds?.has(p.id));
-  }, [projects, isAdmin, userProjectIds]);
+
+    if (effectiveAssignee === "all") {
+      if (isAdmin) return active;
+      if (!currentUserId) return [];
+      return active.filter(
+        (p) =>
+          projectProfiles.some((pp) => pp.projectId === p.id && pp.profileId === currentUserId) ||
+          tasks.some((t) => t.projectId === p.id && isTaskAssignee(t, currentUserId))
+      );
+    }
+
+    if (effectiveAssignee === "unassigned") {
+      const unassignedProjectIds = new Set(
+        tasks
+          .filter(
+            (t) =>
+              !t.assigneeId &&
+              (!t.assigneeIds || t.assigneeIds.length === 0) &&
+              !taskProfiles.some((tp) => tp.taskId === t.id)
+          )
+          .map((t) => t.projectId)
+      );
+      return active.filter((p) => unassignedProjectIds.has(p.id));
+    }
+
+    // Effect to list of projects project_profiles.profile_id when assignee profile_id selected:
+    return active.filter((p) =>
+      projectProfiles.some((pp) => pp.projectId === p.id && pp.profileId === effectiveAssignee)
+    );
+  }, [projects, effectiveAssignee, isAdmin, currentUserId, projectProfiles, tasks, taskProfiles, isTaskAssignee]);
 
   useEffect(() => {
     if (selectedProject && !visibleProjects.some((p) => p.id === selectedProject)) {
@@ -61,40 +100,48 @@ export default function GanttPage() {
 
   const query = searchQuery.trim().toLowerCase();
 
-  // Calculate filtered tasks based on project, assignee, and search
+  // Timeline filter assignee profile_id effect to list of tasks task_profiles.profile_id
   const allTasks = useMemo(() => {
     return tasks.filter((t) => {
-      // Assignee filter
+      // 1. Assignee filter via task_profiles.profile_id
       if (effectiveAssignee === "unassigned") {
-        if (t.assigneeId) return false;
+        const hasAssignee =
+          Boolean(t.assigneeId) ||
+          (t.assigneeIds && t.assigneeIds.length > 0) ||
+          taskProfiles.some((tp) => tp.taskId === t.id);
+        if (hasAssignee) return false;
       } else if (effectiveAssignee !== "all") {
-        if (t.assigneeId !== effectiveAssignee) return false;
+        if (!isTaskAssignee(t, effectiveAssignee)) return false;
       }
 
-      // Member/Guest restriction: must be assigned to self and in related projects
+      // Member/Guest restriction: must be assigned to self
       if (!isAdmin && currentUserId) {
-        if (t.assigneeId !== currentUserId) return false;
-        if (!userProjectIds?.has(t.projectId)) return false;
+        if (!isTaskAssignee(t, currentUserId)) return false;
       }
 
-      // Project filter
+      // 2. Project filter
       if (selectedProject) {
         if (t.projectId !== selectedProject) return false;
-      } else if (!isAdmin) {
-        if (!userProjectIds?.has(t.projectId)) return false;
+      } else {
+        if (!visibleProjects.some((p) => p.id === t.projectId)) return false;
       }
 
-      // Search query filter
+      // 3. Search query filter
       if (query) {
         const project = projects.find((p) => p.id === t.projectId);
-        const assignee = t.assigneeId ? getUserById(t.assigneeId) : null;
-        const haystack = `${t.title} ${project?.title ?? ""} ${assignee?.name ?? ""}`.toLowerCase();
+        const taskAssignees = taskProfiles
+          .filter((tp) => tp.taskId === t.id)
+          .map((tp) => getUserById(tp.profileId)?.name)
+          .filter(Boolean);
+        const legacyAssignee = t.assigneeId ? getUserById(t.assigneeId)?.name : "";
+        const allNames = [...taskAssignees, legacyAssignee].join(" ");
+        const haystack = `${t.title} ${project?.title ?? ""} ${allNames}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
 
       return true;
     });
-  }, [tasks, effectiveAssignee, isAdmin, currentUserId, userProjectIds, selectedProject, query, projects, getUserById]);
+  }, [tasks, taskProfiles, effectiveAssignee, isAdmin, currentUserId, isTaskAssignee, visibleProjects, selectedProject, query, projects, getUserById]);
 
   const timelineStart = useMemo(() => {
     const dates = allTasks.flatMap((t) =>
@@ -341,7 +388,24 @@ export default function GanttPage() {
 
                       {/* Task rows */}
                       {projectTasks.map((task) => {
-                        const assignee = task.assigneeId ? getUserById(task.assigneeId) : null;
+                        const taskAssignees = (() => {
+                          const fromStore = taskProfiles
+                            .filter((tp) => tp.taskId === task.id)
+                            .map((tp) => getUserById(tp.profileId))
+                            .filter(Boolean) as User[];
+                          if (fromStore.length > 0) return fromStore;
+                          if (task.assigneeIds && task.assigneeIds.length > 0) {
+                            return task.assigneeIds.map((id) => getUserById(id)).filter(Boolean) as User[];
+                          }
+                          return [task.assigneeId ? getUserById(task.assigneeId) : null].filter(Boolean) as User[];
+                        })();
+
+                        const timeRangeText = task.checkStartTime && task.checkEndTime
+                          ? ` (${formatTimeOnly(task.checkStartTime)} - ${formatTimeOnly(task.checkEndTime)})`
+                          : task.checkStartTime
+                          ? ` (${formatTimeOnly(task.checkStartTime)})`
+                          : "";
+
                         const barPos = getBarPosition(task.startDate, task.dueDate);
                         const checkDatePos = task.checkDate ? getPointPosition(task.checkDate) : null;
                         const isHovered = hoveredTask === task.id;
@@ -400,18 +464,31 @@ export default function GanttPage() {
                                 {task.checkDate && (
                                   <span
                                     className="inline-flex items-center text-blue-600 dark:text-blue-400 shrink-0"
-                                    title={`Check Date: ${formatDate(task.checkDate)}`}
+                                    title={`Check Date: ${formatDate(task.checkDate)}${timeRangeText}`}
                                   >
                                     <Flag className="w-3 h-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400" />
                                   </span>
                                 )}
-                                {assignee && (
+                                {taskAssignees.length > 0 && (
                                   <div
-                                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground flex-shrink-0 ml-auto"
-                                    style={{ backgroundColor: assignee.avatarColor }}
-                                    title={assignee.name}
+                                    className="flex items-center -space-x-1.5 ml-auto shrink-0"
+                                    title={taskAssignees.map((u) => u.name).join(", ")}
                                   >
-                                    {getInitials(assignee.name)}
+                                    {taskAssignees.slice(0, 3).map((u) => (
+                                      <div
+                                        key={u.id}
+                                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-primary-foreground ring-1 ring-card shrink-0"
+                                        style={{ backgroundColor: u.avatarColor }}
+                                        title={u.name}
+                                      >
+                                        {getInitials(u.name)}
+                                      </div>
+                                    ))}
+                                    {taskAssignees.length > 3 && (
+                                      <div className="w-5 h-5 rounded-full bg-secondary text-subtle-foreground flex items-center justify-center text-[9px] font-semibold ring-1 ring-card shrink-0">
+                                        +{taskAssignees.length - 3}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -448,14 +525,14 @@ export default function GanttPage() {
                                 {/* Blue flag marker button */}
                                 <div
                                   className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 dark:bg-blue-500 text-white shadow-md ring-2 ring-card hover:scale-125 transition-transform cursor-pointer"
-                                  title={`Check Date: ${formatDate(task.checkDate!)}`}
+                                  title={`Check Date: ${formatDate(task.checkDate!)}${timeRangeText}`}
                                 >
                                   <Flag className="w-2.5 h-2.5 fill-white text-white" />
                                 </div>
 
                                 {/* Hover tooltip */}
                                 <div className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/flag:opacity-100 transition-opacity bg-blue-700 dark:bg-blue-800 text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-30">
-                                  Check Date: {formatDate(task.checkDate!)}
+                                  Check Date: {formatDate(task.checkDate!)}{timeRangeText}
                                 </div>
                               </div>
                             )}

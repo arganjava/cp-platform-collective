@@ -4,6 +4,7 @@ import type {
   ProjectRow,
   ProjectProfileRow,
   TaskRow,
+  TaskProfileRow,
   SaleRow,
   SaleStageRow,
   NotificationRow,
@@ -25,6 +26,7 @@ import type {
   SaleType,
   Client,
   ProjectProfile,
+  TaskProfile,
 } from "../types";
 
 type RowResult<T> = { data: T | null; error: { message: string } | null };
@@ -90,9 +92,13 @@ export function fromTaskRow(r: TaskRow): Task {
     status: (r.status as TaskStatus) || "todo",
     priority: (r.priority as Priority) || "medium",
     assigneeId: r.assignee_id ?? null,
+    assigneeIds: r.assignee_id ? [r.assignee_id] : [],
     startDate: r.start_date ?? "",
     dueDate: r.due_date ?? null,
-    checkDate: r.check_date ?? null,
+    checkDate: r.check_date ?? (r.check_start_time ? r.check_start_time.split("T")[0] : null),
+    checkStartTime: r.check_start_time ?? (r.check_date ? `${r.check_date}T09:00:00Z` : null),
+    checkEndTime: r.check_end_time ?? (r.check_date ? `${r.check_date}T10:00:00Z` : null),
+    googleCalendarId: r.google_calendar_id ?? null,
     link: r.link ?? (links.length > 0 ? links[0].url : null),
     links,
     tags: r.tags ?? [],
@@ -177,10 +183,22 @@ export function taskColumns(t: Partial<Task>): Record<string, unknown> {
   if (t.description !== undefined) cols.description = t.description;
   if (t.status !== undefined) cols.status = t.status;
   if (t.priority !== undefined) cols.priority = t.priority;
-  if (t.assigneeId !== undefined) cols.assignee_id = t.assigneeId || null;
+  if (t.assigneeId !== undefined) {
+    cols.assignee_id = t.assigneeId || null;
+  } else if (t.assigneeIds !== undefined) {
+    cols.assignee_id = t.assigneeIds[0] || null;
+  }
   if (t.startDate !== undefined) cols.start_date = t.startDate || null;
   if (t.dueDate !== undefined) cols.due_date = t.dueDate || null;
-  if (t.checkDate !== undefined) cols.check_date = t.checkDate || null;
+  if (t.checkStartTime !== undefined) {
+    cols.check_start_time = t.checkStartTime || null;
+    if (t.checkStartTime) {
+      cols.check_date = t.checkStartTime.split("T")[0];
+    }
+  }
+  if (t.checkEndTime !== undefined) cols.check_end_time = t.checkEndTime || null;
+  if (t.googleCalendarId !== undefined) cols.google_calendar_id = t.googleCalendarId || null;
+  if (t.checkDate !== undefined && cols.check_date === undefined) cols.check_date = t.checkDate || null;
   if (t.links !== undefined) {
     cols.links = t.links;
     cols.link = t.links.length > 0 ? t.links[0].url : (t.link || null);
@@ -263,6 +281,7 @@ export interface TeamData {
   notifications: Notification[];
   clients: Client[];
   projectProfiles: ProjectProfile[];
+  taskProfiles: TaskProfile[];
 }
 
 async function fetchSalesSafe(supabase: ReturnType<typeof getSupabase>): Promise<SaleRow[]> {
@@ -308,6 +327,18 @@ async function fetchProjectProfilesSafe(
   }
 }
 
+async function fetchTaskProfilesSafe(
+  supabase: ReturnType<typeof getSupabase>
+): Promise<TaskProfileRow[]> {
+  try {
+    const res = await supabase.from("task_profiles").select("*");
+    if (!res.error && res.data) return res.data as TaskProfileRow[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchTeamData(): Promise<TeamData> {
   const supabase = getSupabase();
   const [
@@ -319,6 +350,7 @@ export async function fetchTeamData(): Promise<TeamData> {
     clientsRows,
     saleStageRows,
     projectProfilesRows,
+    taskProfilesRows,
   ] = await Promise.all([
     supabase.from("profiles").select("*").order("name"),
     supabase.from("projects").select("*").order("created_at"),
@@ -328,6 +360,7 @@ export async function fetchTeamData(): Promise<TeamData> {
     fetchClientsSafe(supabase),
     fetchSaleStagesSafe(supabase),
     fetchProjectProfilesSafe(supabase),
+    fetchTaskProfilesSafe(supabase),
   ]);
 
   const mappedProjectProfiles: ProjectProfile[] = (projectProfilesRows || []).map((pp) => ({
@@ -346,6 +379,22 @@ export async function fetchTeamData(): Promise<TeamData> {
     projectProfileMap.set(pp.projectId, existing);
   }
 
+  const mappedTaskProfiles: TaskProfile[] = (taskProfilesRows || []).map((tp) => ({
+    id: tp.id,
+    taskId: tp.task_id,
+    profileId: tp.profile_id,
+    createdAt: tp.created_at,
+  }));
+
+  const taskProfileMap = new Map<string, string[]>();
+  for (const tp of mappedTaskProfiles) {
+    const existing = taskProfileMap.get(tp.taskId) || [];
+    if (!existing.includes(tp.profileId)) {
+      existing.push(tp.profileId);
+    }
+    taskProfileMap.set(tp.taskId, existing);
+  }
+
   // Load project memberIds strictly from project_profiles, NOT from projects.member_ids
   const mappedProjects = (unwrap(projects, "load projects") as ProjectRow[]).map((r) => {
     const project = fromProjectRow(r);
@@ -353,10 +402,17 @@ export async function fetchTeamData(): Promise<TeamData> {
     return project;
   });
 
+  const mappedTasks = (unwrap(tasks, "load tasks") as TaskRow[]).map((r) => {
+    const task = fromTaskRow(r);
+    const profileIds = taskProfileMap.get(r.id) || [];
+    task.assigneeIds = profileIds.length > 0 ? profileIds : (task.assigneeId ? [task.assigneeId] : []);
+    return task;
+  });
+
   return {
     users: (unwrap(profiles, "load profiles") as ProfileRow[]).map(fromProfileRow),
     projects: mappedProjects,
-    tasks: (unwrap(tasks, "load tasks") as TaskRow[]).map(fromTaskRow),
+    tasks: mappedTasks,
     sales: salesRows.map(fromSaleRow),
     saleStages: saleStageRows.map(fromSaleStageRow),
     notifications: (unwrap(notifications, "load notifications") as NotificationRow[]).map(
@@ -364,6 +420,7 @@ export async function fetchTeamData(): Promise<TeamData> {
     ),
     clients: clientsRows.map(fromClientRow),
     projectProfiles: mappedProjectProfiles,
+    taskProfiles: mappedTaskProfiles,
   };
 }
 
@@ -475,11 +532,30 @@ export async function deleteProjectRow(id: string) {
   if (error) throw error;
 }
 
+export async function syncTaskProfiles(taskId: string, assigneeIds: string[]) {
+  const supabase = getSupabase();
+  try {
+    await supabase.from("task_profiles").delete().eq("task_id", taskId);
+    if (assigneeIds && assigneeIds.length > 0) {
+      const rows = assigneeIds.map((profileId) => ({
+        task_id: taskId,
+        profile_id: profileId,
+      }));
+      await supabase.from("task_profiles").insert(rows);
+    }
+  } catch (err) {
+    console.warn("Failed to sync task_profiles:", err);
+  }
+}
+
 export async function insertTask(task: Task) {
   const { error } = await getSupabase()
     .from("tasks")
     .insert(taskColumns(task));
   if (error) throw error;
+  if (task.assigneeIds !== undefined) {
+    await syncTaskProfiles(task.id, task.assigneeIds);
+  }
 }
 
 export async function updateTaskRow(id: string, updates: Partial<Task>) {
@@ -488,6 +564,9 @@ export async function updateTaskRow(id: string, updates: Partial<Task>) {
     .update(taskColumns(updates))
     .eq("id", id);
   if (error) throw error;
+  if (updates.assigneeIds !== undefined) {
+    await syncTaskProfiles(id, updates.assigneeIds);
+  }
 }
 
 export async function deleteTaskRow(id: string) {

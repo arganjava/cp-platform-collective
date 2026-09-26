@@ -122,4 +122,27 @@ describe("POST /api/notifications/webhook", () => {
     expect(data.success).toBe(true);
     expect(data.recipient.email).toBe("marcus@collectivep.com");
   });
+
+  it("handles multiple send email with recipients array", async () => {
+    const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+      method: "POST",
+      body: JSON.stringify({
+        message: 'You have been assigned to task: "Frame Artworks for Exhibition"',
+        related_id: "t-1",
+        recipients: [
+          { name: "Marcus Tan", email: "marcus@collectivep.com", user_id: "u-123" },
+          { name: "Sarah Lim", email: "sarah@collectivep.com", user_id: "u-456" },
+        ],
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.totalRecipients).toBe(2);
+    expect(data.recipients).toHaveLength(2);
+    expect(data.recipients[0].email).toBe("marcus@collectivep.com");
+    expect(data.recipients[1].email).toBe("sarah@collectivep.com");
+  });
 });

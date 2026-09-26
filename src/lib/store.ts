@@ -10,6 +10,7 @@ import type {
   ProjectStatus,
   Client,
   ProjectProfile,
+  TaskProfile,
 } from "./types";
 import {
   insertTask,
@@ -63,6 +64,7 @@ interface AppState {
   notifications: Notification[];
   clients: Client[];
   projectProfiles: ProjectProfile[];
+  taskProfiles: TaskProfile[];
   currentUserId: string | null;
   loading: boolean;
   initialized: boolean;
@@ -84,6 +86,7 @@ interface AppState {
     notifications: Notification[];
     clients?: Client[];
     projectProfiles?: ProjectProfile[];
+    taskProfiles?: TaskProfile[];
     currentUserId: string | null;
   }) => void;
   loadDataFromDatabase: () => Promise<void>;
@@ -150,6 +153,8 @@ interface AppState {
   getProjectsByStatus: (status: ProjectStatus) => Project[];
   getProjectMemberIds: (projectId: string) => string[];
   getProjectProfilesByProjectId: (projectId: string) => ProjectProfile[];
+  getTaskAssigneeIds: (taskId: string) => string[];
+  getTaskProfilesByTaskId: (taskId: string) => TaskProfile[];
 }
 
 const initialDataState = {
@@ -161,6 +166,7 @@ const initialDataState = {
   notifications: [] as Notification[],
   clients: [] as Client[],
   projectProfiles: [] as ProjectProfile[],
+  taskProfiles: [] as TaskProfile[],
   currentUserId: null as string | null,
   loading: true,
   initialized: false,
@@ -177,7 +183,18 @@ export const useStore = create<AppState>((set, get) => ({
   selectedProjectId: null,
 
   // Hydration
-  initialize: ({ users, projects, tasks, sales, saleStages, notifications, clients, projectProfiles, currentUserId }) =>
+  initialize: ({
+    users,
+    projects,
+    tasks,
+    sales,
+    saleStages,
+    notifications,
+    clients,
+    projectProfiles,
+    taskProfiles,
+    currentUserId,
+  }) =>
     set({
       users,
       projects,
@@ -187,6 +204,7 @@ export const useStore = create<AppState>((set, get) => ({
       notifications,
       clients: clients ?? [],
       projectProfiles: projectProfiles ?? [],
+      taskProfiles: taskProfiles ?? [],
       currentUserId,
       loading: false,
       initialized: true,
@@ -219,13 +237,67 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Task actions
   addTask: (task) => {
-    set((s) => ({ tasks: [...s.tasks, task] }));
-    persist(insertTask(task));
+    const assigneeIds =
+      task.assigneeIds && task.assigneeIds.length > 0
+        ? task.assigneeIds
+        : task.assigneeId
+        ? [task.assigneeId]
+        : [];
+    const newProfiles: TaskProfile[] = assigneeIds.map((profileId) => ({
+      id: `tp-${task.id}-${profileId}`,
+      taskId: task.id,
+      profileId,
+    }));
+    const finalTask: Task = {
+      ...task,
+      ...(task.assigneeIds !== undefined ? { assigneeIds } : {}),
+      assigneeId: task.assigneeId ?? (assigneeIds[0] || null),
+    };
+    set((s) => ({
+      tasks: [...s.tasks, finalTask],
+      taskProfiles: [...s.taskProfiles, ...newProfiles],
+    }));
+    persist(insertTask(finalTask));
   },
   updateTask: (id, updates) => {
-    set((s) => ({
-      tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
-    }));
+    set((s) => {
+      let updatedProfiles = s.taskProfiles;
+      let nextAssigneeIds = updates.assigneeIds;
+      if (updates.assigneeIds !== undefined) {
+        const remaining = s.taskProfiles.filter((tp) => tp.taskId !== id);
+        const added = updates.assigneeIds.map((profileId) => ({
+          id: `tp-${id}-${profileId}`,
+          taskId: id,
+          profileId,
+        }));
+        updatedProfiles = [...remaining, ...added];
+      } else if (updates.assigneeId !== undefined && updates.assigneeIds === undefined) {
+        const remaining = s.taskProfiles.filter((tp) => tp.taskId !== id);
+        const added = updates.assigneeId
+          ? [
+              {
+                id: `tp-${id}-${updates.assigneeId}`,
+                taskId: id,
+                profileId: updates.assigneeId,
+              },
+            ]
+          : [];
+        updatedProfiles = [...remaining, ...added];
+        nextAssigneeIds = updates.assigneeId ? [updates.assigneeId] : [];
+      }
+      return {
+        tasks: s.tasks.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                ...updates,
+                assigneeIds: nextAssigneeIds !== undefined ? nextAssigneeIds : t.assigneeIds,
+              }
+            : t
+        ),
+        taskProfiles: updatedProfiles,
+      };
+    });
     persist(updateTaskRow(id, updates));
   },
   updateTaskStatus: (id, status) => {
@@ -235,7 +307,10 @@ export const useStore = create<AppState>((set, get) => ({
     persist(updateTaskRow(id, { status }));
   },
   deleteTask: (id) => {
-    set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
+    set((s) => ({
+      tasks: s.tasks.filter((t) => t.id !== id),
+      taskProfiles: s.taskProfiles.filter((tp) => tp.taskId !== id),
+    }));
     persist(deleteTaskRow(id));
   },
   reorderTasks: (taskId, newStatus, newOrder) => {
@@ -468,4 +543,15 @@ export const useStore = create<AppState>((set, get) => ({
     get().projectProfiles.filter((pp) => pp.projectId === projectId).map((pp) => pp.profileId),
   getProjectProfilesByProjectId: (projectId) =>
     get().projectProfiles.filter((pp) => pp.projectId === projectId),
+  getTaskAssigneeIds: (taskId) => {
+    const fromProfiles = get()
+      .taskProfiles.filter((tp) => tp.taskId === taskId)
+      .map((tp) => tp.profileId);
+    if (fromProfiles.length > 0) return fromProfiles;
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (task?.assigneeIds && task.assigneeIds.length > 0) return task.assigneeIds;
+    return task?.assigneeId ? [task.assigneeId] : [];
+  },
+  getTaskProfilesByTaskId: (taskId) =>
+    get().taskProfiles.filter((tp) => tp.taskId === taskId),
 }));
