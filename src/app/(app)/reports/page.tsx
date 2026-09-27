@@ -316,6 +316,7 @@ export default function ReportsPage() {
 
   const completionLabel = filteredTasks.length > 0 ? `${completedTasks}/${filteredTasks.length}` : "0";
   const stageStatusLabel = stageStatus === "all" ? "All Stage Statuses" : stageStatus;
+  const revenueLabel = stageStatus === "Closed" ? "Closed" : "Pipeline";
   const reportStatus = `${projectLabel} · ${stageStatusLabel} · ${range.label} · ${filteredSales.length} sales entries, ${filteredTasks.length} tasks, ${filteredProjects.length} projects`;
 
   if (!isAdmin) {
@@ -353,7 +354,7 @@ export default function ReportsPage() {
     <PageFrame className="print-content">
       <PageHeader
         title="Reports"
-        description="A trustworthy view of delivery and revenue across your selected reporting period."
+        description={`A trustworthy view of delivery and ${revenueLabel.toLowerCase()} across your selected reporting period.`}
       />
 
       <ReportPeriodToolbar
@@ -371,7 +372,7 @@ export default function ReportsPage() {
       <ReportMeta rangeLabel={range.label} projectLabel={projectLabel} stageStatusLabel={stageStatusLabel} />
 
       <SheetSummary>
-        <SummaryMetric value={formatCurrency(totalRevenue)} label="Revenue" indicator={<Badge variant="neutral">{filteredSales.length} entries</Badge>} />
+        <SummaryMetric value={formatCurrency(totalRevenue)} label={revenueLabel} indicator={<Badge variant="neutral">{filteredSales.length} entries</Badge>} />
         <SummaryMetric value={completionLabel} label="Tasks completed" indicator={<span className="text-xs text-subtle-foreground">{overdueTasks.length} overdue</span>} />
         <SummaryMetric value={activeProjects} label="Active projects" indicator={<span className="text-xs text-subtle-foreground">{filteredProjects.length} in view</span>} />
         <SummaryMetric value={teamStats.length} label="People" indicator={<span className="text-xs text-subtle-foreground">{range.label}</span>} />
@@ -387,8 +388,8 @@ export default function ReportsPage() {
 
         <TabsContent value="overview" className="space-y-6">
           <ContentGrid>
-            <ReportPanel title="Revenue trend" description={`${formatCurrency(totalRevenue)} recorded across ${revenueData.length} month${revenueData.length === 1 ? "" : "s"}.`}>
-              <SalesChart data={revenueData} />
+            <ReportPanel title={`${revenueLabel} trend`} description={`${formatCurrency(totalRevenue)} recorded across ${revenueData.length} month${revenueData.length === 1 ? "" : "s"}.`}>
+              <SalesChart data={revenueData} label={revenueLabel} />
             </ReportPanel>
             <ReportPanel title="Delivery health" description={`${completedTasks} of ${filteredTasks.length} tasks completed; ${overdueTasks.length} currently overdue.`}>
               <TaskChart data={taskStatusData} />
@@ -396,7 +397,7 @@ export default function ReportsPage() {
           </ContentGrid>
 
           <ReportPanel title="Needs attention" description="Projects are surfaced when they contain overdue work or are below 50% completion in the selected view.">
-            <AttentionProjectList projects={attentionProjects} />
+            <AttentionProjectList projects={attentionProjects} revenueLabel={revenueLabel} />
           </ReportPanel>
 
           <ContentGrid>
@@ -474,7 +475,7 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="projects">
-          <ReportPanel title="Project detail" description="Delivery, revenue, and timeline signals for each project in view.">
+          <ReportPanel title="Project detail" description={`Delivery, ${revenueLabel.toLowerCase()}, and timeline signals for each project in view.`}>
             <div className="divide-y divide-border">
               {projectStats.map((project) => {
                 const sourceProject = projects.find((item) => item.id === project.id);
@@ -487,7 +488,7 @@ export default function ReportsPage() {
                     <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                       <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Tasks</p><p className="mt-1 text-lg font-bold tabular">{project.completedTasks}/{project.totalTasks}</p></div>
                       <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Completion</p><p className="mt-1 text-lg font-bold tabular">{project.completionRate}%</p></div>
-                      <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Revenue</p><p className="mt-1 text-lg font-bold tabular">{formatCurrency(project.revenue)}</p></div>
+                      <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">{revenueLabel}</p><p className="mt-1 text-lg font-bold tabular">{formatCurrency(project.revenue)}</p></div>
                       <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Overdue</p><p className={cn("mt-1 text-lg font-bold tabular", project.overdueTasks > 0 && "text-destructive")}>{project.overdueTasks}</p></div>
                     </div>
                     <Progress value={project.completionRate} label={`${project.title} completion`} className="mt-4" color={project.color} />

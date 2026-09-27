@@ -119,7 +119,13 @@ export interface AttentionProject {
   nextAction: string;
 }
 
-export function AttentionProjectList({ projects }: { projects: AttentionProject[] }) {
+export function AttentionProjectList({
+  projects,
+  revenueLabel = "Pipeline",
+}: {
+  projects: AttentionProject[];
+  revenueLabel?: string;
+}) {
   if (projects.length === 0) {
     return (
       <div className="border border-border bg-secondary p-5" role="status">
@@ -148,7 +154,7 @@ export function AttentionProjectList({ projects }: { projects: AttentionProject[
           </div>
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Next action</p><p className="mt-1 text-foreground">{project.nextAction}</p></div>
-            <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Revenue in period</p><p className="mt-1 font-semibold text-foreground tabular">{project.revenue}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">{revenueLabel} in period</p><p className="mt-1 font-semibold text-foreground tabular">{project.revenue}</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground">Delivery status</p><p className="mt-1 text-foreground">{project.overdueTasks > 0 ? "Needs coordinator review" : "Monitor progress"}</p></div>
           </div>
         </article>

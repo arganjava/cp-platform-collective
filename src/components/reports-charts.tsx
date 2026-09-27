@@ -105,14 +105,14 @@ export function ChartDataTable({ caption, columns, rows }: ChartDataTableProps) 
   );
 }
 
-export function SalesChart({ data }: { data: RevenuePoint[] }) {
+export function SalesChart({ data, label = "Pipeline" }: { data: RevenuePoint[]; label?: string }) {
   const total = data.reduce((sum, point) => sum + point.revenue, 0);
   return (
     <div>
       <div
         className="h-[300px] w-full"
         role="img"
-        aria-label={`Revenue trend across ${data.length} reporting month${data.length === 1 ? "" : "s"}, totalling ${formatCurrency(total)}`}
+        aria-label={`${label} trend across ${data.length} reporting month${data.length === 1 ? "" : "s"}, totalling ${formatCurrency(total)}`}
       >
         {data.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -120,18 +120,18 @@ export function SalesChart({ data }: { data: RevenuePoint[] }) {
               <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
               <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
               <YAxis tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={(value) => formatCompactCurrency(Number(value))} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatCurrency(value), "Revenue"]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(value: number) => [formatCurrency(value), label]} />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
-              <Bar dataKey="revenue" name="Revenue" fill={chartCoral} />
+              <Bar dataKey="revenue" name={label} fill={chartCoral} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center border border-border bg-secondary text-sm text-subtle-foreground">No revenue recorded for this period.</div>
+          <div className="flex h-full items-center justify-center border border-border bg-secondary text-sm text-subtle-foreground">No {label.toLowerCase()} recorded for this period.</div>
         )}
       </div>
       <ChartDataTable
-        caption="Revenue by reporting month"
-        columns={["Month", "Revenue"]}
+        caption={`${label} by reporting month`}
+        columns={["Month", label]}
         rows={data.map((point) => [point.month, formatCurrency(point.revenue)])}
       />
     </div>
