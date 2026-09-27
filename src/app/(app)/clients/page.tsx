@@ -253,7 +253,7 @@ export default function ClientsPage() {
         />
         <SummaryMetric
           id="metric-total-revenue"
-          label="Total Revenue"
+          label="Pipeline"
           value={`$${totalRevenueAll.toLocaleString()}`}
           indicator={
             <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
@@ -306,7 +306,7 @@ export default function ClientsPage() {
           >
             <option value="name_asc">Name (A–Z)</option>
             <option value="name_desc">Name (Z–A)</option>
-            <option value="revenue_desc">Highest Revenue</option>
+            <option value="revenue_desc">Highest Pipeline</option>
             <option value="deals_desc">Most Deals</option>
             <option value="recent">Recently Created</option>
           </Select>
@@ -321,7 +321,7 @@ export default function ClientsPage() {
               <tr className="border-b border-border text-xs font-medium text-subtle-foreground uppercase tracking-wider">
                 <th className="py-3 px-4">Client Name</th>
                 <th className="py-3 px-4">Deals</th>
-                <th className="py-3 px-4 text-right">Total Revenue</th>
+                <th className="py-3 px-4 text-right">Pipeline</th>
                 <th className="py-3 px-4">Created</th>
                 <th className="py-3 px-4">Updated</th>
                 <th className="w-28 text-right py-3 px-4">Actions</th>

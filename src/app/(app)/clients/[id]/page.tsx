@@ -259,7 +259,7 @@ export default function ClientDetailPage() {
       <SheetSummary id="client-sales-metrics">
         <SummaryMetric
           id="metric-client-revenue"
-          label="Total Revenue"
+          label="Pipeline"
           value={`$${totalRevenue.toLocaleString()}`}
           indicator={
             <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">

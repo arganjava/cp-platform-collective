@@ -3,6 +3,7 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { useStore } from "@/lib/store";
+import type { Sale, SaleStage } from "@/lib/types";
 import { cn, formatDate, getInitials } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { projects, tasks, sales, users, projectProfiles, getUserById, currentUserId, searchQuery } = useStore();
+  const { projects, tasks, sales, saleStages, users, projectProfiles, getUserById, currentUserId, searchQuery } = useStore();
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
 
@@ -83,13 +84,50 @@ export default function DashboardPage() {
     if (t.status === "done" || !t.dueDate) return false;
     return new Date(t.dueDate) < new Date();
   }).length;
-  const totalRevenue = sales.reduce((sum, s) => sum + s.amount, 0);
-  const thisMonthSales = sales.filter((s) => {
-    const d = new Date(s.date);
+
+  const closedSalesWithStage = React.useMemo(() => {
+    const list: { sale: Sale; latestStage: SaleStage; amount: number }[] = [];
+    for (const s of sales) {
+      const saleId = s.id || (s as any).sale_id;
+      const matching = saleStages.filter((st) => {
+        const stageSaleId = st.saleId || (st as any).sale_id;
+        return String(stageSaleId).trim() === String(saleId).trim();
+      });
+      if (matching.length === 0) continue;
+      const latest = [...matching].sort((a, b) => {
+        const timeB = Math.max(
+          b.createdAt ? new Date(b.createdAt).getTime() : 0,
+          (b as any).created_at ? new Date((b as any).created_at).getTime() : 0,
+          b.date ? new Date(b.date).getTime() : 0
+        );
+        const timeA = Math.max(
+          a.createdAt ? new Date(a.createdAt).getTime() : 0,
+          (a as any).created_at ? new Date((a as any).created_at).getTime() : 0,
+          a.date ? new Date(a.date).getTime() : 0
+        );
+        return timeB - timeA;
+      })[0];
+      const status = (latest?.status ?? "").trim().toLowerCase();
+      if (status === "closed") {
+        const amount = Number(s.amount) || Number(latest.value) || 0;
+        list.push({ sale: s, latestStage: latest, amount });
+      }
+    }
+    return list;
+  }, [sales, saleStages]);
+
+  const totalClosed = closedSalesWithStage.reduce((sum, item) => sum + item.amount, 0);
+
+  const thisMonthClosed = closedSalesWithStage.reduce((sum, item) => {
+    const stageDateStr = item.latestStage.date || item.latestStage.createdAt || (item.latestStage as any).created_at || item.sale.date;
+    if (!stageDateStr) return sum;
+    const d = new Date(stageDateStr);
     const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const thisMonthRevenue = thisMonthSales.reduce((sum, s) => sum + s.amount, 0);
+    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+      return sum + item.amount;
+    }
+    return sum;
+  }, 0);
 
   const upcomingDeadlines = [...visibleTasks]
     .filter((t) => t.status !== "done" && t.dueDate)
@@ -118,13 +156,20 @@ export default function DashboardPage() {
           }
         />
 
-        <SheetSummary id="dashboard-sheet-summary" className={cn(!isAdmin && "sm:grid-cols-3")}>
+        <SheetSummary id="dashboard-sheet-summary">
           <SummaryMetric id="dashboard-metric-projects" value={baseProjects.length} label="Projects" indicator={<Badge variant="neutral">{activeProjects.length} active</Badge>} />
           <SummaryMetric id="dashboard-metric-tasks" value={totalTasks} label="Tasks" indicator={<Badge variant="positive">{completionPct}% done</Badge>} />
           <SummaryMetric id="dashboard-metric-overdue" value={overdueTasks} label="Overdue" indicator={overdueTasks > 0 ? <Badge variant="danger">{overdueTasks} need attention</Badge> : <Badge variant="positive">On track</Badge>} />
-          {isAdmin && (
-            <SummaryMetric id="dashboard-metric-revenue" value={`$${(totalRevenue / 1000).toFixed(0)}k`} label="Revenue" indicator={<Badge variant="neutral">+${(thisMonthRevenue / 1000).toFixed(0)}k this month</Badge>} />
-          )}
+          <SummaryMetric
+            id="dashboard-metric-revenue"
+            value={`$${totalClosed.toLocaleString()}`}
+            label="Closed"
+            indicator={
+              <Badge variant="neutral">
+                {thisMonthClosed > 0 ? `+$${thisMonthClosed.toLocaleString()} this month` : "+$0 this month"}
+              </Badge>
+            }
+          />
         </SheetSummary>
 
         <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.9fr)]">

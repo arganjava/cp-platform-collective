@@ -417,6 +417,52 @@ export default function PipelinesPage() {
           }
         />
 
+        {/* Filters */}
+        <Toolbar id="pipelines-filter-toolbar">
+          <Select
+            value={filterClient}
+            onChange={(e) => setFilterClient(e.target.value)}
+            aria-label="Filter by Client name"
+          >
+            <option value="all">All Clients</option>
+            {clientFilterOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={filterStageStatus}
+            onChange={(e) => setFilterStageStatus(e.target.value)}
+            aria-label="Filter by Stage Status"
+          >
+            <option value="all">All Stage Statuses</option>
+            {stageStatusOptions.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </Select>
+          <Select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            aria-label="Filter by Type"
+          >
+            <option value="all">All Types</option>
+            {Object.entries(saleTypeConfig).map(([key, val]) => (
+              <option key={key} value={key}>{val.label}</option>
+            ))}
+          </Select>
+          <Select
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            aria-label="Filter by Project"
+          >
+            <option value="all">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </Select>
+        </Toolbar>
+
         {/* Summary cards */}
         <SheetSummary className="sm:grid-cols-3">
           <SummaryMetric
@@ -491,52 +537,6 @@ export default function PipelinesPage() {
             </CardContent>
           </Card>
         </ContentGrid>
-
-        {/* Filters */}
-        <Toolbar>
-          <Select
-            value={filterClient}
-            onChange={(e) => setFilterClient(e.target.value)}
-            aria-label="Filter by Client name"
-          >
-            <option value="all">All Clients</option>
-            {clientFilterOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={filterStageStatus}
-            onChange={(e) => setFilterStageStatus(e.target.value)}
-            aria-label="Filter by Stage Status"
-          >
-            <option value="all">All Stage Statuses</option>
-            {stageStatusOptions.map((status) => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </Select>
-          <Select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            aria-label="Filter by Type"
-          >
-            <option value="all">All Types</option>
-            {Object.entries(saleTypeConfig).map(([key, val]) => (
-              <option key={key} value={key}>{val.label}</option>
-            ))}
-          </Select>
-          <Select
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            aria-label="Filter by Project"
-          >
-            <option value="all">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.title}</option>
-            ))}
-          </Select>
-        </Toolbar>
 
         {/* Pipeline Table */}
         <Card>

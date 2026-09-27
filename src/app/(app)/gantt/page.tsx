@@ -56,7 +56,31 @@ export default function GanttPage() {
     }
   }, [isAdmin, currentUserId]);
 
-  const effectiveAssignee = isAdmin ? filterAssignee : (currentUserId || "all");
+  const effectiveAssignee = isAdmin
+    ? (filterAssignee === "mine" ? currentUserId || "all" : filterAssignee)
+    : (currentUserId || "all");
+
+  const isProjectMatchingAssignee = useCallback(
+    (p: { id: string; memberIds?: string[]; ownerId?: string }, assigneeId: string) => {
+      // 1. Task assignment via task_profiles, assigneeIds, or assigneeId
+      if (tasks.some((t) => t.projectId === p.id && isTaskAssignee(t, assigneeId))) {
+        return true;
+      }
+      // 2. Project profile membership via project_profiles
+      if (projectProfiles.some((pp) => pp.projectId === p.id && pp.profileId === assigneeId)) {
+        return true;
+      }
+      // 3. Project memberIds or ownerId
+      if (p.memberIds && p.memberIds.includes(assigneeId)) {
+        return true;
+      }
+      if (p.ownerId === assigneeId) {
+        return true;
+      }
+      return false;
+    },
+    [tasks, isTaskAssignee, projectProfiles]
+  );
 
   // Timeline filter assignee profile_id effect to list of projects project_profiles.profile_id
   const visibleProjects = useMemo(() => {
@@ -65,32 +89,24 @@ export default function GanttPage() {
     if (effectiveAssignee === "all") {
       if (isAdmin) return active;
       if (!currentUserId) return [];
-      return active.filter(
-        (p) =>
-          projectProfiles.some((pp) => pp.projectId === p.id && pp.profileId === currentUserId) ||
-          tasks.some((t) => t.projectId === p.id && isTaskAssignee(t, currentUserId))
-      );
+      return active.filter((p) => isProjectMatchingAssignee(p, currentUserId));
     }
 
     if (effectiveAssignee === "unassigned") {
-      const unassignedProjectIds = new Set(
-        tasks
-          .filter(
-            (t) =>
-              !t.assigneeId &&
-              (!t.assigneeIds || t.assigneeIds.length === 0) &&
-              !taskProfiles.some((tp) => tp.taskId === t.id)
-          )
-          .map((t) => t.projectId)
+      return active.filter((p) =>
+        tasks.some(
+          (t) =>
+            t.projectId === p.id &&
+            !t.assigneeId &&
+            (!t.assigneeIds || t.assigneeIds.length === 0) &&
+            !taskProfiles.some((tp) => tp.taskId === t.id)
+        )
       );
-      return active.filter((p) => unassignedProjectIds.has(p.id));
     }
 
     // Effect to list of projects project_profiles.profile_id when assignee profile_id selected:
-    return active.filter((p) =>
-      projectProfiles.some((pp) => pp.projectId === p.id && pp.profileId === effectiveAssignee)
-    );
-  }, [projects, effectiveAssignee, isAdmin, currentUserId, projectProfiles, tasks, taskProfiles, isTaskAssignee]);
+    return active.filter((p) => isProjectMatchingAssignee(p, effectiveAssignee));
+  }, [projects, effectiveAssignee, isAdmin, currentUserId, isProjectMatchingAssignee, tasks, taskProfiles]);
 
   useEffect(() => {
     if (selectedProject && !visibleProjects.some((p) => p.id === selectedProject)) {
@@ -132,9 +148,9 @@ export default function GanttPage() {
         const taskAssignees = taskProfiles
           .filter((tp) => tp.taskId === t.id)
           .map((tp) => getUserById(tp.profileId)?.name)
-          .filter(Boolean);
+          .filter(Boolean) as string[];
         const legacyAssignee = t.assigneeId ? getUserById(t.assigneeId)?.name : "";
-        const allNames = [...taskAssignees, legacyAssignee].join(" ");
+        const allNames = [...taskAssignees, legacyAssignee].filter(Boolean).join(" ");
         const haystack = `${t.title} ${project?.title ?? ""} ${allNames}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
@@ -147,19 +163,29 @@ export default function GanttPage() {
     const dates = allTasks.flatMap((t) =>
       [t.startDate, t.checkDate].filter(Boolean).map((d) => new Date(d!).getTime())
     );
-    const projects2 = visibleProjects.map((p) => new Date(p.startDate).getTime());
+    const activeProj = selectedProject
+      ? visibleProjects.filter((p) => p.id === selectedProject)
+      : visibleProjects.filter((p) => allTasks.some((t) => t.projectId === p.id));
+    const projects2 = (activeProj.length > 0 ? activeProj : visibleProjects).map((p) =>
+      new Date(p.startDate).getTime()
+    );
     const valid = [...dates, ...projects2].filter((n) => !isNaN(n));
     return valid.length > 0 ? new Date(Math.min(...valid)) : new Date();
-  }, [allTasks, visibleProjects]);
+  }, [allTasks, visibleProjects, selectedProject]);
 
   const timelineEnd = useMemo(() => {
     const dates = allTasks.flatMap((t) =>
       [t.dueDate, t.checkDate].filter(Boolean).map((d) => new Date(d!).getTime())
     );
-    const projects2 = visibleProjects.map((p) => new Date(p.endDate).getTime());
+    const activeProj = selectedProject
+      ? visibleProjects.filter((p) => p.id === selectedProject)
+      : visibleProjects.filter((p) => allTasks.some((t) => t.projectId === p.id));
+    const projects2 = (activeProj.length > 0 ? activeProj : visibleProjects).map((p) =>
+      new Date(p.endDate).getTime()
+    );
     const valid = [...dates, ...projects2].filter((n) => !isNaN(n));
     return valid.length > 0 ? new Date(Math.max(...valid)) : new Date();
-  }, [allTasks, visibleProjects]);
+  }, [allTasks, visibleProjects, selectedProject]);
 
   // Generate columns based on zoom level
   const columns = useMemo(() => {
@@ -253,7 +279,7 @@ export default function GanttPage() {
                 className="w-48 text-xs h-8"
               >
                 <option value="all">All Assignees</option>
-                {currentUserId && <option value={currentUserId}>Assigned to Me</option>}
+                {currentUserId && <option value="mine">Assigned to Me</option>}
                 <option value="unassigned">Unassigned</option>
                 {activeUsers.map((u) => (
                   <option key={u.id} value={u.id}>

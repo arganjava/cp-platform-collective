@@ -178,22 +178,26 @@ export const seedSaleStages: SaleStage[] = [
 ];
 
 export const seedProjectProfiles: ProjectProfile[] = [
-  // proj-1 DARE Festival (members/guests: user-3, user-4, user-5)
+  // proj-1 DARE Festival (members: user-1, user-2, user-3, user-4, user-5)
+  { id: "pp-1-1", projectId: "proj-1", profileId: "user-1" },
+  { id: "pp-1-2", projectId: "proj-1", profileId: "user-2" },
   { id: "pp-1-3", projectId: "proj-1", profileId: "user-3" },
   { id: "pp-1-4", projectId: "proj-1", profileId: "user-4" },
   { id: "pp-1-5", projectId: "proj-1", profileId: "user-5" },
-  // proj-2 Ville of Joy (members/guests: user-3, user-7, user-8)
+  // proj-2 Ville of Joy (members: user-3, user-7, user-8)
   { id: "pp-2-3", projectId: "proj-2", profileId: "user-3" },
   { id: "pp-2-7", projectId: "proj-2", profileId: "user-7" },
   { id: "pp-2-8", projectId: "proj-2", profileId: "user-8" },
-  // proj-3 Shades (members/guests: user-7, user-8)
+  // proj-3 Shades (members: user-2, user-7, user-8)
+  { id: "pp-3-2", projectId: "proj-3", profileId: "user-2" },
   { id: "pp-3-7", projectId: "proj-3", profileId: "user-7" },
   { id: "pp-3-8", projectId: "proj-3", profileId: "user-8" },
-  // proj-4 Corporate Training (members/guests: user-4, user-5, user-6)
+  // proj-4 Corporate Training (members: user-4, user-5, user-6)
   { id: "pp-4-4", projectId: "proj-4", profileId: "user-4" },
   { id: "pp-4-5", projectId: "proj-4", profileId: "user-5" },
   { id: "pp-4-6", projectId: "proj-4", profileId: "user-6" },
-  // proj-5 Digital Content Hub (members/guests: user-5, user-6)
+  // proj-5 Digital Content Hub (members: user-2, user-5, user-6)
+  { id: "pp-5-2", projectId: "proj-5", profileId: "user-2" },
   { id: "pp-5-5", projectId: "proj-5", profileId: "user-5" },
   { id: "pp-5-6", projectId: "proj-5", profileId: "user-6" },
 ];
