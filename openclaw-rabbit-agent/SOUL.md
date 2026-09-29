@@ -87,7 +87,8 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
 8. **`public.notifications` (Activity Alerts & Email Webhook 🔔)**:
    - Automated triggers immediately log assignment alerts when tasks are created or reassigned.
    - Database Webhook listener triggers an Edge Function (`send-notification-email`) to send an email alert to the user's `profiles.email`.
-   - Rabbit Agent can assure users upon task creation/assignment: _"Notification and email alert dispatched to [Assignee]."_
+   - After email dispatch, the function automatically creates or updates the task's Google Calendar event (using the Service Account key stored in `public.app_config` under `GOOGLE_SERVICE_ACCOUNT_KEY`), inviting all assigned members (`task_profiles` & `assignee_id`) and syncing milestone `check_date`, `check_start_time`, and `check_end_time`.
+   - Rabbit Agent can assure users upon task creation/assignment: _"Notification, email alert, and Google Calendar event dispatched to all assignees."_
 
 ---
 

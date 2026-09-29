@@ -49,6 +49,7 @@ interface WebhookPayload {
   recipient_emails?: string[];
   message?: string;
   related_id?: string | null;
+  task_id?: string | null;
   all_assignees?: boolean;
 }
 
@@ -69,6 +70,330 @@ interface ResolvedRecipient {
   name: string;
   notificationId?: string;
   message?: string;
+}
+
+interface CalendarSyncResult {
+  status: "created" | "updated" | "skipped" | "failed";
+  calendarEventId?: string | null;
+  error?: string;
+}
+
+/**
+ * Pustaka Google Auth khusus untuk runtime Deno / Edge.
+ * Menginisialisasi autentikasi Google JWT Service Account dan mendapatkan token akses yang valid secara otomatis.
+ */
+export class GoogleAuth {
+  private scope: string[];
+  private credentials: {
+    client_email?: string;
+    private_key?: string;
+  };
+
+  constructor(options: {
+    scope?: string[];
+    credentials: { client_email?: string; private_key?: string };
+  }) {
+    this.scope = options.scope || ["https://www.googleapis.com/auth/calendar"];
+    this.credentials = options.credentials;
+  }
+
+  async getToken(): Promise<string> {
+    if (!this.credentials?.client_email || !this.credentials?.private_key) {
+      throw new Error("Missing client_email or private_key in service account credentials");
+    }
+
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + 3600;
+
+    const header = { alg: "RS256", typ: "JWT" };
+    const claims = {
+      iss: this.credentials.client_email,
+      scope: this.scope.join(" "),
+      aud: "https://oauth2.googleapis.com/token",
+      exp,
+      iat,
+    };
+
+    const enc = new TextEncoder();
+    const b64Url = (bytes: Uint8Array) => {
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    };
+
+    const headerB64 = b64Url(enc.encode(JSON.stringify(header)));
+    const claimsB64 = b64Url(enc.encode(JSON.stringify(claims)));
+    const signingInput = `${headerB64}.${claimsB64}`;
+
+    // Normalisasi private key (baik dengan newline asli maupun newline ter-escape)
+    const rawKey = this.credentials.private_key.replace(/\\n/g, "\n");
+    const cleanPem = rawKey
+      .replace(/-----BEGIN [A-Z ]+-----/g, "")
+      .replace(/-----END [A-Z ]+-----/g, "")
+      .replace(/\s+/g, "");
+
+    const binaryDer = Uint8Array.from(atob(cleanPem), (c) => c.charCodeAt(0));
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "pkcs8",
+      binaryDer.buffer,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signatureBuffer = await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      cryptoKey,
+      enc.encode(signingInput)
+    );
+
+    const signatureB64 = b64Url(new Uint8Array(signatureBuffer));
+    const jwt = `${signingInput}.${signatureB64}`;
+
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      throw new Error(`Google token exchange failed (${tokenResponse.status}): ${errText}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    return tokenData.access_token;
+  }
+}
+
+/**
+ * Creates or updates a Google Calendar event for a given task ID.
+ * Menggunakan GoogleAuth dengan credentials dari app_config (key = GOOGLE_SERVICE_ACCOUNT_KEY).
+ */
+async function syncTaskWithGoogleCalendar(
+  supabaseAdmin: any,
+  taskId: string,
+  appUrl: string
+): Promise<CalendarSyncResult> {
+  // 1. Ambil Service Account Key dari public.app_config (fallback ke Deno.env)
+  const { data: configRow } = await supabaseAdmin
+    .from("app_config")
+    .select("value")
+    .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
+    .maybeSingle();
+
+  const serviceAccountKeyString = configRow?.value || Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+  if (!serviceAccountKeyString) {
+    console.log("[Google Calendar] Skipped: GOOGLE_SERVICE_ACCOUNT_KEY not set in app_config.");
+    return { status: "skipped", error: "GOOGLE_SERVICE_ACCOUNT_KEY not configured" };
+  }
+
+  let credentials: { client_email?: string; private_key?: string };
+  try {
+    credentials = typeof serviceAccountKeyString === "string"
+      ? JSON.parse(serviceAccountKeyString)
+      : serviceAccountKeyString;
+  } catch (parseErr) {
+    console.warn("[Google Calendar] Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON:", parseErr);
+    return { status: "failed", error: "Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON" };
+  }
+
+  if (!credentials?.client_email || !credentials?.private_key) {
+    console.warn("[Google Calendar] Service account missing client_email or private_key");
+    return { status: "failed", error: "Missing client_email or private_key in service account credentials" };
+  }
+
+  // 2. Fetch task, project, and assignees
+  const { data: task, error: taskError } = await supabaseAdmin
+    .from("tasks")
+    .select("id, title, description, status, priority, due_date, check_date, check_start_time, check_end_time, google_calendar_id, project_id, assignee_id, project:project_id(title)")
+    .eq("id", taskId)
+    .maybeSingle();
+
+  if (taskError || !task) {
+    console.warn("[Google Calendar] Could not find task with id:", taskId, taskError);
+    return { status: "skipped", error: "Task not found" };
+  }
+
+  // 3. Query all task_profiles and task.assignee_id to collect attendee emails
+  const { data: taskProfileRows } = await supabaseAdmin
+    .from("task_profiles")
+    .select("profile_id")
+    .eq("task_id", taskId);
+
+  const profileIds = new Set<string>();
+  if (task.assignee_id) profileIds.add(task.assignee_id);
+  if (Array.isArray(taskProfileRows)) {
+    for (const tp of taskProfileRows) {
+      if (tp.profile_id) profileIds.add(tp.profile_id);
+    }
+  }
+
+  const attendeeList: Array<{ email: string }> = [];
+  if (profileIds.size > 0) {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("email, is_deleted, deleted_at")
+      .in("id", Array.from(profileIds));
+
+    if (profiles) {
+      for (const p of profiles) {
+        if (p.email && !p.is_deleted && !p.deleted_at) {
+          const trimmed = p.email.trim();
+          if (trimmed && !attendeeList.some((a) => a.email.toLowerCase() === trimmed.toLowerCase())) {
+            attendeeList.push({ email: trimmed });
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Build start and end timings
+  const timeZone = "Asia/Singapore";
+  let startObj: { dateTime?: string; date?: string; timeZone?: string };
+  let endObj: { dateTime?: string; date?: string; timeZone?: string };
+
+  if (task.check_start_time) {
+    const startDate = new Date(task.check_start_time);
+    const startIso = isNaN(startDate.getTime())
+      ? `${String(task.check_start_time).split("T")[0]}T09:00:00+08:00`
+      : startDate.toISOString();
+
+    let endIso: string;
+    if (task.check_end_time) {
+      const endDate = new Date(task.check_end_time);
+      endIso = isNaN(endDate.getTime())
+        ? `${String(task.check_end_time).split("T")[0]}T10:00:00+08:00`
+        : endDate.toISOString();
+    } else {
+      endIso = new Date(new Date(startIso).getTime() + 60 * 60 * 1000).toISOString();
+    }
+    startObj = { dateTime: startIso, timeZone };
+    endObj = { dateTime: endIso, timeZone };
+  } else if (task.check_date) {
+    startObj = { dateTime: `${task.check_date}T09:00:00+08:00`, timeZone };
+    endObj = { dateTime: `${task.check_date}T10:00:00+08:00`, timeZone };
+  } else if (task.due_date) {
+    startObj = { dateTime: `${task.due_date}T09:00:00+08:00`, timeZone };
+    endObj = { dateTime: `${task.due_date}T10:00:00+08:00`, timeZone };
+  } else {
+    const today = new Date().toISOString().split("T")[0];
+    startObj = { dateTime: `${today}T09:00:00+08:00`, timeZone };
+    endObj = { dateTime: `${today}T10:00:00+08:00`, timeZone };
+  }
+
+  // 5. Build Event Title and Description
+  const projTitle = (task.project as { title?: string } | null)?.title || null;
+  const eventSummary = projTitle ? `[${projTitle}] ${task.title}` : task.title;
+
+  const descParts: string[] = [];
+  if (task.description) descParts.push(task.description);
+  descParts.push("");
+  if (projTitle) descParts.push(`Project: ${projTitle}`);
+  if (task.priority) descParts.push(`Priority: ${task.priority.toUpperCase()}`);
+  if (task.status) descParts.push(`Status: ${task.status}`);
+  if (task.check_date) descParts.push(`🚩 Milestone Check Date: ${task.check_date}`);
+  if (task.check_start_time) descParts.push(`Check Start: ${task.check_start_time}`);
+  if (task.check_end_time) descParts.push(`Check End: ${task.check_end_time}`);
+  if (task.due_date) descParts.push(`Due Date: ${task.due_date}`);
+  descParts.push(`Link: ${appUrl}/tasks`);
+  const eventDescription = descParts.join("\n");
+
+  const eventPayload: Record<string, any> = {
+    summary: eventSummary,
+    description: eventDescription,
+    start: startObj,
+    end: endObj,
+  };
+
+  if (attendeeList.length > 0) {
+    eventPayload.attendees = attendeeList;
+  }
+
+  // 6. Inisialisasi Autentikasi Google JWT
+  const auth = new GoogleAuth({
+    scope: ["https://www.googleapis.com/auth/calendar"],
+    credentials,
+  });
+
+  // Mendapatkan token akses yang valid secara otomatis
+  const token = await auth.getToken();
+
+  // 7. Panggil HTTP REST API Google Calendar langsung
+  const calendarId = "primary";
+  let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+  let method = "POST";
+
+  // Jika operasinya adalah UPDATE, sesuaikan URL dan Method HTTP
+  if (task.google_calendar_id) {
+    url = `${url}/${encodeURIComponent(task.google_calendar_id)}`;
+    method = "PUT";
+  }
+
+  try {
+    const response = await fetch(`${url}?sendUpdates=all`, {
+      method,
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(eventPayload),
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      const eventId = result.id || task.google_calendar_id;
+      if (!task.google_calendar_id && result.id) {
+        await supabaseAdmin
+          .from("tasks")
+          .update({ google_calendar_id: result.id })
+          .eq("id", taskId);
+        console.log(`[Google Calendar] Created event ${result.id} and linked to task ${taskId}`);
+      } else {
+        console.log(`[Google Calendar] Updated event ${eventId} for task ${taskId}`);
+      }
+      return {
+        status: method === "PUT" ? "updated" : "created",
+        calendarEventId: eventId,
+      };
+    }
+
+    // Jika update menghasilkan 404 (event dihapus di calendar), create ulang
+    if (method === "PUT" && response.status === 404) {
+      console.log(`[Google Calendar] Event ${task.google_calendar_id} not found on calendar. Recreating...`);
+      const createUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`;
+      const createRes = await fetch(createUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(eventPayload),
+      });
+      const createResult = await createRes.json();
+      if (createRes.ok && createResult.id) {
+        await supabaseAdmin
+          .from("tasks")
+          .update({ google_calendar_id: createResult.id })
+          .eq("id", taskId);
+        return { status: "created", calendarEventId: createResult.id };
+      }
+    }
+
+    const errDetail = typeof result === "object" ? JSON.stringify(result) : String(result);
+    console.warn(`[Google Calendar] Calendar API returned error (${response.status}):`, errDetail);
+    return { status: "failed", error: errDetail };
+  } catch (calError: any) {
+    console.warn("[Google Calendar] Error calling Google Calendar API:", calError);
+    return { status: "failed", error: calError?.message || String(calError) };
+  }
 }
 
 serve(async (req: Request) => {
@@ -179,7 +504,7 @@ serve(async (req: Request) => {
     }
 
     const defaultMessage = body.message || singleRecord?.message || "You have a new update in Collective Perspectives.";
-    const relatedId = body.related_id || singleRecord?.related_id || null;
+    const relatedId = body.related_id || body.task_id || singleRecord?.related_id || null;
     const notifType = singleRecord?.type || "assignment";
 
     // If related task is present and all_assignees is requested (or no recipients specified)
@@ -498,6 +823,20 @@ Collective Perspectives • Singapore
       }
     }
 
+    // 5. Synchronize task with Google Calendar (Create or Update based on relatedId/task id)
+    let calendarSyncResult: CalendarSyncResult = { status: "skipped" };
+    if (supabaseAdmin && relatedId) {
+      try {
+        calendarSyncResult = await syncTaskWithGoogleCalendar(supabaseAdmin, relatedId, appUrl);
+      } catch (calErr) {
+        console.error("[send-notification-email] Error during Google Calendar sync:", calErr);
+        calendarSyncResult = {
+          status: "failed",
+          error: calErr instanceof Error ? calErr.message : String(calErr),
+        };
+      }
+    }
+
     const sentCount = dispatchResults.filter((r) => r.status === "sent").length;
     const simulatedCount = dispatchResults.filter((r) => r.status === "simulated").length;
     const failedCount = dispatchResults.filter((r) => r.status === "failed").length;
@@ -524,6 +863,7 @@ Collective Perspectives • Singapore
           name: dispatchResults[0]?.name,
         },
         subject: emailSubject,
+        calendar: calendarSyncResult,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

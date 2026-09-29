@@ -1,0 +1,199 @@
+// Supabase Edge Function: manage-calendar
+// Location: supabase/functions/manage-calendar/index.ts
+//
+// Standalone Edge Function for Google Calendar event management using GoogleAuth
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+/**
+ * Pustaka Google Auth khusus untuk runtime Deno / Edge.
+ * Menginisialisasi autentikasi Google JWT Service Account dan mendapatkan token akses yang valid secara otomatis.
+ */
+export class GoogleAuth {
+  private scope: string[];
+  private credentials: {
+    client_email?: string;
+    private_key?: string;
+  };
+
+  constructor(options: {
+    scope?: string[];
+    credentials: { client_email?: string; private_key?: string };
+  }) {
+    this.scope = options.scope || ["https://www.googleapis.com/auth/calendar"];
+    this.credentials = options.credentials;
+  }
+
+  async getToken(): Promise<string> {
+    if (!this.credentials?.client_email || !this.credentials?.private_key) {
+      throw new Error("Missing client_email or private_key in service account credentials");
+    }
+
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + 3600;
+
+    const header = { alg: "RS256", typ: "JWT" };
+    const claims = {
+      iss: this.credentials.client_email,
+      scope: this.scope.join(" "),
+      aud: "https://oauth2.googleapis.com/token",
+      exp,
+      iat,
+    };
+
+    const enc = new TextEncoder();
+    const b64Url = (bytes: Uint8Array) => {
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    };
+
+    const headerB64 = b64Url(enc.encode(JSON.stringify(header)));
+    const claimsB64 = b64Url(enc.encode(JSON.stringify(claims)));
+    const signingInput = `${headerB64}.${claimsB64}`;
+
+    // Normalisasi private key (baik dengan newline asli maupun newline ter-escape)
+    const rawKey = this.credentials.private_key.replace(/\\n/g, "\n");
+    const cleanPem = rawKey
+      .replace(/-----BEGIN [A-Z ]+-----/g, "")
+      .replace(/-----END [A-Z ]+-----/g, "")
+      .replace(/\s+/g, "");
+
+    const binaryDer = Uint8Array.from(atob(cleanPem), (c) => c.charCodeAt(0));
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "pkcs8",
+      binaryDer.buffer,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signatureBuffer = await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      cryptoKey,
+      enc.encode(signingInput)
+    );
+
+    const signatureB64 = b64Url(new Uint8Array(signatureBuffer));
+    const jwt = `${signingInput}.${signatureB64}`;
+
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      throw new Error(`Google token exchange failed (${tokenResponse.status}): ${errText}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    return tokenData.access_token;
+  }
+}
+
+serve(async (req: Request) => {
+  // Menangani preflight request CORS
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const { action, calendarId = "primary", eventId, eventData } = await req.json();
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    let credentials: any = null;
+
+    // 1. Ambil Service Account Key dari public.app_config (fallback ke Deno.env)
+    if (supabaseUrl && supabaseServiceKey) {
+      try {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { data: configRow } = await supabaseAdmin
+          .from("app_config")
+          .select("value")
+          .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
+          .maybeSingle();
+
+        if (configRow?.value) {
+          credentials = typeof configRow.value === "string" ? JSON.parse(configRow.value) : configRow.value;
+        }
+      } catch (dbErr) {
+        console.warn("Could not query GOOGLE_SERVICE_ACCOUNT_KEY from app_config:", dbErr);
+      }
+    }
+
+    if (!credentials) {
+      const serviceAccountKeyString = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+      if (!serviceAccountKeyString) {
+        throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY in app_config or environment secret");
+      }
+      credentials = typeof serviceAccountKeyString === "string" ? JSON.parse(serviceAccountKeyString) : serviceAccountKeyString;
+    }
+
+    // 2. Inisialisasi Autentikasi Google JWT
+    const auth = new GoogleAuth({
+      scope: ["https://www.googleapis.com/auth/calendar"],
+      credentials,
+    });
+
+    // Mendapatkan token akses yang valid secara otomatis
+    const token = await auth.getToken();
+
+    let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+    let method = "POST";
+
+    // Jika operasinya adalah UPDATE, sesuaikan URL dan Method HTTP
+    if (action === "update") {
+      if (!eventId) throw new Error("eventId is required for update action");
+      url = `${url}/${encodeURIComponent(eventId)}`;
+      method = "PUT";
+    }
+
+    // 3. Panggil HTTP REST API Google Calendar langsung
+    const response = await fetch(`${url}?sendUpdates=all`, {
+      method: method,
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(eventData),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      return new Response(JSON.stringify({ error: result }), {
+        status: response.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true, data: result }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
