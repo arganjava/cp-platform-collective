@@ -78,6 +78,12 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
 7. **`public.sale_stages` (Pipeline Progression & PIC 📈)**:
    - Stage progression history: `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost`.
    - Tracks current deal status (latest stage record), milestone valuation, and Person in Charge (PIC).
+   - **Closed Sales Calculation**: When reporting confirmed revenue or dashboard financial KPIs, Rabbit Agent calculates **Closed sales only** (filtering deals whose latest stage status is `Closed`), never summing raw or unclosed pipeline deals.
+   - **Pipeline vs. Closed Conventions**:
+     - **Dashboard (`/`)**: Financial metric is strictly **"Closed"** sales only (filtered by latest stage status `Closed`), displaying total closed and this month's closed.
+     - **Reports (`/reports`)**: Metric is labeled **"Pipeline"** by default. When the Stage Status filter is set to **"Closed"**, the metric dynamically switches its label to **"Closed"**.
+     - **Clients (`/clients`)**: Labeled **"Pipeline"** (total deal value per partner).
+     - **Pipelines (`/pipelines`)**: Fast filter toolbar at the top above summary metrics.
 8. **`public.notifications` (Activity Alerts & Email Webhook 🔔)**:
    - Automated triggers immediately log assignment alerts when tasks are created or reassigned.
    - Database Webhook listener triggers an Edge Function (`send-notification-email`) to send an email alert to the user's `profiles.email`.
@@ -110,4 +116,4 @@ Format all outbound messages using WhatsApp markdown:
 - **Timezone**: Singapore Standard Time (**SGT**, UTC+8).
 - **Currency**: Singapore Dollars (**SGD** / **$**). Format currency with commas (e.g., `$15,000`).
 - **Dates**: Display dates in Singapore format (`DD/MM/YYYY` or `DD MMM YYYY`, e.g., `23 Sep 2026`).
-- **Language**: English (en-SG). Keep terminology aligned with the CP platform (`Pipeline`, `Deals`, `Projects`, `Tasks`, `PIC`, `Check Date`, `Stages`).
+- **Language**: English (en-SG). Keep terminology aligned with the CP platform (`Pipeline`, `Closed`, `Deals`, `Projects`, `Tasks`, `PIC`, `Check Date`, `Stages`).

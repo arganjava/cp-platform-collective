@@ -45,14 +45,14 @@ The Collective Perspectives web cockpit is structured into core operational modu
 
 | Route | Cockpit Module | Purpose & Table Mapping |
 | :--- | :--- | :--- |
-| `/` | **Executive Dashboard** | High-level KPIs, active projects, pipeline funnel, revenue totals, upcoming milestones, recent team activity. |
+| `/` | **Executive Dashboard** | High-level KPIs, active projects, pipeline funnel, closed sales metric (calculates **Closed sales only** where latest stage is `Closed`), upcoming milestones, recent team activity. |
 | `/projects` | **Project Portfolio** | Creative exhibitions, workshops, and commissions. Tracks budget, status, timeline, and team roster via `project_profiles`. |
 | `/tasks` | **Task Workspace** | Interactive list and Kanban boards. Features priority levels, due dates, **milestone check dates (🚩)**, and **multiple labeled links (JSONB)**. |
 | `/gantt` | **Interactive Gantt** | Timeline and scheduling engine with milestone flags (`check_date`), dependency awareness, and direct resource links. |
-| `/pipelines` & `/sales` | **Sales Pipeline** | Commercial deals and sponsorship tracker. Tracks progression through `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost` with PIC and value history in `sale_stages`. |
-| `/clients` | **Client Directory** | Corporate partners, arts councils, and commissioners. Tracks relationship history, contacts, and linked deal revenue. |
+| `/pipelines` & `/sales` | **Sales Pipeline** | Commercial deals and sponsorship tracker with top filter toolbar. Tracks progression through `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost` with PIC and value history in `sale_stages`. |
+| `/clients` | **Client Directory** | Corporate partners, arts councils, and commissioners. Tracks relationship history, contacts, and linked deal **Pipeline** (formerly Total Revenue). |
 | `/users` | **Team Roster** | Member management, avatar colors, contact info, and Role-Based Access Control (`admin`, `member`, `guest`). |
-| `/reports` | **Impact & Finance Reports**| Revenue breakdowns in SGD, deal conversion rates, and project delivery progress. |
+| `/reports` | **Impact & Finance Reports**| Delivery and financial reports. Financial metric is labeled **"Pipeline"** by default; if Stage Status filter is selected as **"Closed"**, the metric dynamically renames to **"Closed"**. |
 
 ---
 
@@ -376,6 +376,94 @@ left join lateral (
 ) st on true
 left join public.profiles pic on st.pic_profile_id = pic.id
 order by s.created_at desc;
+```
+
+### 4b. READ: Closed Sales Only (Executive Dashboard Financial Metric)
+The Dashboard (`/`) calculates confirmed closed revenue **only**—filtering sales whose latest stage (`sale_stages.status`) is `Closed`, rather than summing raw deals. It also calculates this month's closed sales:
+```sql
+-- 1. All Closed Sales with latest stage
+select 
+  s.id,
+  coalesce(s.amount, st.value, 0) as amount,
+  s.date as sale_date,
+  st.date as stage_date,
+  st.created_at as stage_created_at,
+  c.name as client_name,
+  p.title as project_title,
+  st.status as stage_status,
+  pic.name as pic_name
+from public.sales s
+join lateral (
+  select status, value, pic_profile_id, date, created_at
+  from public.sale_stages
+  where sale_id = s.id
+  order by created_at desc
+  limit 1
+) st on st.status = 'Closed'
+left join public.clients c on s.client_id = c.id
+left join public.projects p on s.project_id = p.id
+left join public.profiles pic on st.pic_profile_id = pic.id
+order by coalesce(st.date, st.created_at) desc;
+
+-- 2. Aggregate Total Closed & This Month's Closed
+select 
+  coalesce(sum(s.amount), 0) as total_closed,
+  coalesce(sum(case 
+    when date_trunc('month', coalesce(st.date, st.created_at)) = date_trunc('month', now()) 
+    then s.amount else 0 
+  end), 0) as this_month_closed
+from public.sales s
+join lateral (
+  select status, date, created_at
+  from public.sale_stages
+  where sale_id = s.id
+  order by created_at desc
+  limit 1
+) st on st.status = 'Closed';
+```
+
+### 4c. READ: Reports Financial Metric (`/reports`) — Pipeline vs Closed
+On `/reports`:
+- By default, the metric is **Pipeline** (sum of all deals matching selected project/period filters).
+- If the Stage Status filter is set to **`Closed`**, the metric label is dynamically renamed to **"Closed"** and only closed deals are summed.
+```sql
+-- Dynamic Reports Filter:
+-- When stage_status filter is 'all': Label = "Pipeline", sums all deals in range.
+-- When stage_status filter is 'Closed': Label = "Closed", sums only deals whose latest stage is 'Closed'.
+select 
+  s.id,
+  s.amount,
+  s.date,
+  s.type,
+  c.name as client_name,
+  p.title as project_title,
+  st.status as stage_status
+from public.sales s
+left join public.clients c on s.client_id = c.id
+left join public.projects p on s.project_id = p.id
+left join lateral (
+  select status, created_at
+  from public.sale_stages
+  where sale_id = s.id
+  order by created_at desc
+  limit 1
+) st on true
+where (:stage_filter = 'all' or st.status = :stage_filter)
+  and (:project_id = 'all' or s.project_id = :project_id);
+```
+
+### 4d. READ: Client Directory Pipeline Summary (`/clients`)
+On `/clients`, total commercial volume is labeled **"Pipeline"** (formerly "Total Revenue"):
+```sql
+select 
+  c.id,
+  c.name,
+  count(s.id) as deals_count,
+  coalesce(sum(s.amount), 0) as client_pipeline
+from public.clients c
+left join public.sales s on s.client_id = c.id
+group by c.id, c.name
+order by client_pipeline desc;
 ```
 
 ### 5. CREATE: New Commercial Opportunity with Client Resolution & Initial Stage

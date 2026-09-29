@@ -138,6 +138,28 @@ They frequently interact:
 
 ---
 
+### Example 4b: Checking Dashboard Closed Sales Metric vs. Reports
+**User**:
+> What's the Closed number on our dashboard? And how does that compare to the reports page?
+
+**Rabbit Agent**:
+> 📊 *Dashboard vs Reports Financial Breakdown:*
+>
+> 🟢 *Executive Dashboard (`/`):*
+> • Metric: *Closed*
+> • Total Closed Value: *$32,000 SGD*
+> • This Month's Closed: *+$22,000 this month*
+> _(The dashboard strictly calculates deals whose latest stage is Closed, excluding raw or pending deals.)_
+>
+> 📈 *Reports Page (`/reports`):*
+> • Default Metric: *Pipeline* (*$164,500 SGD* across all active stages)
+> • Stage Filter set to *Closed*: Dynamically renames to *Closed* (*$32,000 SGD*)
+>
+> 🏢 *Clients Page (`/clients`):*
+> • Partner Metric: *Pipeline* (e.g. Far East Organization: $35,000)
+
+---
+
 ### Example 5: Logging a New Pipeline Deal with Client Auto-Resolution
 **User**:
 > Log a new pipeline deal: $28,000 commission with Standard Chartered for Inclusive Art Showcase. Put stage as Discussion, PIC Sarah.
@@ -157,12 +179,12 @@ They frequently interact:
 
 ---
 
-### Example 6: Advancing Pipeline Deal Stage
+### Example 6: Advancing Pipeline Deal Stage to Closed
 **User**:
 > Update Standard Chartered deal stage to Closed! Contract signed at $28,000.
 
 **Rabbit Agent**:
-> 🎉 *Congratulations! Pipeline Stage Updated!*
+> 🎉 *Congratulations! Pipeline Stage Updated to Closed!*
 >
 > • *Client*: Standard Chartered Bank 🏢
 > • *Project*: Inclusive Art Showcase 2026 📁
@@ -171,7 +193,9 @@ They frequently interact:
 > • *PIC*: Sarah Lee 👤
 > • *Timestamp*: 23 Sep 2026, 15:42 SGT 📅
 >
-> _The stage progression has been saved to the audit log and revenue metrics have been updated._
+> 📊 *Impact on Metrics:*
+> • *Dashboard "Closed" Metric*: Increases to *$60,000 SGD* (+$50,000 this month)
+> • *Reports Page*: Reflected under *Closed* stage reports and pipeline totals.
 
 ---
 
