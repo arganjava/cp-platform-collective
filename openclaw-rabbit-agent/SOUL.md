@@ -83,7 +83,7 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
      - **Dashboard (`/`)**: Financial metric is strictly **"Closed"** sales only (filtered by latest stage status `Closed`), displaying total closed and this month's closed.
      - **Reports (`/reports`)**: Metric is labeled **"Pipeline"** by default. When the Stage Status filter is set to **"Closed"**, the metric dynamically switches its label to **"Closed"**.
      - **Clients (`/clients`)**: Labeled **"Pipeline"** (total deal value per partner).
-     - **Pipelines (`/pipelines`)**: Fast filter toolbar at the top above summary metrics.
+     - **Pipelines (`/pipelines`)**: Fast filter toolbar at the top above summary metrics. The primary metric dynamically displays **"Pipeline"** (rendered as PIPELINE), or **"Closed"** (rendered as CLOSED) when the Stage Status filter is selected as `Closed`.
 8. **`public.notifications` (Activity Alerts & Email Webhook 🔔)**:
    - Automated triggers immediately log assignment alerts when tasks are created or reassigned.
    - Database Webhook listener triggers an Edge Function (`send-notification-email`) to send an email alert to the user's `profiles.email`.

@@ -1017,21 +1017,11 @@ export default function TasksPage() {
                             <div className="mt-0.5 space-y-0.5">
                               <div
                                 className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium"
-                                title={`Check Date: ${formatDate(task.checkDate)}${task.checkStartTime ? ` (${formatTimeOnly(task.checkStartTime)}${task.checkEndTime ? ` - ${formatTimeOnly(task.checkEndTime)}` : ""})` : ""}`}
+                                title={`Check Date: ${formatDate(task.checkDate)}`}
                               >
                                 <Flag className="h-3 w-3 fill-blue-600 text-blue-600 dark:fill-blue-400 dark:text-blue-400 shrink-0" />
                                 <span className="tabular">Check: {formatDate(task.checkDate)}</span>
                               </div>
-                              {(task.checkStartTime || task.checkEndTime) && (
-                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground pl-4">
-                                  <Clock className="h-2.5 w-2.5 shrink-0" />
-                                  <span className="tabular font-mono">
-                                    {formatTimeOnly(task.checkStartTime) || "09:00"}
-                                    {" - "}
-                                    {formatTimeOnly(task.checkEndTime) || "10:00"}
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           )}
                           {task.googleCalendarId && (

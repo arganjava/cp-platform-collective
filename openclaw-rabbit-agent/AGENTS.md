@@ -49,7 +49,7 @@ The Collective Perspectives web cockpit is structured into core operational modu
 | `/projects` | **Project Portfolio** | Creative exhibitions, workshops, and commissions. Tracks budget, status, timeline, and team roster via `project_profiles`. |
 | `/tasks` | **Task Workspace** | Interactive list and Kanban boards. Features priority levels, due dates, **milestone check dates (🚩)**, and **multiple labeled links (JSONB)**. |
 | `/gantt` | **Interactive Gantt** | Timeline and scheduling engine with milestone flags (`check_date`), dependency awareness, and direct resource links. |
-| `/pipelines` & `/sales` | **Sales Pipeline** | Commercial deals and sponsorship tracker with top filter toolbar. Tracks progression through `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost` with PIC and value history in `sale_stages`. |
+| `/pipelines` & `/sales` | **Sales Pipeline** | Commercial deals and sponsorship tracker with top filter toolbar. Summary metric dynamically displays **"Pipeline"** (PIPELINE) by default, or **"Closed"** (CLOSED) when Stage Status filter is set to Closed. Tracks progression through `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost` with PIC and value history in `sale_stages`. |
 | `/clients` | **Client Directory** | Corporate partners, arts councils, and commissioners. Tracks relationship history, contacts, and linked deal **Pipeline** (formerly Total Revenue). |
 | `/users` | **Team Roster** | Member management, avatar colors, contact info, and Role-Based Access Control (`admin`, `member`, `guest`). |
 | `/reports` | **Impact & Finance Reports**| Delivery and financial reports. Financial metric is labeled **"Pipeline"** by default; if Stage Status filter is selected as **"Closed"**, the metric dynamically renames to **"Closed"**. |

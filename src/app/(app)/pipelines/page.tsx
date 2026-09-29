@@ -468,7 +468,7 @@ export default function PipelinesPage() {
           <SummaryMetric
             id="pipelines-metric-total"
             value={`$${totalRevenue.toLocaleString()}`}
-            label="Total"
+            label={filterStageStatus === "Closed" ? "Closed" : "Pipeline"}
             indicator={<Badge variant="neutral">{filteredSales.length} deals</Badge>}
           />
           <SummaryMetric value={`$${Math.round(avgDeal).toLocaleString()}`} label="Average Deal" />
