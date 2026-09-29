@@ -118,44 +118,63 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    let apiKey: string | null = null;
     let credentials: any = null;
 
-    // 1. Ambil Service Account Key dari public.app_config (fallback ke Deno.env)
+    // 1. Ambil GOOGLE_CALENDAR_API_KEY atau Service Account Key dari public.app_config (fallback ke Deno.env)
     if (supabaseUrl && supabaseServiceKey) {
       try {
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
           auth: { autoRefreshToken: false, persistSession: false },
         });
-        const { data: configRow } = await supabaseAdmin
+
+        const { data: apiKeyRow } = await supabaseAdmin
           .from("app_config")
           .select("value")
-          .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
+          .eq("key", "GOOGLE_CALENDAR_API_KEY")
           .maybeSingle();
 
-        if (configRow?.value) {
-          credentials = typeof configRow.value === "string" ? JSON.parse(configRow.value) : configRow.value;
+        if (apiKeyRow?.value) {
+          apiKey = apiKeyRow.value;
+        } else {
+          const { data: configRow } = await supabaseAdmin
+            .from("app_config")
+            .select("value")
+            .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
+            .maybeSingle();
+
+          if (configRow?.value) {
+            credentials = typeof configRow.value === "string" ? JSON.parse(configRow.value) : configRow.value;
+          }
         }
       } catch (dbErr) {
-        console.warn("Could not query GOOGLE_SERVICE_ACCOUNT_KEY from app_config:", dbErr);
+        console.warn("Could not query Google credentials from app_config:", dbErr);
       }
     }
 
-    if (!credentials) {
-      const serviceAccountKeyString = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-      if (!serviceAccountKeyString) {
-        throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_KEY in app_config or environment secret");
+    if (!apiKey && !credentials) {
+      apiKey = Deno.env.get("GOOGLE_CALENDAR_API_KEY") || null;
+      if (!apiKey) {
+        const serviceAccountKeyString = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
+        if (serviceAccountKeyString) {
+          credentials = typeof serviceAccountKeyString === "string" ? JSON.parse(serviceAccountKeyString) : serviceAccountKeyString;
+        }
       }
-      credentials = typeof serviceAccountKeyString === "string" ? JSON.parse(serviceAccountKeyString) : serviceAccountKeyString;
     }
 
-    // 2. Inisialisasi Autentikasi Google JWT
-    const auth = new GoogleAuth({
-      scope: ["https://www.googleapis.com/auth/calendar"],
-      credentials,
-    });
+    if (!apiKey && !credentials) {
+      throw new Error("Missing GOOGLE_CALENDAR_API_KEY or GOOGLE_SERVICE_ACCOUNT_KEY in app_config or environment secrets");
+    }
 
-    // Mendapatkan token akses yang valid secara otomatis
-    const token = await auth.getToken();
+    // 2. Inisialisasi Autentikasi Google: Token via Service Account jika menggunakan JWT, atau API Key langsung
+    let token: string | null = null;
+    if (!apiKey && credentials) {
+      const auth = new GoogleAuth({
+        scope: ["https://www.googleapis.com/auth/calendar"],
+        credentials,
+      });
+      token = await auth.getToken();
+    }
 
     let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
     let method = "POST";
@@ -167,13 +186,25 @@ serve(async (req: Request) => {
       method = "PUT";
     }
 
+    const queryParams = new URLSearchParams({ sendUpdates: "all" });
+    if (apiKey) {
+      queryParams.set("key", apiKey);
+    }
+
+    const requestHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      requestHeaders["X-Goog-Api-Key"] = apiKey;
+    }
+    if (token) {
+      requestHeaders["Authorization"] = `Bearer ${token}`;
+    }
+
     // 3. Panggil HTTP REST API Google Calendar langsung
-    const response = await fetch(`${url}?sendUpdates=all`, {
+    const response = await fetch(`${url}?${queryParams.toString()}`, {
       method: method,
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: requestHeaders,
       body: JSON.stringify(eventData),
     });
 

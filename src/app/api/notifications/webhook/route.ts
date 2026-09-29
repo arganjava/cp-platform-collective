@@ -162,37 +162,51 @@ class GoogleAuth {
 
 /**
  * Creates or updates a Google Calendar event for a given task ID.
- * Menggunakan GoogleAuth dengan credentials dari app_config (key = GOOGLE_SERVICE_ACCOUNT_KEY).
+ * Menggunakan API Key dari app_config (key = GOOGLE_CALENDAR_API_KEY)
+ * atau fallback ke Service Account Key (key = GOOGLE_SERVICE_ACCOUNT_KEY).
  */
 async function syncTaskWithGoogleCalendar(
   supabaseAdmin: any,
   taskId: string,
   appUrl: string
 ): Promise<CalendarSyncResult> {
-  // 1. Fetch GOOGLE_SERVICE_ACCOUNT_KEY from app_config (fallback ke process.env)
-  const { data: configRow } = await supabaseAdmin
+  // 1. Fetch GOOGLE_CALENDAR_API_KEY from app_config (fallback ke process.env)
+  const { data: apiKeyRow } = await supabaseAdmin
     .from("app_config")
     .select("value")
-    .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
+    .eq("key", "GOOGLE_CALENDAR_API_KEY")
     .maybeSingle();
 
-  const serviceAccountKeyString = configRow?.value || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountKeyString) {
-    return { status: "skipped", error: "GOOGLE_SERVICE_ACCOUNT_KEY not configured in app_config" };
-  }
+  const apiKey = apiKeyRow?.value || process.env.GOOGLE_CALENDAR_API_KEY;
 
-  let credentials: { client_email?: string; private_key?: string };
-  try {
-    credentials = typeof serviceAccountKeyString === "string"
-      ? JSON.parse(serviceAccountKeyString)
-      : serviceAccountKeyString;
-  } catch (parseErr) {
-    console.warn("[Google Calendar] Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON:", parseErr);
-    return { status: "failed", error: "Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON" };
-  }
+  let serviceAccountKeyString: string | null = null;
+  let credentials: { client_email?: string; private_key?: string } | null = null;
 
-  if (!credentials?.client_email || !credentials?.private_key) {
-    return { status: "failed", error: "Missing client_email or private_key in service account credentials" };
+  if (!apiKey) {
+    // Fallback: periksa GOOGLE_SERVICE_ACCOUNT_KEY jika API Key tidak disetel
+    const { data: configRow } = await supabaseAdmin
+      .from("app_config")
+      .select("value")
+      .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
+      .maybeSingle();
+
+    serviceAccountKeyString = configRow?.value || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (!serviceAccountKeyString) {
+      return { status: "skipped", error: "GOOGLE_CALENDAR_API_KEY not configured in app_config" };
+    }
+
+    try {
+      credentials = typeof serviceAccountKeyString === "string"
+        ? JSON.parse(serviceAccountKeyString)
+        : serviceAccountKeyString;
+    } catch (parseErr) {
+      console.warn("[Google Calendar] Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON:", parseErr);
+      return { status: "failed", error: "Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON" };
+    }
+
+    if (!credentials?.client_email || !credentials?.private_key) {
+      return { status: "failed", error: "Missing client_email or private_key in service account credentials" };
+    }
   }
 
   // 2. Fetch task, project, and assignees
@@ -301,15 +315,26 @@ async function syncTaskWithGoogleCalendar(
     eventPayload.attendees = attendeeList;
   }
 
-  // 6. Inisialisasi Autentikasi Google JWT & dapatkan token akses
-  const auth = new GoogleAuth({
-    scope: ["https://www.googleapis.com/auth/calendar"],
-    credentials,
-  });
-  const token = await auth.getToken();
+  // 6. Inisialisasi Autentikasi: Token via Service Account jika menggunakan JWT, atau API Key langsung
+  let token: string | null = null;
+  if (!apiKey && credentials) {
+    const auth = new GoogleAuth({
+      scope: ["https://www.googleapis.com/auth/calendar"],
+      credentials,
+    });
+    token = await auth.getToken();
+  }
 
-  // 7. Panggil HTTP REST API Google Calendar langsung
-  const calendarId = "primary";
+  // 7. Ambil Calendar ID (default: "primary")
+  const { data: calConfigRow } = await supabaseAdmin
+    .from("app_config")
+    .select("value")
+    .eq("key", "GOOGLE_CALENDAR_ID")
+    .maybeSingle();
+
+  const calendarId = calConfigRow?.value || process.env.GOOGLE_CALENDAR_ID || "primary";
+
+  // 8. Panggil HTTP REST API Google Calendar
   let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
   let method = "POST";
 
@@ -319,13 +344,25 @@ async function syncTaskWithGoogleCalendar(
     method = "PUT";
   }
 
+  const queryParams = new URLSearchParams({ sendUpdates: "all" });
+  if (apiKey) {
+    queryParams.set("key", apiKey);
+  }
+
+  const requestHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    requestHeaders["X-Goog-Api-Key"] = apiKey;
+  }
+  if (token) {
+    requestHeaders["Authorization"] = `Bearer ${token}`;
+  }
+
   try {
-    const response = await fetch(`${url}?sendUpdates=all`, {
+    const response = await fetch(`${url}?${queryParams.toString()}`, {
       method,
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: requestHeaders,
       body: JSON.stringify(eventPayload),
     });
 
@@ -347,13 +384,14 @@ async function syncTaskWithGoogleCalendar(
 
     if (method === "PUT" && response.status === 404) {
       console.log(`[Google Calendar] Event ${task.google_calendar_id} not found on calendar. Recreating...`);
-      const createUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`;
+      const createQueryParams = new URLSearchParams({ sendUpdates: "all" });
+      if (apiKey) {
+        createQueryParams.set("key", apiKey);
+      }
+      const createUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${createQueryParams.toString()}`;
       const createRes = await fetch(createUrl, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: requestHeaders,
         body: JSON.stringify(eventPayload),
       });
       const createResult = await createRes.json();

@@ -354,4 +354,111 @@ describe("POST /api/notifications/webhook", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("creates a Google Calendar event using GOOGLE_CALENDAR_API_KEY without needing JWT", async () => {
+    mockTaskRecord.google_calendar_id = null;
+    delete mockAppConfig.GOOGLE_SERVICE_ACCOUNT_KEY;
+    mockAppConfig.GOOGLE_CALENDAR_API_KEY = "test-google-calendar-api-key-12345";
+
+    let calendarPayloadSent: any = null;
+    let calendarMethodSent: string = "";
+    let calendarUrlSent: string = "";
+    let apiKeyHeaderSent: string | undefined = undefined;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars/primary/events")) {
+        calendarUrlSent = urlStr;
+        calendarMethodSent = opts?.method;
+        calendarPayloadSent = JSON.parse(opts?.body || "{}");
+        apiKeyHeaderSent = opts?.headers?.["X-Goog-Api-Key"];
+        return new Response(JSON.stringify({ id: "gcal-event-created-via-api-key" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-apikey-1",
+            user_id: "u-123",
+            message: "Assigned to task",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("created");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-created-via-api-key");
+      expect(calendarMethodSent).toBe("POST");
+      expect(calendarUrlSent).toContain("key=test-google-calendar-api-key-12345");
+      expect(apiKeyHeaderSent).toBe("test-google-calendar-api-key-12345");
+      expect(calendarPayloadSent.summary).toContain("Frame Artworks for Exhibition");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("updates existing Google Calendar event using GOOGLE_CALENDAR_API_KEY", async () => {
+    mockTaskRecord.google_calendar_id = "gcal-existing-api-key-789";
+    delete mockAppConfig.GOOGLE_SERVICE_ACCOUNT_KEY;
+    mockAppConfig.GOOGLE_CALENDAR_API_KEY = "test-google-calendar-api-key-12345";
+
+    let calendarMethodSent: string = "";
+    let calendarUrlSent: string = "";
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars/primary/events/gcal-existing-api-key-789")) {
+        calendarMethodSent = opts?.method;
+        calendarUrlSent = urlStr;
+        return new Response(JSON.stringify({ id: "gcal-existing-api-key-789" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-apikey-2",
+            user_id: "u-123",
+            message: "Assigned to task",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("updated");
+      expect(data.calendar.calendarEventId).toBe("gcal-existing-api-key-789");
+      expect(calendarMethodSent).toBe("PUT");
+      expect(calendarUrlSent).toContain("gcal-existing-api-key-789");
+      expect(calendarUrlSent).toContain("key=test-google-calendar-api-key-12345");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
