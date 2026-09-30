@@ -106,6 +106,44 @@ export class GoogleAuth {
   }
 }
 
+/**
+ * Exchanges a Google OAuth refresh token for a fresh access token.
+ */
+async function getGoogleAccessTokenFromRefreshToken(
+  refreshToken: string,
+  clientId?: string | null,
+  clientSecret?: string | null
+): Promise<string> {
+  const params = new URLSearchParams();
+  params.set("grant_type", "refresh_token");
+  params.set("refresh_token", refreshToken.trim());
+  if (clientId && clientId.trim()) {
+    params.set("client_id", clientId.trim());
+  }
+  if (clientSecret && clientSecret.trim()) {
+    params.set("client_secret", clientSecret.trim());
+  }
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Google token refresh failed (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  if (!data.access_token) {
+    throw new Error("Google token refresh did not return an access_token");
+  }
+  return data.access_token;
+}
+
 serve(async (req: Request) => {
   // Menangani preflight request CORS
   if (req.method === "OPTIONS") {
@@ -118,33 +156,41 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    let rawRefreshToken: string | null = null;
+    let clientId: string | null = null;
+    let clientSecret: string | null = null;
     let apiKey: string | null = null;
     let credentials: any = null;
 
-    // 1. Ambil GOOGLE_CALENDAR_API_KEY atau Service Account Key dari public.app_config (fallback ke Deno.env)
+    // 1. Ambil config terkait Google dari public.app_config (fallback ke Deno.env)
     if (supabaseUrl && supabaseServiceKey) {
       try {
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
           auth: { autoRefreshToken: false, persistSession: false },
         });
 
-        const { data: apiKeyRow } = await supabaseAdmin
+        const { data: configRows } = await supabaseAdmin
           .from("app_config")
-          .select("value")
-          .eq("key", "GOOGLE_CALENDAR_API_KEY")
-          .maybeSingle();
+          .select("key, value")
+          .in("key", [
+            "GOOGLE_REFRESH_TOKEN",
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_OAUTH_CLIENT_ID",
+            "GOOGLE_OAUTH_CLIENT_SECRET",
+            "GOOGLE_SERVICE_ACCOUNT_KEY",
+            "GOOGLE_CALENDAR_API_KEY",
+          ]);
 
-        if (apiKeyRow?.value) {
-          apiKey = apiKeyRow.value;
-        } else {
-          const { data: configRow } = await supabaseAdmin
-            .from("app_config")
-            .select("value")
-            .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
-            .maybeSingle();
-
-          if (configRow?.value) {
-            credentials = typeof configRow.value === "string" ? JSON.parse(configRow.value) : configRow.value;
+        if (Array.isArray(configRows)) {
+          for (const row of configRows) {
+            if (row.key === "GOOGLE_REFRESH_TOKEN") rawRefreshToken = row.value;
+            if (row.key === "GOOGLE_CLIENT_ID" || row.key === "GOOGLE_OAUTH_CLIENT_ID") clientId = row.value;
+            if (row.key === "GOOGLE_CLIENT_SECRET" || row.key === "GOOGLE_OAUTH_CLIENT_SECRET") clientSecret = row.value;
+            if (row.key === "GOOGLE_SERVICE_ACCOUNT_KEY") {
+              credentials = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+            }
+            if (row.key === "GOOGLE_CALENDAR_API_KEY") apiKey = row.value;
           }
         }
       } catch (dbErr) {
@@ -152,28 +198,37 @@ serve(async (req: Request) => {
       }
     }
 
-    if (!apiKey && !credentials) {
-      apiKey = Deno.env.get("GOOGLE_CALENDAR_API_KEY") || null;
-      if (!apiKey) {
-        const serviceAccountKeyString = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_KEY");
-        if (serviceAccountKeyString) {
-          credentials = typeof serviceAccountKeyString === "string" ? JSON.parse(serviceAccountKeyString) : serviceAccountKeyString;
-        }
+    if (!rawRefreshToken) rawRefreshToken = Deno.env.get("GOOGLE_REFRESH_TOKEN") || null;
+    if (!clientId) clientId = Deno.env.get("GOOGLE_CLIENT_ID") || Deno.env.get("GOOGLE_OAUTH_CLIENT_ID") || null;
+    if (!clientSecret) clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET") || Deno.env.get("GOOGLE_OAUTH_CLIENT_SECRET") || null;
+
+    let refreshToken = rawRefreshToken;
+    if (rawRefreshToken && typeof rawRefreshToken === "string" && rawRefreshToken.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(rawRefreshToken);
+        if (parsed.refresh_token || parsed.refreshToken) refreshToken = parsed.refresh_token || parsed.refreshToken;
+        if (!clientId && (parsed.client_id || parsed.clientId)) clientId = parsed.client_id || parsed.clientId;
+        if (!clientSecret && (parsed.client_secret || parsed.clientSecret)) clientSecret = parsed.client_secret || parsed.clientSecret;
+      } catch (_e) {
+        // treat as raw
       }
     }
 
-    if (!apiKey && !credentials) {
-      throw new Error("Missing GOOGLE_CALENDAR_API_KEY or GOOGLE_SERVICE_ACCOUNT_KEY in app_config or environment secrets");
-    }
-
-    // 2. Inisialisasi Autentikasi Google: Token via Service Account jika menggunakan JWT, atau API Key langsung
     let token: string | null = null;
-    if (!apiKey && credentials) {
+    if (refreshToken) {
+      token = await getGoogleAccessTokenFromRefreshToken(refreshToken, clientId, clientSecret);
+    } else if (credentials) {
       const auth = new GoogleAuth({
         scope: ["https://www.googleapis.com/auth/calendar"],
         credentials,
       });
       token = await auth.getToken();
+    } else {
+      apiKey = apiKey || Deno.env.get("GOOGLE_CALENDAR_API_KEY") || null;
+    }
+
+    if (!token && !apiKey) {
+      throw new Error("Missing GOOGLE_REFRESH_TOKEN or other credentials in app_config or environment secrets");
     }
 
     let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;

@@ -161,52 +161,152 @@ class GoogleAuth {
 }
 
 /**
+ * Exchanges a Google OAuth refresh token for a fresh access token.
+ */
+async function getGoogleAccessTokenFromRefreshToken(
+  refreshToken: string,
+  clientId?: string | null,
+  clientSecret?: string | null
+): Promise<string> {
+  const params = new URLSearchParams();
+  params.set("grant_type", "refresh_token");
+  params.set("refresh_token", refreshToken.trim());
+  if (clientId && clientId.trim()) {
+    params.set("client_id", clientId.trim());
+  }
+  if (clientSecret && clientSecret.trim()) {
+    params.set("client_secret", clientSecret.trim());
+  }
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Google token refresh failed (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  if (!data.access_token) {
+    throw new Error("Google token refresh did not return an access_token");
+  }
+  return data.access_token;
+}
+
+/**
  * Creates or updates a Google Calendar event for a given task ID.
- * Menggunakan API Key dari app_config (key = GOOGLE_CALENDAR_API_KEY)
- * atau fallback ke Service Account Key (key = GOOGLE_SERVICE_ACCOUNT_KEY).
+ * Menggunakan access token dari GOOGLE_REFRESH_TOKEN di app_config (key = GOOGLE_REFRESH_TOKEN),
+ * dengan fallback ke Service Account Key (GOOGLE_SERVICE_ACCOUNT_KEY) atau API Key (GOOGLE_CALENDAR_API_KEY).
  */
 async function syncTaskWithGoogleCalendar(
   supabaseAdmin: any,
   taskId: string,
   appUrl: string
 ): Promise<CalendarSyncResult> {
-  // 1. Fetch GOOGLE_CALENDAR_API_KEY from app_config (fallback ke process.env)
-  const { data: apiKeyRow } = await supabaseAdmin
+  // 1. Ambil config terkait Google dari public.app_config
+  const { data: configRows } = await supabaseAdmin
     .from("app_config")
-    .select("value")
-    .eq("key", "GOOGLE_CALENDAR_API_KEY")
-    .maybeSingle();
+    .select("key, value")
+    .in("key", [
+      "GOOGLE_REFRESH_TOKEN",
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GOOGLE_OAUTH_CLIENT_ID",
+      "GOOGLE_OAUTH_CLIENT_SECRET",
+      "GOOGLE_CALENDAR_ID",
+      "GOOGLE_SERVICE_ACCOUNT_KEY",
+      "GOOGLE_CALENDAR_API_KEY",
+    ]);
 
-  const apiKey = apiKeyRow?.value || process.env.GOOGLE_CALENDAR_API_KEY;
-
-  let serviceAccountKeyString: string | null = null;
-  let credentials: { client_email?: string; private_key?: string } | null = null;
-
-  if (!apiKey) {
-    // Fallback: periksa GOOGLE_SERVICE_ACCOUNT_KEY jika API Key tidak disetel
-    const { data: configRow } = await supabaseAdmin
-      .from("app_config")
-      .select("value")
-      .eq("key", "GOOGLE_SERVICE_ACCOUNT_KEY")
-      .maybeSingle();
-
-    serviceAccountKeyString = configRow?.value || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    if (!serviceAccountKeyString) {
-      return { status: "skipped", error: "GOOGLE_CALENDAR_API_KEY not configured in app_config" };
+  const configMap: Record<string, string> = {};
+  if (Array.isArray(configRows)) {
+    for (const r of configRows) {
+      if (r.key && r.value) {
+        configMap[r.key] = r.value;
+      }
     }
+  }
 
+  let rawRefreshToken = configMap["GOOGLE_REFRESH_TOKEN"] || process.env.GOOGLE_REFRESH_TOKEN;
+  let clientId = configMap["GOOGLE_CLIENT_ID"] || configMap["GOOGLE_OAUTH_CLIENT_ID"] || process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
+  let clientSecret = configMap["GOOGLE_CLIENT_SECRET"] || configMap["GOOGLE_OAUTH_CLIENT_SECRET"] || process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const calendarId = configMap["GOOGLE_CALENDAR_ID"] || process.env.GOOGLE_CALENDAR_ID || "primary";
+
+  // Parse JSON jika GOOGLE_REFRESH_TOKEN berbentuk objek/JSON
+  let refreshToken = rawRefreshToken;
+  if (rawRefreshToken && typeof rawRefreshToken === "string" && rawRefreshToken.trim().startsWith("{")) {
     try {
-      credentials = typeof serviceAccountKeyString === "string"
-        ? JSON.parse(serviceAccountKeyString)
-        : serviceAccountKeyString;
+      const parsed = JSON.parse(rawRefreshToken);
+      if (parsed.refresh_token || parsed.refreshToken) {
+        refreshToken = parsed.refresh_token || parsed.refreshToken;
+      }
+      if (!clientId && (parsed.client_id || parsed.clientId)) {
+        clientId = parsed.client_id || parsed.clientId;
+      }
+      if (!clientSecret && (parsed.client_secret || parsed.clientSecret)) {
+        clientSecret = parsed.client_secret || parsed.clientSecret;
+      }
+      if (!clientId && parsed.web?.client_id) {
+        clientId = parsed.web.client_id;
+      }
+      if (!clientSecret && parsed.web?.client_secret) {
+        clientSecret = parsed.web.client_secret;
+      }
+      if (!clientId && parsed.installed?.client_id) {
+        clientId = parsed.installed.client_id;
+      }
+      if (!clientSecret && parsed.installed?.client_secret) {
+        clientSecret = parsed.installed.client_secret;
+      }
     } catch (parseErr) {
-      console.warn("[Google Calendar] Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON:", parseErr);
-      return { status: "failed", error: "Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON" };
+      console.warn("[Google Calendar] Note: GOOGLE_REFRESH_TOKEN is not JSON, treating as raw string:", parseErr);
     }
+  }
 
-    if (!credentials?.client_email || !credentials?.private_key) {
-      return { status: "failed", error: "Missing client_email or private_key in service account credentials" };
+  let token: string | null = null;
+  let apiKey: string | null = null;
+
+  // Prioritas 1: GOOGLE_REFRESH_TOKEN (Dapatkan access token valid)
+  if (refreshToken) {
+    try {
+      token = await getGoogleAccessTokenFromRefreshToken(refreshToken, clientId, clientSecret);
+      console.log("[Google Calendar] Successfully obtained access token from GOOGLE_REFRESH_TOKEN.");
+    } catch (refErr: any) {
+      console.warn("[Google Calendar] Error exchanging refresh token:", refErr);
+      return { status: "failed", error: refErr?.message || String(refErr) };
     }
+  }
+
+  // Prioritas 2 (Fallback): Service account key jika refresh token belum dikonfigurasi
+  if (!token && configMap["GOOGLE_SERVICE_ACCOUNT_KEY"]) {
+    try {
+      const saRaw = configMap["GOOGLE_SERVICE_ACCOUNT_KEY"];
+      const credentials = typeof saRaw === "string" ? JSON.parse(saRaw) : saRaw;
+      if (credentials?.client_email && credentials?.private_key) {
+        const auth = new GoogleAuth({
+          scope: ["https://www.googleapis.com/auth/calendar"],
+          credentials,
+        });
+        token = await auth.getToken();
+      }
+    } catch (saErr) {
+      console.warn("[Google Calendar] Failed to use fallback GOOGLE_SERVICE_ACCOUNT_KEY:", saErr);
+    }
+  }
+
+  // Prioritas 3 (Fallback): API Key jika tidak ada token
+  if (!token) {
+    apiKey = configMap["GOOGLE_CALENDAR_API_KEY"] || process.env.GOOGLE_CALENDAR_API_KEY || null;
+  }
+
+  if (!token && !apiKey) {
+    console.log("[Google Calendar] Skipped: GOOGLE_REFRESH_TOKEN not configured in app_config.");
+    return { status: "skipped", error: "GOOGLE_REFRESH_TOKEN not configured in app_config" };
   }
 
   // 2. Fetch task, project, and assignees
@@ -315,26 +415,7 @@ async function syncTaskWithGoogleCalendar(
     eventPayload.attendees = attendeeList;
   }
 
-  // 6. Inisialisasi Autentikasi: Token via Service Account jika menggunakan JWT, atau API Key langsung
-  let token: string | null = null;
-  if (!apiKey && credentials) {
-    const auth = new GoogleAuth({
-      scope: ["https://www.googleapis.com/auth/calendar"],
-      credentials,
-    });
-    token = await auth.getToken();
-  }
-
-  // 7. Ambil Calendar ID (default: "primary")
-  const { data: calConfigRow } = await supabaseAdmin
-    .from("app_config")
-    .select("value")
-    .eq("key", "GOOGLE_CALENDAR_ID")
-    .maybeSingle();
-
-  const calendarId = calConfigRow?.value || process.env.GOOGLE_CALENDAR_ID || "primary";
-
-  // 8. Panggil HTTP REST API Google Calendar
+  // 6. Panggil HTTP REST API Google Calendar
   let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
   let method = "POST";
 

@@ -99,6 +99,12 @@ vi.mock("@supabase/supabase-js", () => {
         if (table === "app_config") {
           return {
             select: vi.fn().mockReturnThis(),
+            in: vi.fn((_col: string, keys: string[]) => {
+              const rows = keys
+                .filter((k) => mockAppConfig[k] !== undefined)
+                .map((k) => ({ key: k, value: mockAppConfig[k] }));
+              return Promise.resolve({ data: rows, error: null });
+            }),
             eq: vi.fn((_col: string, val: string) => ({
               maybeSingle: vi.fn().mockResolvedValue({
                 data: mockAppConfig[val] ? { value: mockAppConfig[val] } : null,
@@ -457,6 +463,148 @@ describe("POST /api/notifications/webhook", () => {
       expect(calendarMethodSent).toBe("PUT");
       expect(calendarUrlSent).toContain("gcal-existing-api-key-789");
       expect(calendarUrlSent).toContain("key=test-google-calendar-api-key-12345");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates a Google Calendar event using GOOGLE_REFRESH_TOKEN by exchanging for access token", async () => {
+    mockTaskRecord.google_calendar_id = null;
+    delete mockAppConfig.GOOGLE_SERVICE_ACCOUNT_KEY;
+    delete mockAppConfig.GOOGLE_CALENDAR_API_KEY;
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//04mockRefreshToken123";
+    mockAppConfig.GOOGLE_CLIENT_ID = "mock-client-id.apps.googleusercontent.com";
+    mockAppConfig.GOOGLE_CLIENT_SECRET = "mock-client-secret-xyz";
+
+    let tokenEndpointCalled = false;
+    let tokenParamsSent = "";
+    let calendarAuthHeaderSent = "";
+    let calendarMethodSent = "";
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        tokenEndpointCalled = true;
+        tokenParamsSent = String(opts?.body || "");
+        return new Response(JSON.stringify({ access_token: "ya29.mock-oauth-access-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars/primary/events")) {
+        calendarMethodSent = opts?.method;
+        calendarAuthHeaderSent = opts?.headers?.["Authorization"];
+        return new Response(JSON.stringify({ id: "gcal-event-created-via-refresh-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-refresh-1",
+            user_id: "u-123",
+            message: "Assigned to task",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(tokenEndpointCalled).toBe(true);
+      expect(tokenParamsSent).toContain("grant_type=refresh_token");
+      expect(tokenParamsSent).toContain("1%2F%2F04mockRefreshToken123");
+      expect(tokenParamsSent).toContain("mock-client-id.apps.googleusercontent.com");
+      expect(tokenParamsSent).toContain("mock-client-secret-xyz");
+
+      expect(calendarMethodSent).toBe("POST");
+      expect(calendarAuthHeaderSent).toBe("Bearer ya29.mock-oauth-access-token");
+      expect(data.calendar.status).toBe("created");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-created-via-refresh-token");
+      expect(updatedTaskCalendarId).toBe("gcal-event-created-via-refresh-token");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("updates existing Google Calendar event when GOOGLE_REFRESH_TOKEN is provided as a JSON string", async () => {
+    mockTaskRecord.google_calendar_id = "gcal-existing-refresh-999";
+    delete mockAppConfig.GOOGLE_SERVICE_ACCOUNT_KEY;
+    delete mockAppConfig.GOOGLE_CALENDAR_API_KEY;
+    delete mockAppConfig.GOOGLE_CLIENT_ID;
+    delete mockAppConfig.GOOGLE_CLIENT_SECRET;
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = JSON.stringify({
+      refresh_token: "1//04jsonRefreshToken456",
+      client_id: "json-client-id.apps.googleusercontent.com",
+      client_secret: "json-client-secret",
+    });
+
+    let tokenEndpointCalled = false;
+    let tokenParamsSent = "";
+    let calendarMethodSent = "";
+    let calendarAuthHeaderSent = "";
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        tokenEndpointCalled = true;
+        tokenParamsSent = String(opts?.body || "");
+        return new Response(JSON.stringify({ access_token: "ya29.json-oauth-access-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars/primary/events/gcal-existing-refresh-999")) {
+        calendarMethodSent = opts?.method;
+        calendarAuthHeaderSent = opts?.headers?.["Authorization"];
+        return new Response(JSON.stringify({ id: "gcal-existing-refresh-999" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-refresh-2",
+            user_id: "u-123",
+            message: "Assigned to task",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(tokenEndpointCalled).toBe(true);
+      expect(tokenParamsSent).toContain("1%2F%2F04jsonRefreshToken456");
+      expect(tokenParamsSent).toContain("json-client-id.apps.googleusercontent.com");
+      expect(tokenParamsSent).toContain("json-client-secret");
+
+      expect(calendarMethodSent).toBe("PUT");
+      expect(calendarAuthHeaderSent).toBe("Bearer ya29.json-oauth-access-token");
+      expect(data.calendar.status).toBe("updated");
+      expect(data.calendar.calendarEventId).toBe("gcal-existing-refresh-999");
     } finally {
       globalThis.fetch = originalFetch;
     }
