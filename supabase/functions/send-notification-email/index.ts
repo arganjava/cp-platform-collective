@@ -366,57 +366,90 @@ async function syncTaskWithGoogleCalendar(
     }
   }
 
-  // 4. Build start and end timings (strictly ensure end > start to avoid Google Calendar timeRangeEmpty error)
+  // 4. Build start and end timings adhering strictly to Singapore Time (UTC+8)
+  // Must follow tasks.check_date, tasks.check_start_time, and tasks.check_end_time
   const timeZone = "Asia/Singapore";
-  const defaultDurationMs = 60 * 60 * 1000; // Minimum 1 hour duration
+  const singaporeOffset = "+08:00";
 
-  const parseToValidDate = (val?: string | null): Date | null => {
+  // Resolve target date (YYYY-MM-DD)
+  const extractDateOnly = (val?: string | null): string | null => {
+    if (!val || typeof val !== "string") return null;
+    const match = val.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    return match ? match[1] : null;
+  };
+
+  let targetDate =
+    extractDateOnly(task.check_date) ||
+    extractDateOnly(task.check_start_time) ||
+    extractDateOnly(task.start_date) ||
+    extractDateOnly(task.due_date);
+
+  if (!targetDate) {
+    targetDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Singapore",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
+
+  // Resolve time components (HH:mm)
+  const extractTimeOnly = (val?: string | null): string | null => {
     if (!val || typeof val !== "string") return null;
     const trimmed = val.trim();
-    if (!trimmed) return null;
-    const d = new Date(trimmed);
-    if (!isNaN(d.getTime())) return d;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const d2 = new Date(`${trimmed}T09:00:00+08:00`);
-      if (!isNaN(d2.getTime())) return d2;
+    if (trimmed.includes("T")) {
+      const afterT = trimmed.split("T")[1];
+      const match = afterT.match(/^(\d{1,2}):(\d{2})/);
+      if (match) return `${match[1].padStart(2, "0")}:${match[2]}`;
     }
+    const match = trimmed.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\b/);
+    if (match) return `${match[1].padStart(2, "0")}:${match[2]}`;
     return null;
   };
 
-  let startDate: Date | null = null;
-  let endDate: Date | null = null;
+  const startTimeStr = extractTimeOnly(task.check_start_time) || "09:00";
+  const endTimeStr = extractTimeOnly(task.check_end_time);
 
-  if (task.check_start_time) {
-    startDate = parseToValidDate(task.check_start_time);
-  }
-  if (task.check_end_time) {
-    endDate = parseToValidDate(task.check_end_time);
-  }
+  // Construct start Date in Singapore Time
+  const startIso = `${targetDate}T${startTimeStr}:00${singaporeOffset}`;
+  const startDate = new Date(startIso);
 
-  if (!startDate) {
-    if (task.check_date) {
-      startDate = parseToValidDate(task.check_date);
-    } else if (task.start_date) {
-      startDate = parseToValidDate(task.start_date);
-    } else if (task.due_date) {
-      startDate = parseToValidDate(task.due_date);
+  let endDate: Date;
+  if (endTimeStr) {
+    const endIso = `${targetDate}T${endTimeStr}:00${singaporeOffset}`;
+    const parsedEnd = new Date(endIso);
+    // Ensure end time is strictly greater than start time
+    if (!isNaN(parsedEnd.getTime()) && parsedEnd.getTime() > startDate.getTime()) {
+      endDate = parsedEnd;
     } else {
-      const today = new Date().toISOString().split("T")[0];
-      startDate = new Date(`${today}T09:00:00+08:00`);
+      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
     }
+  } else {
+    endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
   }
 
-  // Strictly enforce that endDate is after startDate to prevent "timeRangeEmpty" error in Google Calendar
-  if (!endDate || isNaN(endDate.getTime()) || endDate.getTime() <= (startDate?.getTime() || 0)) {
-    endDate = new Date((startDate?.getTime() || Date.now()) + defaultDurationMs);
-  }
+  // Format explicitly as RFC 3339 string with +08:00 offset for Google Calendar
+  const formatSgtIso = (d: Date): string => {
+    const sgtMillis = d.getTime() + 8 * 60 * 60 * 1000;
+    const sgtDate = new Date(sgtMillis);
+    const yyyy = sgtDate.getUTCFullYear();
+    const mm = String(sgtDate.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(sgtDate.getUTCDate()).padStart(2, "0");
+    const hh = String(sgtDate.getUTCHours()).padStart(2, "0");
+    const min = String(sgtDate.getUTCMinutes()).padStart(2, "0");
+    const ss = String(sgtDate.getUTCSeconds()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}${singaporeOffset}`;
+  };
+
+  const startFormattedIso = formatSgtIso(startDate);
+  const endFormattedIso = formatSgtIso(endDate);
 
   const startObj = {
-    dateTime: startDate!.toISOString(),
+    dateTime: startFormattedIso,
     timeZone,
   };
   const endObj = {
-    dateTime: endDate.toISOString(),
+    dateTime: endFormattedIso,
     timeZone,
   };
 
@@ -430,9 +463,8 @@ async function syncTaskWithGoogleCalendar(
   if (projTitle) descParts.push(`Project: ${projTitle}`);
   if (task.priority) descParts.push(`Priority: ${task.priority.toUpperCase()}`);
   if (task.status) descParts.push(`Status: ${task.status}`);
-  if (task.check_date) descParts.push(`🚩 Milestone Check Date: ${task.check_date}`);
-  if (task.check_start_time) descParts.push(`Check Start: ${task.check_start_time}`);
-  if (task.check_end_time) descParts.push(`Check End: ${task.check_end_time}`);
+  descParts.push(`📅 Agenda Date: ${targetDate} (Singapore Time SGT)`);
+  descParts.push(`⏰ Agenda Time: ${startTimeStr} - ${endTimeStr || (String(new Date(endDate.getTime() + 8 * 3600000).getUTCHours()).padStart(2, "0") + ":" + String(new Date(endDate.getTime() + 8 * 3600000).getUTCMinutes()).padStart(2, "0"))} SGT`);
   if (task.due_date) descParts.push(`Due Date: ${task.due_date}`);
   descParts.push(`Link: ${appUrl}/tasks`);
   const eventDescription = descParts.join("\n");

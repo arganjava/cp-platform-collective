@@ -293,8 +293,10 @@ describe("POST /api/notifications/webhook", () => {
       expect(calendarPayloadSent.summary).toContain("Frame Artworks for Exhibition");
       expect(calendarPayloadSent.description).toContain("High quality wooden frames");
       expect(calendarPayloadSent.description).toContain("2026-09-27");
-      expect(calendarPayloadSent.start.dateTime).toBe("2026-09-27T10:00:00.000Z");
-      expect(calendarPayloadSent.end.dateTime).toBe("2026-09-27T11:30:00.000Z");
+      expect(calendarPayloadSent.start.dateTime).toBe("2026-09-27T10:00:00+08:00");
+      expect(calendarPayloadSent.start.timeZone).toBe("Asia/Singapore");
+      expect(calendarPayloadSent.end.dateTime).toBe("2026-09-27T11:30:00+08:00");
+      expect(calendarPayloadSent.end.timeZone).toBe("Asia/Singapore");
       expect(calendarPayloadSent.attendees).toEqual(
         expect.arrayContaining([{ email: "marcus@collectivep.com" }, { email: "sarah@collectivep.com" }])
       );
@@ -666,6 +668,71 @@ describe("POST /api/notifications/webhook", () => {
 
       expect(endTime).toBeGreaterThan(startTime);
       expect(endTime - startTime).toBeGreaterThanOrEqual(60 * 60 * 1000); // At least 1 hour duration
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("strictly follows tasks check_date, check_start_time, and check_end_time in default Singapore time (SGT +08:00)", async () => {
+    mockTaskRecord.google_calendar_id = null;
+    mockTaskRecord.check_date = "2026-10-15";
+    mockTaskRecord.check_start_time = "14:30";
+    mockTaskRecord.check_end_time = "16:00";
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+
+    let eventPayloadSent: any = null;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.sgt-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars/primary/events")) {
+        eventPayloadSent = JSON.parse(opts?.body || "{}");
+        return new Response(JSON.stringify({ id: "gcal-event-sgt-agenda" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-sgt-agenda",
+            user_id: "u-123",
+            message: "Assigned to task",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("created");
+
+      // Verify Start timing adheres to Singapore Time (+08:00)
+      expect(eventPayloadSent.start.dateTime).toBe("2026-10-15T14:30:00+08:00");
+      expect(eventPayloadSent.start.timeZone).toBe("Asia/Singapore");
+
+      // Verify End timing adheres to Singapore Time (+08:00)
+      expect(eventPayloadSent.end.dateTime).toBe("2026-10-15T16:00:00+08:00");
+      expect(eventPayloadSent.end.timeZone).toBe("Asia/Singapore");
+
+      // Verify Agenda description details
+      expect(eventPayloadSent.description).toContain("2026-10-15 (Singapore Time SGT)");
+      expect(eventPayloadSent.description).toContain("14:30 - 16:00 SGT");
     } finally {
       globalThis.fetch = originalFetch;
     }
