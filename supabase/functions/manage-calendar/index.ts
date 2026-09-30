@@ -256,6 +256,29 @@ serve(async (req: Request) => {
       requestHeaders["Authorization"] = `Bearer ${token}`;
     }
 
+    // Pastikan eventData memiliki time range valid jika start & end ditentukan (cegah error timeRangeEmpty)
+    if (eventData && (eventData.start || eventData.end)) {
+      const startVal = eventData.start?.dateTime || eventData.start?.date;
+      const endVal = eventData.end?.dateTime || eventData.end?.date;
+      const startDate = startVal ? new Date(startVal) : new Date();
+      let endDate = endVal ? new Date(endVal) : null;
+      if (!endDate || isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+        const safeEndDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+        if (eventData.start?.dateTime || !eventData.start?.date) {
+          eventData.end = {
+            ...(eventData.end || {}),
+            dateTime: safeEndDate.toISOString(),
+            timeZone: eventData.end?.timeZone || eventData.start?.timeZone || "Asia/Singapore",
+          };
+        } else {
+          eventData.end = {
+            ...(eventData.end || {}),
+            date: safeEndDate.toISOString().split("T")[0],
+          };
+        }
+      }
+    }
+
     // 3. Panggil HTTP REST API Google Calendar langsung
     const response = await fetch(`${url}?${queryParams.toString()}`, {
       method: method,

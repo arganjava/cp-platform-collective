@@ -609,4 +609,65 @@ describe("POST /api/notifications/webhook", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("automatically enforces end > start by at least 1 hour when check_end_time equals check_start_time to prevent timeRangeEmpty 400 error", async () => {
+    mockTaskRecord.google_calendar_id = null;
+    mockTaskRecord.check_start_time = "2026-09-30T14:00:00Z";
+    mockTaskRecord.check_end_time = "2026-09-30T14:00:00Z"; // Same as start time!
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+    mockAppConfig.GOOGLE_CLIENT_ID = "mock-client";
+    mockAppConfig.GOOGLE_CLIENT_SECRET = "mock-secret";
+
+    let eventPayloadSent: any = null;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.safe-range-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars/primary/events")) {
+        eventPayloadSent = JSON.parse(opts?.body || "{}");
+        return new Response(JSON.stringify({ id: "gcal-event-safe-timerange" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-timerange-1",
+            user_id: "u-123",
+            message: "Assigned to task",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("created");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-safe-timerange");
+
+      const startTime = new Date(eventPayloadSent.start.dateTime).getTime();
+      const endTime = new Date(eventPayloadSent.end.dateTime).getTime();
+
+      expect(endTime).toBeGreaterThan(startTime);
+      expect(endTime - startTime).toBeGreaterThanOrEqual(60 * 60 * 1000); // At least 1 hour duration
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

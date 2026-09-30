@@ -312,7 +312,7 @@ async function syncTaskWithGoogleCalendar(
   // 2. Fetch task, project, and assignees
   const { data: task, error: taskError } = await supabaseAdmin
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, check_date, check_start_time, check_end_time, google_calendar_id, project_id, assignee_id, project:project_id(title)")
+    .select("id, title, description, status, priority, start_date, due_date, check_date, check_start_time, check_end_time, google_calendar_id, project_id, assignee_id, project:project_id(title)")
     .eq("id", taskId)
     .maybeSingle();
 
@@ -353,39 +353,59 @@ async function syncTaskWithGoogleCalendar(
     }
   }
 
-  // 4. Build start and end timings
+  // 4. Build start and end timings (strictly ensure end > start to avoid Google Calendar timeRangeEmpty error)
   const timeZone = "Asia/Singapore";
-  let startObj: { dateTime?: string; date?: string; timeZone?: string };
-  let endObj: { dateTime?: string; date?: string; timeZone?: string };
+  const defaultDurationMs = 60 * 60 * 1000; // Minimum 1 hour duration
+
+  const parseToValidDate = (val?: string | null): Date | null => {
+    if (!val || typeof val !== "string") return null;
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) return d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const d2 = new Date(`${trimmed}T09:00:00+08:00`);
+      if (!isNaN(d2.getTime())) return d2;
+    }
+    return null;
+  };
+
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
 
   if (task.check_start_time) {
-    const startDate = new Date(task.check_start_time);
-    const startIso = isNaN(startDate.getTime())
-      ? `${String(task.check_start_time).split("T")[0]}T09:00:00+08:00`
-      : startDate.toISOString();
-
-    let endIso: string;
-    if (task.check_end_time) {
-      const endDate = new Date(task.check_end_time);
-      endIso = isNaN(endDate.getTime())
-        ? `${String(task.check_end_time).split("T")[0]}T10:00:00+08:00`
-        : endDate.toISOString();
-    } else {
-      endIso = new Date(new Date(startIso).getTime() + 60 * 60 * 1000).toISOString();
-    }
-    startObj = { dateTime: startIso, timeZone };
-    endObj = { dateTime: endIso, timeZone };
-  } else if (task.check_date) {
-    startObj = { dateTime: `${task.check_date}T09:00:00+08:00`, timeZone };
-    endObj = { dateTime: `${task.check_date}T10:00:00+08:00`, timeZone };
-  } else if (task.due_date) {
-    startObj = { dateTime: `${task.due_date}T09:00:00+08:00`, timeZone };
-    endObj = { dateTime: `${task.due_date}T10:00:00+08:00`, timeZone };
-  } else {
-    const today = new Date().toISOString().split("T")[0];
-    startObj = { dateTime: `${today}T09:00:00+08:00`, timeZone };
-    endObj = { dateTime: `${today}T10:00:00+08:00`, timeZone };
+    startDate = parseToValidDate(task.check_start_time);
   }
+  if (task.check_end_time) {
+    endDate = parseToValidDate(task.check_end_time);
+  }
+
+  if (!startDate) {
+    if (task.check_date) {
+      startDate = parseToValidDate(task.check_date);
+    } else if (task.start_date) {
+      startDate = parseToValidDate(task.start_date);
+    } else if (task.due_date) {
+      startDate = parseToValidDate(task.due_date);
+    } else {
+      const today = new Date().toISOString().split("T")[0];
+      startDate = new Date(`${today}T09:00:00+08:00`);
+    }
+  }
+
+  // Strictly enforce that endDate is after startDate to prevent "timeRangeEmpty" error in Google Calendar
+  if (!endDate || isNaN(endDate.getTime()) || endDate.getTime() <= (startDate?.getTime() || 0)) {
+    endDate = new Date((startDate?.getTime() || Date.now()) + defaultDurationMs);
+  }
+
+  const startObj = {
+    dateTime: startDate!.toISOString(),
+    timeZone,
+  };
+  const endObj = {
+    dateTime: endDate.toISOString(),
+    timeZone,
+  };
 
   // 5. Build Event Title and Description
   const projTitle = (task.project as { title?: string } | null)?.title || null;
