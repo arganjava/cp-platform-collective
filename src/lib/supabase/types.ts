@@ -13,6 +13,7 @@ export interface ProfileRow {
   avatar_color: string | null;
   role: string;
   avatar_url: string | null;
+  wa_number?: string | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
   created_at: string;

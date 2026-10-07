@@ -34,6 +34,7 @@ import {
   Lock,
   Check,
   AlertTriangle,
+  Phone,
 } from "lucide-react";
 
 const AVATAR_COLORS = [
@@ -74,6 +75,7 @@ export default function UsersPage() {
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
+    waNumber: "",
     role: "member" as UserRole,
     password: "",
     avatarColor: "var(--primary)",
@@ -85,10 +87,12 @@ export default function UsersPage() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState<{
     name: string;
+    waNumber: string;
     role: UserRole;
     avatarColor: string;
   }>({
     name: "",
+    waNumber: "",
     role: "member",
     avatarColor: "var(--primary)",
   });
@@ -107,7 +111,7 @@ export default function UsersPage() {
       if (statusFilter === "deleted" && !u.isDeleted) return false;
       if (roleFilter !== "all" && u.role !== roleFilter) return false;
       if (query) {
-        const haystack = `${u.name} ${u.email} ${u.role}`.toLowerCase();
+        const haystack = `${u.name} ${u.email} ${u.role} ${u.waNumber || ""}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;
@@ -173,6 +177,7 @@ export default function UsersPage() {
         id: generateId(),
         name,
         email,
+        waNumber: newUser.waNumber.trim() || null,
         role: newUser.role,
         avatarColor: newUser.avatarColor,
         isDeleted: false,
@@ -184,6 +189,7 @@ export default function UsersPage() {
       setNewUser({
         name: "",
         email: "",
+        waNumber: "",
         role: "member",
         password: "",
         avatarColor: "var(--primary)",
@@ -202,6 +208,7 @@ export default function UsersPage() {
     setIsSavingEdit(false);
     setEditForm({
       name: user.name,
+      waNumber: user.waNumber || "",
       role: user.role,
       avatarColor: user.avatarColor || "var(--primary)",
     });
@@ -233,6 +240,7 @@ export default function UsersPage() {
         name: editForm.name.trim(),
         role: editForm.role,
         avatarColor: editForm.avatarColor,
+        waNumber: editForm.waNumber.trim() || null,
       });
 
       // Update local store immediately
@@ -240,6 +248,7 @@ export default function UsersPage() {
         name: editForm.name.trim(),
         role: editForm.role,
         avatarColor: editForm.avatarColor,
+        waNumber: editForm.waNumber.trim() || null,
       });
 
       setEditingUserId(null);
@@ -434,6 +443,7 @@ export default function UsersPage() {
               <tr>
                 <th className="px-4 py-3.5 sm:px-6">Member</th>
                 <th className="px-4 py-3.5">Email</th>
+                <th className="px-4 py-3.5">WA Mobile</th>
                 <th className="px-4 py-3.5">Role</th>
                 <th className="px-4 py-3.5">Status</th>
                 <th className="px-4 py-3.5 text-right sm:px-6">Actions</th>
@@ -442,7 +452,7 @@ export default function UsersPage() {
             <tbody className="divide-y divide-border">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
                     <UserX className="mx-auto mb-2 h-8 w-8 text-subtle-foreground" />
                     <p className="font-medium">No users match your criteria.</p>
                     <p className="text-xs text-subtle-foreground">Try adjusting your search query or role filter.</p>
@@ -499,6 +509,17 @@ export default function UsersPage() {
                           <Mail className="h-3.5 w-3.5 text-subtle-foreground shrink-0" />
                           <span className="truncate">{user.email}</span>
                         </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-muted-foreground font-mono text-xs">
+                        {user.waNumber ? (
+                          <div className="flex items-center gap-1.5 text-foreground">
+                            <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span className="truncate">{user.waNumber}</span>
+                          </div>
+                        ) : (
+                          <span className="text-subtle-foreground italic">-</span>
+                        )}
                       </td>
 
                       <td className="px-4 py-3.5">
@@ -630,6 +651,22 @@ export default function UsersPage() {
                 value={newUser.email}
                 onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
               />
+            </div>
+
+            <div>
+              <label htmlFor="input-new-user-wa" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                WA Mobile
+              </label>
+              <Input
+                id="input-new-user-wa"
+                type="tel"
+                placeholder="e.g., +65 9123 4567"
+                value={newUser.waNumber}
+                onChange={(e) => setNewUser({ ...newUser, waNumber: e.target.value })}
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                WhatsApp mobile number used for Rabbit WA agent verification and RBAC access.
+              </p>
             </div>
 
             <div>
@@ -779,6 +816,25 @@ export default function UsersPage() {
                       <Badge variant="neutral" className="text-[10px] shrink-0 font-medium">External Domain</Badge>
                     )}
                   </div>
+                </div>
+
+                <div>
+                  <label htmlFor="edit-user-wa" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                    WA Mobile
+                  </label>
+                  <Input
+                    id="edit-user-wa"
+                    type="tel"
+                    value={editForm.waNumber}
+                    onChange={(e) => {
+                      setEditError(null);
+                      setEditForm({ ...editForm, waNumber: e.target.value });
+                    }}
+                    placeholder="e.g., +65 9123 4567"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    WhatsApp mobile number used by Rabbit Agent for identity & permission check.
+                  </p>
                 </div>
 
                 <div>

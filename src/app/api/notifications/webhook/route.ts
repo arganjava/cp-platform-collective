@@ -8,8 +8,12 @@ interface NotificationRecord {
   type?: string;
   is_read?: boolean;
   related_id?: string | null;
+  task_id?: string | null;
   created_at?: string;
+  google_calendar_id?: string | null;
+  check_date?: string | null;
   recipient?: { name?: string; email?: string };
+  [key: string]: any;
 }
 
 interface RecipientInput {
@@ -25,6 +29,7 @@ interface WebhookPayload {
   table?: string;
   schema?: string;
   record?: NotificationRecord;
+  old_record?: NotificationRecord;
   records?: NotificationRecord[];
   notification?: NotificationRecord;
   notifications?: NotificationRecord[];
@@ -38,7 +43,10 @@ interface WebhookPayload {
   message?: string;
   related_id?: string | null;
   task_id?: string | null;
+  google_calendar_id?: string | null;
+  check_date?: string | null;
   all_assignees?: boolean;
+  [key: string]: any;
 }
 
 interface TaskDetails {
@@ -206,7 +214,12 @@ async function getGoogleAccessTokenFromRefreshToken(
 async function syncTaskWithGoogleCalendar(
   supabaseAdmin: any,
   taskId: string,
-  appUrl: string
+  appUrl: string,
+  taskHint?: {
+    google_calendar_id?: string | null;
+    check_date?: string | null;
+    old_google_calendar_id?: string | null;
+  }
 ): Promise<CalendarSyncResult> {
   // 1. Ambil config terkait Google dari public.app_config
   const { data: configRows } = await supabaseAdmin
@@ -321,20 +334,24 @@ async function syncTaskWithGoogleCalendar(
   }
 
   // 3. Validasi check_date:
-  // - Jika check_date null dan task.google_calendar_id ada (pada update): Batalkan event di Google Calendar & set google_calendar_id = null
-  // - Jika check_date null dan task.google_calendar_id tidak ada: Tidak perlu membuat kalender (skip)
+  // - Jika check_date null dan task memiliki google_calendar_id: batalkan event di Google Calendar & set google_calendar_id = null
+  // - Jika check_date null dan task tidak memiliki google_calendar_id: lewati (skip)
   const extractDateOnly = (val?: string | null): string | null => {
     if (!val || typeof val !== "string") return null;
-    const match = val.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === "null" || trimmed === "undefined") return null;
+    const match = trimmed.match(/\b(\d{4}-\d{2}-\d{2})\b/);
     return match ? match[1] : null;
   };
 
-  const targetDate = extractDateOnly(task.check_date);
+  const effectiveCheckDate = taskHint?.check_date !== undefined ? taskHint.check_date : task.check_date;
+  const targetDate = extractDateOnly(effectiveCheckDate);
+  const activeCalendarId = task.google_calendar_id || taskHint?.google_calendar_id || taskHint?.old_google_calendar_id || null;
 
   if (!targetDate) {
-    if (task.google_calendar_id) {
-      console.log(`[Google Calendar] check_date is null but google_calendar_id exists (${task.google_calendar_id}). Cancelling calendar event...`);
-      const cancelUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.google_calendar_id)}`;
+    if (activeCalendarId) {
+      console.log(`[Google Calendar] check_date is null but google_calendar_id exists (${activeCalendarId}). Cancelling calendar event...`);
+      const cancelUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(activeCalendarId)}`;
       const cancelQueryParams = new URLSearchParams({ sendUpdates: "all" });
       if (apiKey) {
         cancelQueryParams.set("key", apiKey);
@@ -361,21 +378,21 @@ async function syncTaskWithGoogleCalendar(
             .from("tasks")
             .update({ google_calendar_id: null })
             .eq("id", taskId);
-          console.log(`[Google Calendar] Successfully cancelled event ${task.google_calendar_id} and cleared google_calendar_id for task ${taskId}`);
+          console.log(`[Google Calendar] Successfully cancelled event ${activeCalendarId} and cleared google_calendar_id for task ${taskId}`);
           return {
             status: "cancelled",
-            calendarEventId: task.google_calendar_id,
+            calendarEventId: activeCalendarId,
           };
         } else {
           const cancelErrText = await cancelRes.text();
-          console.warn(`[Google Calendar] Failed to cancel event ${task.google_calendar_id} (${cancelRes.status}):`, cancelErrText);
+          console.warn(`[Google Calendar] Failed to cancel event ${activeCalendarId} (${cancelRes.status}):`, cancelErrText);
           return {
             status: "failed",
             error: `Failed to cancel calendar event (${cancelRes.status}): ${cancelErrText}`,
           };
         }
       } catch (cancelErr: any) {
-        console.warn(`[Google Calendar] Error calling DELETE for event ${task.google_calendar_id}:`, cancelErr);
+        console.warn(`[Google Calendar] Error calling DELETE for event ${activeCalendarId}:`, cancelErr);
         return {
           status: "failed",
           error: cancelErr?.message || String(cancelErr),
@@ -715,8 +732,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (rawItems.length === 0) {
-      return NextResponse.json({ error: "user_id is required (or provide recipients list)." }, { status: 400 });
+    if (rawItems.length === 0 && !relatedId) {
+      return NextResponse.json({ error: "user_id is required (or provide task_id / recipients list)." }, { status: 400 });
     }
 
     // 2. Resolve missing emails/names from profiles
@@ -991,7 +1008,12 @@ Collective Perspectives • Singapore
     let calendarSyncResult: CalendarSyncResult = { status: "skipped" };
     if (supabaseAdmin && relatedId) {
       try {
-        calendarSyncResult = await syncTaskWithGoogleCalendar(supabaseAdmin, relatedId, appUrl);
+        const taskHint = {
+          google_calendar_id: body.google_calendar_id || body.record?.google_calendar_id || singleRecord?.google_calendar_id || null,
+          old_google_calendar_id: body.old_record?.google_calendar_id || null,
+          check_date: body.check_date !== undefined ? body.check_date : (body.record?.check_date !== undefined ? body.record.check_date : undefined),
+        };
+        calendarSyncResult = await syncTaskWithGoogleCalendar(supabaseAdmin, relatedId, appUrl, taskHint);
       } catch (calErr) {
         console.error("[api/notifications/webhook] Error during Google Calendar sync:", calErr);
         calendarSyncResult = {
@@ -1006,14 +1028,16 @@ Collective Perspectives • Singapore
     const failedCount = dispatchResults.filter((r) => r.status === "failed").length;
 
     const overallStatus =
-      failedCount === 0
+      dispatchResults.length === 0
+        ? (calendarSyncResult.status === "cancelled" || calendarSyncResult.status === "updated" || calendarSyncResult.status === "created" ? "sent" : "simulated")
+        : failedCount === 0
         ? (sentCount > 0 ? "sent" : "simulated")
         : sentCount > 0
         ? "partial"
         : "failed";
 
     return NextResponse.json({
-      success: failedCount < dispatchResults.length,
+      success: dispatchResults.length === 0 ? true : failedCount < dispatchResults.length,
       status: overallStatus,
       totalRecipients: dispatchResults.length,
       sentCount,

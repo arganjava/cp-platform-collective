@@ -448,6 +448,8 @@ export const useStore = create<AppState>((set, get) => ({
         role: user.role,
         password,
         avatarColor: user.avatarColor,
+        waNumber: user.waNumber,
+        wa_number: user.waNumber,
       });
 
       const finalUser: User = {

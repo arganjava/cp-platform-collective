@@ -5,17 +5,22 @@
 
 ```
 WhatsApp User 📱 (CP Team Member / Manager / Artist)
-       │ (Inbound WhatsApp message / voice-note transcript)
+       │ (Inbound WhatsApp message from phone number)
        ▼
 OpenClaw Gateway / Rabbit Agent 🐇
-       │ (Intent parsing, entity resolution & safety policy checks)
+       │ 1. Sender phone lookup: matches against public.profiles.wa_number
+       │ 2. Role verification: checks profiles.role (admin, member, guest)
+       │ 3. RBAC Scoping:
+       │    - admin: global view & CRU across all projects/tasks
+       │    - member / guest: scoped strictly to assigned project_profiles & task_profiles
        ▼
 Supabase CRM Database (PostgreSQL / PostgREST) 🗄️
-  ├── public.profiles         (Team roster, roles & soft deletes)
+  ├── public.profiles         (Team roster, roles, wa_number & soft deletes)
   ├── public.clients          (Organizations, sponsors & commissioners)
   ├── public.projects         (Creative initiatives & deliverables)
   ├── public.project_profiles (Project team membership junction)
   ├── public.tasks            (Action items, milestone check dates & labeled links)
+  ├── public.task_profiles     (Task assignees junction)
   ├── public.sales            (Revenue deals & pipeline entries)
   ├── public.sale_stages      (Stage progression history & PIC assignment)
   └── public.notifications    (System activity & assignment alerts)
@@ -30,8 +35,37 @@ WhatsApp User 📱 (Clean, scannable mobile response in SGT)
 ---
 
 ## Access Control & Operations Boundary
+
+### Role-Based Access Scoping via `profiles.wa_number` & `profiles.role`
+Rabbit WhatsApp Agent identifies incoming senders using their WhatsApp mobile number mapped to `public.profiles.wa_number`. The agent resolves the user profile and applies strict Role-Based Access Control:
+
+1. **Role `admin` (Executive & Leadership)**:
+   - **Global Visibility**: Can view all projects, tasks, clients, sales deals, stages, and team rosters across the workspace.
+   - **Full CRU (Create, Read, Update)**: Authorized to create and update any project, task, client, sale, or pipeline stage.
+   - **Deletion Policy**: Hard deletion is prohibited over WhatsApp for all users (safety directive); admins must archive records or use the web dashboard.
+
+2. **Role `member` & `guest` (Team Members, Artists & External Partners)**:
+   - **Scoped Projects Visibility**: Can **ONLY see projects** where they are explicitly assigned in `public.project_profiles`:
+     ```sql
+     select p.* from public.projects p
+     join public.project_profiles pp on pp.project_id = p.id
+     where pp.profile_id = :caller_profile_id;
+     ```
+   - **Scoped Tasks Visibility**: Can **ONLY see tasks** where they are assigned in `public.task_profiles` or as `tasks.assignee_id`:
+     ```sql
+     select t.* from public.tasks t
+     left join public.task_profiles tp on tp.task_id = t.id
+     where tp.profile_id = :caller_profile_id or t.assignee_id = :caller_profile_id;
+     ```
+   - **CRU Scoping**: Can create tasks within their assigned projects, and update task status/notes on their assigned tasks. Cannot view or alter projects or tasks outside their assignments.
+   - **Financial/Sales Restriction**: Sales pipeline, deal valuations, and `/users` administration are hidden from member and guest queries.
+
+3. **Unregistered WhatsApp Mobile Numbers**:
+   - If an inbound WhatsApp message originates from a phone number not found in `public.profiles.wa_number` (or belonging to a deactivated user where `is_deleted = true`), the agent rejects CRM queries and prompts:
+     > *"⚠️ Your WhatsApp number (+65...) is not linked to an active Collective Perspectives profile. Please ask an administrator to add your WA Mobile number on the `/users` page."*
+
 - **Allowed Operations**:
-  - `READ`: Query lists, metrics, revenue summaries, record details, milestone status, and task assignments.
+  - `READ`: Query lists, metrics, revenue summaries, record details, milestone status, and task assignments (respecting role-based scoping above).
   - `CREATE`: Insert new tasks, projects, clients, sales deals, pipeline stages, and notifications.
   - `UPDATE`: Modify record fields (status, priority, due dates, check dates, links, assignees, deal amounts, stage progressions, notes).
 - **Prohibited Operations**:
@@ -71,13 +105,17 @@ create table public.profiles (
   avatar_color  text,
   role          text not null default 'guest', -- 'admin' | 'member' | 'guest'
   avatar_url    text,
+  wa_number     text, -- WhatsApp phone number (e.g. '+6591234567') for mobile identity & RBAC
   is_deleted    boolean default false,
   deleted_at    timestamptz,
   created_at    timestamptz not null default now()
 );
 ```
 - **Functionality**:
-  - `role`: Controls permissions. Workspace admins have full control; members manage assigned tasks and projects; guests have read-only or limited scope.
+  - `wa_number`: Key identifier for Rabbit Agent WhatsApp inbound messages. The agent extracts the sender phone number and looks up the matching profile to verify identity and determine permissions.
+  - `role`: Controls permissions.
+    - `admin`: Can view all projects, tasks, sales, and clients; full CRU.
+    - `member` & `guest`: Scoped strictly to projects in `project_profiles` and tasks in `task_profiles`.
   - Soft Delete: Members are never hard-deleted. When removing a user, `is_deleted = true` and `deleted_at = now()` are set.
 - **Agent Filter Directive**: Always filter active profiles with:
   ```sql

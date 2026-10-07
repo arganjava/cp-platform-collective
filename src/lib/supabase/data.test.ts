@@ -311,11 +311,30 @@ describe("row → app type mappers", () => {
       avatar_color: null,
       role: null as unknown as string,
       avatar_url: null,
+      wa_number: "+6591234567",
       created_at: "2026-01-05T09:00:00Z",
     };
     expect(fromProfileRow(row)).toMatchObject({
       avatarColor: "var(--primary)",
       role: "guest",
+      waNumber: "+6591234567",
+    });
+  });
+
+  it("profileColumns maps waNumber to wa_number", () => {
+    const userUpdate: Partial<User> = {
+      id: "u-1",
+      name: "Vincent Lim",
+      waNumber: "+6591234567",
+    };
+    expect(profileColumns(userUpdate)).toMatchObject({
+      id: "u-1",
+      name: "Vincent Lim",
+      wa_number: "+6591234567",
+    });
+
+    expect(profileColumns({ waNumber: null })).toMatchObject({
+      wa_number: null,
     });
   });
 });

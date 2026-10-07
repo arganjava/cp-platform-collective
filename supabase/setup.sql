@@ -22,15 +22,18 @@ create table if not exists public.profiles (
   avatar_color  text,
   role          text not null default 'guest',
   avatar_url    text,
+  wa_number     text,
   is_deleted    boolean not null default false,
   deleted_at    timestamptz,
   created_at    timestamptz not null default now()
 );
 
 -- Ensure columns exist if table was already created earlier
+alter table public.profiles add column if not exists wa_number text;
 alter table public.profiles add column if not exists is_deleted boolean not null default false;
 alter table public.profiles add column if not exists deleted_at timestamptz;
 create unique index if not exists idx_profiles_email_unique on public.profiles (lower(trim(email)));
+create index if not exists idx_profiles_wa_number on public.profiles (wa_number);
 
 create table if not exists public.projects (
   id          uuid primary key default gen_random_uuid(),

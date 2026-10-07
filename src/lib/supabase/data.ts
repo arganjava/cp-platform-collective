@@ -47,6 +47,7 @@ export function fromProfileRow(r: ProfileRow): User {
     avatarColor: r.avatar_color ?? "var(--primary)",
     role,
     avatarUrl: r.avatar_url ?? undefined,
+    waNumber: r.wa_number ?? null,
     isDeleted: Boolean(r.is_deleted || r.deleted_at),
     deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at ?? new Date().toISOString(),
@@ -265,6 +266,7 @@ export function profileColumns(u: Partial<User>): Record<string, unknown> {
   if (u.avatarColor !== undefined) cols.avatar_color = u.avatarColor;
   if (u.role !== undefined) cols.role = u.role;
   if (u.avatarUrl !== undefined) cols.avatar_url = u.avatarUrl || null;
+  if (u.waNumber !== undefined) cols.wa_number = u.waNumber || null;
   if (u.isDeleted !== undefined) cols.is_deleted = u.isDeleted;
   if (u.deletedAt !== undefined) cols.deleted_at = u.deletedAt;
   return cols;
@@ -722,6 +724,8 @@ export async function updateProfileRow(id: string, updates: Partial<User>) {
         role: updates.role,
         avatarColor: updates.avatarColor,
         avatar_color: updates.avatarColor,
+        wa_number: updates.waNumber,
+        waNumber: updates.waNumber,
       }),
     });
     const data = await res.json();
@@ -833,6 +837,8 @@ export async function createUserViaFunction(params: {
   role: User["role"];
   password?: string;
   avatarColor?: string;
+  waNumber?: string | null;
+  wa_number?: string | null;
 }): Promise<{ id: string; authUserId?: string }> {
   const normalizedEmail = params.email.trim().toLowerCase();
 
@@ -979,6 +985,7 @@ export async function createUserViaFunction(params: {
       email: normalizedEmail,
       role: params.role,
       avatar_color: params.avatarColor || "var(--primary)",
+      wa_number: params.wa_number || params.waNumber || null,
       is_deleted: false,
     })
     .select()

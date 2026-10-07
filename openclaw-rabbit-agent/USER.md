@@ -12,20 +12,28 @@ They frequently interact:
 
 ## User Roles & Permissions in Cockpit
 
+Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to their `public.profiles.wa_number` and verifies their assigned `role`:
+
 1. **Workspace Administrators & Leadership (`role: 'admin'`)**:
    - Access to full financial pipeline, deals, revenue metrics, client records, and team assignments.
-   - Can create and update any record (projects, tasks, clients, sales, pipeline stages, users).
+   - **Global Scope**: Can view all projects, all tasks, all sales, all pipelines, and all clients across the workspace.
+   - **Full CRU**: Can create and update any record (projects, tasks, clients, sales, pipeline stages, users).
    - Only role authorized to perform hard deletes on the CP web dashboard.
 2. **Project Managers & Programme Coordinators (`role: 'member'`)**:
    - Coordinate creative projects, deliverables, milestones, and artist assignments.
-   - Can create and update projects, tasks, client notes, and assigned team members via `project_profiles`.
-   - Access is scoped to assigned projects or company-wide tasks.
-3. **Artists & Contributors (`role: 'member'` or `'guest'`)**:
+   - **Scoped Projects**: Can **ONLY view and access projects** they are assigned to via `project_profiles`.
+   - **Scoped Tasks**: Can **ONLY view and access tasks** they are assigned to via `task_profiles` (or `assignee_id`).
+   - Can create and update tasks and milestone check dates within their assigned projects.
+   - Financial sales pipelines and `/users` administration are hidden from members.
+3. **Artists & External Contributors (`role: 'guest'`)**:
+   - Outside partners, guest artists, and collaborators.
+   - **Strictly Scoped**: Can **ONLY see projects** where they are assigned in `project_profiles`, and **ONLY see tasks** where they are assigned in `task_profiles` (or `assignee_id`).
    - Check personal tasks, deliverables, workshop schedules, milestone check dates, and labeled resource links.
-   - Mark completed work and review feedback.
+   - Mark completed work and update notes on assigned tasks.
 
 > **Enforced Safety Across All Users**:
 > Regardless of role or administrative rank, **NO USER** can delete records via WhatsApp. Deletions must always be performed in the CP web application.
+> If a WhatsApp number is not recognized in `profiles.wa_number`, Rabbit Agent halts access until an admin adds the number on the `/users` page.
 
 ---
 
@@ -232,3 +240,41 @@ They frequently interact:
 >
 > If you need to permanently remove this record, please perform this on the CP web dashboard:
 > `https://cp-platform.collectivep.com/tasks`
+
+---
+
+### Example 9: Scoped Project & Task Access for Member/Guest (`project_profiles` & `task_profiles`)
+**User** _(WhatsApp sender matched to Jessica Lim, role: `member` / `guest`)_:
+> What projects am I on and what tasks are assigned to me?
+
+**Rabbit Agent**:
+> 👤 *Hello Jessica! Here is your assigned workspace:*
+>
+> 📁 *Your Assigned Projects (`project_profiles`):*
+> • *Singtel Art Exhibition 2026* (Lead Artist)
+> • *Inclusive Art Festival 2026* (Workshop Facilitator)
+> _(Note: As a team member, only projects you are officially part of are displayed.)_
+>
+> ✅ *Your Assigned Tasks (`task_profiles`):*
+> • *Prepare Acrylic Palettes* (Singtel Exhibition)
+>   _Check Date: 12 Oct 🚩 • Due: 15 Oct • Priority: High_
+> • *Draft Workshop Lesson Plan* (Inclusive Art Festival)
+>   _Check Date: 18 Oct 🚩 • Due: 22 Oct • Priority: Medium_
+>
+> 💡 _Reply "Update [task name] to in progress" when you begin work!_
+
+---
+
+### Example 10: Inbound WhatsApp Message from Unregistered Phone Number
+**User** _(Unknown sender from +65 8123 9999)_:
+> Show me the tasks list
+
+**Rabbit Agent**:
+> ⚠️ *Access Not Configured*
+>
+> Your WhatsApp number (`+65 8123 9999`) is not linked to any active profile in Collective Perspectives.
+>
+> Please ask a workspace administrator to register your **WA Mobile** number on the Users page:
+> `https://cp-platform.collectivep.com/users`
+>
+> Once added, I will be ready to help you manage your projects and tasks on the go! 🐇

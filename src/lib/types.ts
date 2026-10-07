@@ -13,6 +13,7 @@ export interface User {
   avatarColor: string;
   role: UserRole;
   avatarUrl?: string;
+  waNumber?: string | null;
   isDeleted?: boolean;
   deletedAt?: string | null;
   createdAt?: string;

@@ -895,4 +895,100 @@ describe("POST /api/notifications/webhook", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("cancels calendar event when task is updated directly with task_id without email recipients", async () => {
+    mockTaskRecord.google_calendar_id = "gcal-event-direct-update-999";
+    mockTaskRecord.check_date = null;
+    mockTaskRecord.assignee_id = null; // No assignees
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+    updatedTaskCalendarId = "gcal-event-direct-update-999";
+
+    let deleteUrlSent = "";
+    let deleteMethodSent = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.cancel-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars")) {
+        deleteUrlSent = urlStr;
+        deleteMethodSent = opts?.method || "GET";
+        return new Response(null, { status: 204 });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          task_id: "t-1",
+          related_id: "t-1",
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("cancelled");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-direct-update-999");
+      expect(deleteMethodSent).toBe("DELETE");
+      expect(deleteUrlSent).toContain("gcal-event-direct-update-999");
+      expect(updatedTaskCalendarId).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("cancels calendar event when check_date is explicitly cleared via payload hint check_date: null", async () => {
+    mockTaskRecord.google_calendar_id = "gcal-event-hint-clear-888";
+    mockTaskRecord.check_date = "2026-10-15"; // Database might not have refreshed yet
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+    updatedTaskCalendarId = "gcal-event-hint-clear-888";
+
+    let deleteUrlSent = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.cancel-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars")) {
+        deleteUrlSent = urlStr;
+        return new Response(null, { status: 204 });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          task_id: "t-1",
+          check_date: null,
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("cancelled");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-hint-clear-888");
+      expect(deleteUrlSent).toContain("gcal-event-hint-clear-888");
+      expect(updatedTaskCalendarId).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
