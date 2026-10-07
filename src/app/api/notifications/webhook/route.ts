@@ -61,7 +61,7 @@ interface ResolvedRecipient {
 }
 
 interface CalendarSyncResult {
-  status: "created" | "updated" | "skipped" | "failed";
+  status: "created" | "updated" | "cancelled" | "skipped" | "failed";
   calendarEventId?: string | null;
   error?: string;
 }
@@ -320,7 +320,74 @@ async function syncTaskWithGoogleCalendar(
     return { status: "skipped", error: "Task not found" };
   }
 
-  // 3. Query all task_profiles and task.assignee_id to collect attendee emails
+  // 3. Validasi check_date:
+  // - Jika check_date null dan task.google_calendar_id ada (pada update): Batalkan event di Google Calendar & set google_calendar_id = null
+  // - Jika check_date null dan task.google_calendar_id tidak ada: Tidak perlu membuat kalender (skip)
+  const extractDateOnly = (val?: string | null): string | null => {
+    if (!val || typeof val !== "string") return null;
+    const match = val.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    return match ? match[1] : null;
+  };
+
+  const targetDate = extractDateOnly(task.check_date);
+
+  if (!targetDate) {
+    if (task.google_calendar_id) {
+      console.log(`[Google Calendar] check_date is null but google_calendar_id exists (${task.google_calendar_id}). Cancelling calendar event...`);
+      const cancelUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(task.google_calendar_id)}`;
+      const cancelQueryParams = new URLSearchParams({ sendUpdates: "all" });
+      if (apiKey) {
+        cancelQueryParams.set("key", apiKey);
+      }
+      const cancelHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (apiKey) {
+        cancelHeaders["X-Goog-Api-Key"] = apiKey;
+      }
+      if (token) {
+        cancelHeaders["Authorization"] = `Bearer ${token}`;
+      }
+
+      try {
+        const cancelRes = await fetch(`${cancelUrl}?${cancelQueryParams.toString()}`, {
+          method: "DELETE",
+          headers: cancelHeaders,
+        });
+
+        // 204 No Content, 200 OK, atau 404/410 (event sudah terhapus) dianggap sukses pembatalan
+        if (cancelRes.ok || cancelRes.status === 204 || cancelRes.status === 404 || cancelRes.status === 410) {
+          await supabaseAdmin
+            .from("tasks")
+            .update({ google_calendar_id: null })
+            .eq("id", taskId);
+          console.log(`[Google Calendar] Successfully cancelled event ${task.google_calendar_id} and cleared google_calendar_id for task ${taskId}`);
+          return {
+            status: "cancelled",
+            calendarEventId: task.google_calendar_id,
+          };
+        } else {
+          const cancelErrText = await cancelRes.text();
+          console.warn(`[Google Calendar] Failed to cancel event ${task.google_calendar_id} (${cancelRes.status}):`, cancelErrText);
+          return {
+            status: "failed",
+            error: `Failed to cancel calendar event (${cancelRes.status}): ${cancelErrText}`,
+          };
+        }
+      } catch (cancelErr: any) {
+        console.warn(`[Google Calendar] Error calling DELETE for event ${task.google_calendar_id}:`, cancelErr);
+        return {
+          status: "failed",
+          error: cancelErr?.message || String(cancelErr),
+        };
+      }
+    }
+
+    console.log(`[Google Calendar] Skipped: check_date is null for task ${taskId}, no calendar event needed.`);
+    return { status: "skipped" };
+  }
+
+  // 4. Query all task_profiles and task.assignee_id to collect attendee emails
   const { data: taskProfileRows } = await supabaseAdmin
     .from("task_profiles")
     .select("profile_id")
@@ -353,32 +420,10 @@ async function syncTaskWithGoogleCalendar(
     }
   }
 
-  // 4. Build start and end timings adhering strictly to Singapore Time (UTC+8)
+  // 5. Build start and end timings adhering strictly to Singapore Time (UTC+8)
   // Must follow tasks.check_date, tasks.check_start_time, and tasks.check_end_time
   const timeZone = "Asia/Singapore";
   const singaporeOffset = "+08:00";
-
-  // Resolve target date (YYYY-MM-DD)
-  const extractDateOnly = (val?: string | null): string | null => {
-    if (!val || typeof val !== "string") return null;
-    const match = val.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-    return match ? match[1] : null;
-  };
-
-  let targetDate =
-    extractDateOnly(task.check_date) ||
-    extractDateOnly(task.check_start_time) ||
-    extractDateOnly(task.start_date) ||
-    extractDateOnly(task.due_date);
-
-  if (!targetDate) {
-    targetDate = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Singapore",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
-  }
 
   // Resolve time components (HH:mm)
   const extractTimeOnly = (val?: string | null): string | null => {

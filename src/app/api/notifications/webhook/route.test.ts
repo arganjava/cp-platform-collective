@@ -737,4 +737,162 @@ describe("POST /api/notifications/webhook", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("skips creating calendar event when check_date is null and no google_calendar_id exists", async () => {
+    mockTaskRecord.google_calendar_id = null;
+    mockTaskRecord.check_date = null;
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+
+    let calendarApiCalled = false;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.skip-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars")) {
+        calendarApiCalled = true;
+        return new Response(JSON.stringify({ id: "should-not-be-called" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-skip-checkdate-null",
+            user_id: "u-123",
+            message: "Assigned to task without check date",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("skipped");
+      expect(calendarApiCalled).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("cancels calendar event when on update task.google_calendar_id is not null and task.check_date is null", async () => {
+    mockTaskRecord.google_calendar_id = "gcal-event-to-cancel-999";
+    mockTaskRecord.check_date = null;
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+    updatedTaskCalendarId = "gcal-event-to-cancel-999";
+
+    let deleteUrlSent = "";
+    let deleteMethodSent = "";
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.cancel-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars")) {
+        deleteUrlSent = urlStr;
+        deleteMethodSent = opts?.method || "GET";
+        return new Response(null, { status: 204 });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-cancel-event",
+            user_id: "u-123",
+            message: "Task check_date cleared",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("cancelled");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-to-cancel-999");
+      expect(deleteMethodSent).toBe("DELETE");
+      expect(deleteUrlSent).toContain("gcal-event-to-cancel-999");
+      expect(deleteUrlSent).toContain("sendUpdates=all");
+      // Verify database updated google_calendar_id to null
+      expect(updatedTaskCalendarId).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("handles 404 from Google Calendar during cancellation by still clearing task.google_calendar_id", async () => {
+    mockTaskRecord.google_calendar_id = "gcal-event-already-gone";
+    mockTaskRecord.check_date = null;
+    mockAppConfig.GOOGLE_REFRESH_TOKEN = "1//mockRefreshToken";
+    updatedTaskCalendarId = "gcal-event-already-gone";
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: any, opts: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.cancel-token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (urlStr.includes("googleapis.com/calendar/v3/calendars")) {
+        return new Response(JSON.stringify({ error: { code: 404, message: "Not Found" } }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return originalFetch(url, opts);
+    }) as any;
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/notifications/webhook", {
+        method: "POST",
+        body: JSON.stringify({
+          record: {
+            id: "notif-cal-cancel-404",
+            user_id: "u-123",
+            message: "Task check_date cleared with gone event",
+            type: "assignment",
+            related_id: "t-1",
+          },
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.calendar.status).toBe("cancelled");
+      expect(data.calendar.calendarEventId).toBe("gcal-event-already-gone");
+      expect(updatedTaskCalendarId).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
