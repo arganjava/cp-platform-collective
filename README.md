@@ -39,6 +39,31 @@ npm run dev
 
 The development server uses Turbopack. Open [http://localhost:3456](http://localhost:3456) when using the project's SSH preview setup, or [http://localhost:3000](http://localhost:3000) for the default Next.js port.
 
+### Running with PM2 (Production & Daemon Mode)
+
+This project includes a pre-configured `ecosystem.config.js` for process management with PM2.
+
+```bash
+# 1. Build the production Next.js bundle
+npm run build
+
+# 2. Start using PM2 in cluster mode (auto-scales across available CPU cores on port 3000)
+npm run pm2:start
+
+# Or start in development mode via PM2
+npm run pm2:start:dev
+
+# Process management commands
+npm run pm2:status    # View running PM2 processes and resource usage
+npm run pm2:logs      # Stream real-time application logs
+npm run pm2:reload    # Zero-downtime cluster reload
+npm run pm2:restart   # Restart application processes
+npm run pm2:stop      # Stop PM2 processes
+
+# Docker / Container runtime (keeps process in foreground)
+npm run pm2:runtime
+```
+
 ## Supabase setup
 
 Auth, the Postgres database, and avatar storage all run on Supabase. To enable them:

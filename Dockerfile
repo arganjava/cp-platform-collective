@@ -31,6 +31,7 @@ ENV NODE_ENV=production
 # Copy package files and scripts
 COPY package*.json ./
 COPY scripts ./scripts
+COPY ecosystem.config.js ./
 
 # Install only production dependencies
 RUN npm ci --only=production
@@ -47,5 +48,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application using PM2 runtime
+CMD ["npm", "run", "pm2:runtime"]
