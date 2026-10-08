@@ -50,3 +50,7 @@ next-env.d.ts
 /.pi/
 .vscode/
 supabase/.temp/
+rabbit-agent/
+openclaw-rabbit-agent/backup
+openclaw-rabbit-agent/backup_running
+.idea/
