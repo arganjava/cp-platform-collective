@@ -450,6 +450,8 @@ export const useStore = create<AppState>((set, get) => ({
         avatarColor: user.avatarColor,
         waNumber: user.waNumber,
         wa_number: user.waNumber,
+        googleOAuth: user.googleOAuth,
+        google_oauth: user.googleOAuth,
       });
 
       const finalUser: User = {

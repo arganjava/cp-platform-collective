@@ -23,6 +23,7 @@ create table if not exists public.profiles (
   role          text not null default 'guest',
   avatar_url    text,
   wa_number     text,
+  google_oauth  jsonb,
   is_deleted    boolean not null default false,
   deleted_at    timestamptz,
   created_at    timestamptz not null default now()
@@ -30,10 +31,24 @@ create table if not exists public.profiles (
 
 -- Ensure columns exist if table was already created earlier
 alter table public.profiles add column if not exists wa_number text;
+alter table public.profiles add column if not exists google_oauth jsonb;
 alter table public.profiles add column if not exists is_deleted boolean not null default false;
 alter table public.profiles add column if not exists deleted_at timestamptz;
 create unique index if not exists idx_profiles_email_unique on public.profiles (lower(trim(email)));
 create index if not exists idx_profiles_wa_number on public.profiles (wa_number);
+
+-- User-level Google Workspace OAuth tokens
+create table if not exists public.profiles_google_tokens (
+  id                   uuid primary key default gen_random_uuid(),
+  profile_id           uuid not null references public.profiles (id) on delete cascade,
+  google_client_id     text,
+  google_client_secret text,
+  google_refresh_token text,
+  created_at           timestamptz not null default now(),
+  constraint uq_profiles_google_tokens_profile unique (profile_id)
+);
+
+create index if not exists idx_profiles_google_tokens_profile_id on public.profiles_google_tokens (profile_id);
 
 create table if not exists public.projects (
   id          uuid primary key default gen_random_uuid(),
@@ -211,6 +226,41 @@ create policy "sales_all" on public.sales
 drop policy if exists "notifications_all" on public.notifications;
 create policy "notifications_all" on public.notifications
   for all to authenticated using (true) with check (true);
+
+-- Google Workspace Tokens (RLS)
+alter table public.profiles_google_tokens enable row level security;
+
+drop policy if exists "profiles_google_tokens_select" on public.profiles_google_tokens;
+create policy "profiles_google_tokens_select" on public.profiles_google_tokens
+  for select to authenticated
+  using (
+    profile_id = auth.uid() or
+    profile_id in (select id from public.profiles where auth_user_id = auth.uid()) or
+    exists (
+      select 1 from public.profiles
+      where (id = auth.uid() or auth_user_id = auth.uid()) and role = 'admin'
+    )
+  );
+
+drop policy if exists "profiles_google_tokens_all" on public.profiles_google_tokens;
+create policy "profiles_google_tokens_all" on public.profiles_google_tokens
+  for all to authenticated
+  using (
+    profile_id = auth.uid() or
+    profile_id in (select id from public.profiles where auth_user_id = auth.uid()) or
+    exists (
+      select 1 from public.profiles
+      where (id = auth.uid() or auth_user_id = auth.uid()) and role = 'admin'
+    )
+  )
+  with check (
+    profile_id = auth.uid() or
+    profile_id in (select id from public.profiles where auth_user_id = auth.uid()) or
+    exists (
+      select 1 from public.profiles
+      where (id = auth.uid() or auth_user_id = auth.uid()) and role = 'admin'
+    )
+  );
 
 -- ─────────────────────────── Storage: avatars ───────────────────────────
 

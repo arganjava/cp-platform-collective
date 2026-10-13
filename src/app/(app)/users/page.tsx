@@ -35,7 +35,11 @@ import {
   Check,
   AlertTriangle,
   Phone,
+  Upload,
+  ShieldCheck,
+  FileText,
 } from "lucide-react";
+import { parseGoogleClientSecretJson } from "@/lib/google-oauth";
 
 const AVATAR_COLORS = [
   "var(--primary)",
@@ -72,6 +76,7 @@ export default function UsersPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [newUserOAuthFileName, setNewUserOAuthFileName] = useState("");
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
@@ -79,23 +84,62 @@ export default function UsersPage() {
     role: "member" as UserRole,
     password: "",
     avatarColor: "var(--primary)",
+    googleOAuth: null as Record<string, unknown> | null,
   });
 
   // Edit User State
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editOAuthFileName, setEditOAuthFileName] = useState("");
   const [editForm, setEditForm] = useState<{
     name: string;
     waNumber: string;
     role: UserRole;
     avatarColor: string;
+    googleOAuth: Record<string, unknown> | null;
   }>({
     name: "",
     waNumber: "",
     role: "member",
     avatarColor: "var(--primary)",
+    googleOAuth: null,
   });
+
+  function handleOAuthJsonUpload(file: File, isEdit: boolean) {
+    if (!file.name.endsWith(".json")) {
+      const err = "Please upload a valid .json file from Google Cloud Console.";
+      if (isEdit) setEditError(err);
+      else setFormError(err);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const parsed = parseGoogleClientSecretJson(text);
+      if (!parsed.valid) {
+        if (isEdit) setEditError(parsed.error || "Invalid Google OAuth client secret JSON file");
+        else setFormError(parsed.error || "Invalid Google OAuth client secret JSON file");
+        return;
+      }
+      if (isEdit) {
+        setEditForm((prev) => ({ ...prev, googleOAuth: parsed.rawJson || null }));
+        setEditOAuthFileName(file.name);
+        setEditError(null);
+      } else {
+        setNewUser((prev) => ({ ...prev, googleOAuth: parsed.rawJson || null }));
+        setNewUserOAuthFileName(file.name);
+        setFormError(null);
+      }
+    };
+    reader.onerror = () => {
+      const err = "Failed to read uploaded file.";
+      if (isEdit) setEditError(err);
+      else setFormError(err);
+    };
+    reader.readAsText(file);
+  }
 
   // Delete Confirmation State
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
@@ -180,6 +224,7 @@ export default function UsersPage() {
         waNumber: newUser.waNumber.trim() || null,
         role: newUser.role,
         avatarColor: newUser.avatarColor,
+        googleOAuth: newUser.googleOAuth || null,
         isDeleted: false,
         createdAt: new Date().toISOString(),
       };
@@ -193,7 +238,9 @@ export default function UsersPage() {
         role: "member",
         password: "",
         avatarColor: "var(--primary)",
+        googleOAuth: null,
       });
+      setNewUserOAuthFileName("");
       setShowAddModal(false);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create user.");
@@ -206,11 +253,13 @@ export default function UsersPage() {
     setEditingUserId(user.id);
     setEditError(null);
     setIsSavingEdit(false);
+    setEditOAuthFileName(user.googleOAuth ? "client_secret.json (configured)" : "");
     setEditForm({
       name: user.name,
       waNumber: user.waNumber || "",
       role: user.role,
       avatarColor: user.avatarColor || "var(--primary)",
+      googleOAuth: (user.googleOAuth as Record<string, unknown> | null) || null,
     });
   }
 
@@ -241,6 +290,7 @@ export default function UsersPage() {
         role: editForm.role,
         avatarColor: editForm.avatarColor,
         waNumber: editForm.waNumber.trim() || null,
+        googleOAuth: editForm.googleOAuth,
       });
 
       // Update local store immediately
@@ -249,6 +299,7 @@ export default function UsersPage() {
         role: editForm.role,
         avatarColor: editForm.avatarColor,
         waNumber: editForm.waNumber.trim() || null,
+        googleOAuth: editForm.googleOAuth,
       });
 
       setEditingUserId(null);
@@ -444,6 +495,7 @@ export default function UsersPage() {
                 <th className="px-4 py-3.5 sm:px-6">Member</th>
                 <th className="px-4 py-3.5">Email</th>
                 <th className="px-4 py-3.5">WA Mobile</th>
+                <th className="px-4 py-3.5">Google OAuth</th>
                 <th className="px-4 py-3.5">Role</th>
                 <th className="px-4 py-3.5">Status</th>
                 <th className="px-4 py-3.5 text-right sm:px-6">Actions</th>
@@ -452,7 +504,7 @@ export default function UsersPage() {
             <tbody className="divide-y divide-border">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
                     <UserX className="mx-auto mb-2 h-8 w-8 text-subtle-foreground" />
                     <p className="font-medium">No users match your criteria.</p>
                     <p className="text-xs text-subtle-foreground">Try adjusting your search query or role filter.</p>
@@ -519,6 +571,17 @@ export default function UsersPage() {
                           </div>
                         ) : (
                           <span className="text-subtle-foreground italic">-</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        {user.googleOAuth ? (
+                          <Badge variant="positive" className="inline-flex items-center gap-1 font-medium text-xs">
+                            <ShieldCheck className="h-3 w-3" />
+                            <span>Configured</span>
+                          </Badge>
+                        ) : (
+                          <span className="text-subtle-foreground italic text-xs">Not configured</span>
                         )}
                       </td>
 
@@ -751,6 +814,40 @@ export default function UsersPage() {
               </div>
             </div>
 
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                Google OAuth Credentials (JSON)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex cursor-pointer items-center gap-2 border border-border bg-secondary/50 px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors">
+                  <Upload className="h-4 w-4 text-subtle-foreground shrink-0" />
+                  <span className="truncate max-w-[220px]">
+                    {newUserOAuthFileName || "Upload client_secret_*.json"}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleOAuthJsonUpload(file, false);
+                    }}
+                  />
+                </label>
+                {newUser.googleOAuth ? (
+                  <Badge variant="positive" className="inline-flex items-center gap-1 text-[11px]">
+                    <ShieldCheck className="h-3 w-3" />
+                    Configured
+                  </Badge>
+                ) : (
+                  <span className="text-[11px] text-subtle-foreground">Optional</span>
+                )}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Upload client_secret_*.json downloaded from Google Cloud Console to enable Google Workspace integration.
+              </p>
+            </div>
+
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
               <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
                 Cancel
@@ -897,6 +994,52 @@ export default function UsersPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-subtle-foreground">
+                    Google OAuth Credentials (JSON)
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex cursor-pointer items-center gap-2 border border-border bg-secondary/50 px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors">
+                      <Upload className="h-4 w-4 text-subtle-foreground shrink-0" />
+                      <span className="truncate max-w-[220px]">
+                        {editOAuthFileName || "Upload client_secret_*.json"}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleOAuthJsonUpload(file, true);
+                        }}
+                      />
+                    </label>
+                    {editForm.googleOAuth ? (
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="positive" className="inline-flex items-center gap-1 text-[11px]">
+                          <ShieldCheck className="h-3 w-3" />
+                          Configured
+                        </Badge>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditForm((prev) => ({ ...prev, googleOAuth: null }));
+                            setEditOAuthFileName("");
+                          }}
+                          className="text-[11px] text-destructive hover:underline ml-1"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-subtle-foreground">No credentials uploaded</span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Upload or replace client_secret_*.json downloaded from Google Cloud Console for this profile.
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">

@@ -14,8 +14,19 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   waNumber?: string | null;
+  googleOAuth?: Record<string, unknown> | null;
+  hasGoogleToken?: boolean;
   isDeleted?: boolean;
   deletedAt?: string | null;
+  createdAt?: string;
+}
+
+export interface ProfileGoogleToken {
+  id?: string;
+  profileId: string;
+  googleClientId?: string | null;
+  googleClientSecret?: string | null;
+  googleRefreshToken?: string | null;
   createdAt?: string;
 }
 

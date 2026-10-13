@@ -7,6 +7,7 @@ import { cn, getRelativeTime } from "@/lib/utils";
 import { Search, Bell, ClipboardList, MessageCircle, Clock3, Info } from "lucide-react";
 import { UserMenu } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { GoogleWorkspaceLinkButton } from "@/components/google-workspace-link-button";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -94,6 +95,7 @@ export function TopBar() {
             <span className="hidden sm:inline text-[11px] font-medium text-subtle-foreground">Syncing…</span>
           </div>
         )}
+        <GoogleWorkspaceLinkButton />
         <ThemeToggle />
 
         <div className="relative" ref={notifRef}>

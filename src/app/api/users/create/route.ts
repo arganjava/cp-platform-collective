@@ -24,7 +24,7 @@ function formatError(err: unknown): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, password, role = "guest", avatarColor = "var(--primary)", avatar_color, wa_number, waNumber } = body;
+    const { name, email, password, role = "guest", avatarColor = "var(--primary)", avatar_color, wa_number, waNumber, google_oauth, googleOAuth } = body;
 
     if (!name || !email) {
       return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     const resolvedAvatarColor = avatar_color || avatarColor || "var(--primary)";
     const resolvedWaNumber = wa_number !== undefined ? wa_number : waNumber !== undefined ? waNumber : null;
     const trimmedWaNumber = resolvedWaNumber ? String(resolvedWaNumber).trim() : null;
+    const resolvedGoogleOAuth = google_oauth !== undefined ? google_oauth : googleOAuth !== undefined ? googleOAuth : null;
     const validatedRole: "admin" | "member" | "guest" =
       role === "admin" ? "admin" : role === "member" ? "member" : "guest";
 
@@ -129,6 +130,7 @@ export async function POST(req: NextRequest) {
         role: validatedRole,
         avatar_color: resolvedAvatarColor,
         wa_number: trimmedWaNumber,
+        google_oauth: resolvedGoogleOAuth,
         is_deleted: false,
         deleted_at: null,
       };

@@ -25,7 +25,7 @@ function formatError(err: unknown): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, role, avatarColor, avatar_color, is_deleted, deleted_at, wa_number, waNumber } = body;
+    const { id, name, role, avatarColor, avatar_color, is_deleted, deleted_at, wa_number, waNumber, google_oauth, googleOAuth } = body;
 
     if (!id) {
       return NextResponse.json({ error: "User ID is required." }, { status: 400 });
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
 
     const resolvedWaNumber = wa_number !== undefined ? wa_number : waNumber !== undefined ? waNumber : undefined;
     const trimmedWaNumber = resolvedWaNumber !== undefined ? (resolvedWaNumber ? String(resolvedWaNumber).trim() : null) : undefined;
+    const resolvedGoogleOAuth = google_oauth !== undefined ? google_oauth : googleOAuth !== undefined ? googleOAuth : undefined;
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
         updateData.avatar_color = avatar_color || avatarColor;
       }
       if (trimmedWaNumber !== undefined) updateData.wa_number = trimmedWaNumber;
+      if (resolvedGoogleOAuth !== undefined) updateData.google_oauth = resolvedGoogleOAuth;
       if (is_deleted !== undefined) updateData.is_deleted = is_deleted;
       if (deleted_at !== undefined) updateData.deleted_at = deleted_at;
 
@@ -217,6 +219,7 @@ export async function POST(req: NextRequest) {
         updateData.avatar_color = avatar_color || avatarColor;
       }
       if (trimmedWaNumber !== undefined) updateData.wa_number = trimmedWaNumber;
+      if (resolvedGoogleOAuth !== undefined) updateData.google_oauth = resolvedGoogleOAuth;
       if (is_deleted !== undefined) updateData.is_deleted = is_deleted;
       if (deleted_at !== undefined) updateData.deleted_at = deleted_at;
 

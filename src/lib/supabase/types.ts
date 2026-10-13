@@ -14,8 +14,18 @@ export interface ProfileRow {
   role: string;
   avatar_url: string | null;
   wa_number?: string | null;
+  google_oauth?: Record<string, unknown> | null;
   is_deleted?: boolean | null;
   deleted_at?: string | null;
+  created_at: string;
+}
+
+export interface ProfileGoogleTokenRow {
+  id: string;
+  profile_id: string;
+  google_client_id: string | null;
+  google_client_secret: string | null;
+  google_refresh_token: string | null;
   created_at: string;
 }
 
