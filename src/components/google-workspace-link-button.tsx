@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import { useSearchParams } from "next/navigation";
 import { buildGoogleOAuthUrl, parseGoogleClientSecretJson } from "@/lib/google-oauth";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -163,34 +164,94 @@ export function GoogleWorkspaceLinkButton() {
     setIsExchangingCode(true);
     setExchangeError(null);
 
-    try {
-      const res = await fetch("/api/auth/google/exchange", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile_id: currentUser.id,
-          code: manualCodeInput.trim(),
-          redirect_uri: "http://localhost",
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to exchange authorization code");
+    const rawInput = manualCodeInput.trim();
+    let cleanCode = rawInput;
+    if (rawInput.includes("code=")) {
+      try {
+        const parsed = new URL(rawInput.startsWith("http") ? rawInput : `http://localhost/${rawInput}`);
+        cleanCode = parsed.searchParams.get("code") || cleanCode;
+      } catch {
+        const match = rawInput.match(/[?&]code=([^&]+)/);
+        if (match) cleanCode = decodeURIComponent(match[1]);
       }
-
-      setIsLinked(true);
-      setFeedback({
-        type: "success",
-        message: "Google Workspace successfully linked! Permissions approved for Calendar, Sheets, Docs, and Drive.",
-      });
-      setManualCodeInput("");
-      setModalOpen(false);
-    } catch (err) {
-      setExchangeError(err instanceof Error ? err.message : "Failed to link Google Workspace");
-    } finally {
-      setIsExchangingCode(false);
     }
+
+    const payload = {
+      profile_id: currentUser.id,
+      code: cleanCode,
+      raw_input: rawInput,
+      redirect_uri: "http://localhost",
+    };
+
+    let success = false;
+    let errorMessage = "";
+
+    // 1. Primary: Invoke Supabase Edge Function directly (/functions/v1/google-oauth-callback)
+    if (isSupabaseConfigured) {
+      try {
+        const supabase = getSupabase();
+        const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
+          "google-oauth-callback",
+          { body: payload }
+        );
+
+        if (!edgeErr && (edgeData?.success || edgeData?.linked)) {
+          success = true;
+        } else if (edgeErr) {
+          errorMessage = edgeErr.message || "Edge function returned error";
+          const errCtx = (edgeErr as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+          if (errCtx && typeof errCtx.json === "function") {
+            try {
+              const parsed = await errCtx.json();
+              if (parsed?.error) errorMessage = parsed.error;
+            } catch {
+              // ignore json parse error
+            }
+          }
+        } else if (edgeData?.error) {
+          errorMessage = edgeData.error;
+        }
+      } catch (invokeErr) {
+        errorMessage = invokeErr instanceof Error ? invokeErr.message : String(invokeErr);
+      }
+    }
+
+    // 2. Secondary Fallback: Call Next.js API route (/api/auth/google/exchange)
+    if (!success) {
+      try {
+        const res = await fetch("/api/auth/google/exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (res.ok && (data.success || data.linked)) {
+          success = true;
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+      } catch (apiErr) {
+        if (!errorMessage) {
+          errorMessage = apiErr instanceof Error ? apiErr.message : String(apiErr);
+        }
+      }
+    }
+
+    if (!success) {
+      setIsExchangingCode(false);
+      setExchangeError(errorMessage || "Failed to exchange authorization code");
+      return;
+    }
+
+    setIsLinked(true);
+    setFeedback({
+      type: "success",
+      message: "Google Workspace successfully linked! Permissions approved for Calendar, Sheets, Docs, and Drive.",
+    });
+    setManualCodeInput("");
+    setModalOpen(false);
+    setIsExchangingCode(false);
   }
 
   async function handleUnlink() {

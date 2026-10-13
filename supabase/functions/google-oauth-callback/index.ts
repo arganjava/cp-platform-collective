@@ -91,37 +91,96 @@ serve(async (req: Request) => {
   if (req.method === "POST") {
     try {
       const body = await req.json();
-      let { profile_id, code, redirect_uri } = body || {};
+      let { profile_id, code: rawCode, redirect_uri } = body || {};
 
-      if (!profile_id || !code) {
+      if (!rawCode) {
         return new Response(
-          JSON.stringify({ error: "profile_id and code are required in request body" }),
+          JSON.stringify({ error: "Authorization code is required" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       // Extract code if user pasted a full URL
-      code = String(code).trim();
-      if (code.includes("code=")) {
+      let code = String(rawCode).trim();
+      let stateFromUrl: string | null = null;
+      if (code.includes("code=") || code.includes("http://") || code.includes("https://")) {
         try {
-          const parsed = new URL(code);
+          const parsed = new URL(code.startsWith("http") ? code : `http://localhost/${code}`);
           code = parsed.searchParams.get("code") || code;
+          stateFromUrl = parsed.searchParams.get("state");
         } catch {
-          const match = code.match(/[?&]code=([^&]+)/);
-          if (match) code = decodeURIComponent(match[1]);
+          const matchCode = code.match(/[?&]code=([^&]+)/);
+          if (matchCode) code = decodeURIComponent(matchCode[1]);
+          const matchState = code.match(/[?&]state=([^&]+)/);
+          if (matchState) stateFromUrl = decodeURIComponent(matchState[1]);
         }
       }
 
-      const { data: profile, error: profileErr } = await supabaseAdmin
+      // If profile_id was not passed directly, try to get it from state
+      if (!profile_id && stateFromUrl) {
+        const parsedState = parseState(stateFromUrl);
+        if (parsedState?.profile_id) {
+          profile_id = parsedState.profile_id;
+        }
+      }
+
+      if (!profile_id) {
+        return new Response(
+          JSON.stringify({ error: "profile_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Look up profile by id OR auth_user_id (crucial: auth users pass auth.uid() which is auth_user_id)
+      let { data: profile } = await supabaseAdmin
         .from("profiles")
-        .select("id, name, email, google_oauth")
-        .eq("id", profile_id)
+        .select("id, auth_user_id, name, email, google_oauth")
+        .or(`id.eq.${profile_id},auth_user_id.eq.${profile_id}`)
         .maybeSingle();
 
-      if (profileErr || !profile) {
+      if (!profile) {
+        // Fallback: Check auth.users by ID to find email
+        try {
+          const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(profile_id);
+          if (authUserData?.user?.email) {
+            const { data: byEmail } = await supabaseAdmin
+              .from("profiles")
+              .select("id, auth_user_id, name, email, google_oauth")
+              .ilike("email", authUserData.user.email)
+              .maybeSingle();
+            if (byEmail) profile = byEmail;
+          }
+        } catch {
+          // ignore auth lookup error
+        }
+      }
+
+      if (!profile) {
         return new Response(
           JSON.stringify({ error: `Profile not found for ID: ${profile_id}` }),
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If this row has no google_oauth, check if there is another row for the same email
+      if (!profile.google_oauth && profile.email) {
+        const { data: sibling } = await supabaseAdmin
+          .from("profiles")
+          .select("google_oauth")
+          .ilike("email", profile.email)
+          .not("google_oauth", "is", null)
+          .maybeSingle();
+        if (sibling?.google_oauth) {
+          profile.google_oauth = sibling.google_oauth;
+        }
+      }
+
+      if (!profile.google_oauth) {
+        return new Response(
+          JSON.stringify({
+            error: `No Google OAuth credentials found for profile ${profile.name || profile.email}. Please upload client_secret_*.json on the /users page.`,
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -197,7 +256,11 @@ serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, linked: true, message: "Google Workspace successfully linked" }),
+        JSON.stringify({
+          success: true,
+          linked: true,
+          message: "Google Workspace successfully linked! Permissions approved for Calendar, Sheets, Docs, and Drive.",
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } catch (err) {
@@ -246,13 +309,29 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { data: profile, error: profileErr } = await supabaseAdmin
+    let { data: profile } = await supabaseAdmin
       .from("profiles")
-      .select("id, name, email, google_oauth")
-      .eq("id", stateData.profile_id)
+      .select("id, auth_user_id, name, email, google_oauth")
+      .or(`id.eq.${stateData.profile_id},auth_user_id.eq.${stateData.profile_id}`)
       .maybeSingle();
 
-    if (profileErr || !profile) {
+    if (!profile) {
+      try {
+        const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(stateData.profile_id);
+        if (authUserData?.user?.email) {
+          const { data: byEmail } = await supabaseAdmin
+            .from("profiles")
+            .select("id, auth_user_id, name, email, google_oauth")
+            .ilike("email", authUserData.user.email)
+            .maybeSingle();
+          if (byEmail) profile = byEmail;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!profile) {
       throw new Error(`Profile not found for ID: ${stateData.profile_id}`);
     }
 
