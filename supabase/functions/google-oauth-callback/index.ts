@@ -91,7 +91,7 @@ serve(async (req: Request) => {
   if (req.method === "POST") {
     try {
       const body = await req.json();
-      let { profile_id, code: rawCode, redirect_uri } = body || {};
+      let { profile_id, email: bodyEmail, code: rawCode, redirect_uri } = body || {};
 
       if (!rawCode) {
         return new Response(
@@ -131,12 +131,18 @@ serve(async (req: Request) => {
         );
       }
 
-      // Look up profile by id OR auth_user_id (crucial: auth users pass auth.uid() which is auth_user_id)
-      let { data: profile } = await supabaseAdmin
+      // Look up profile by id OR auth_user_id OR email
+      let profileQuery = supabaseAdmin
         .from("profiles")
-        .select("id, auth_user_id, name, email, google_oauth")
-        .or(`id.eq.${profile_id},auth_user_id.eq.${profile_id}`)
-        .maybeSingle();
+        .select("id, auth_user_id, name, email, google_oauth");
+
+      if (bodyEmail) {
+        profileQuery = profileQuery.or(`id.eq.${profile_id},auth_user_id.eq.${profile_id},email.ilike.${bodyEmail}`);
+      } else {
+        profileQuery = profileQuery.or(`id.eq.${profile_id},auth_user_id.eq.${profile_id}`);
+      }
+
+      let { data: profile } = await profileQuery.maybeSingle();
 
       if (!profile) {
         // Fallback: Check auth.users by ID to find email
@@ -153,6 +159,15 @@ serve(async (req: Request) => {
         } catch {
           // ignore auth lookup error
         }
+      }
+
+      if (!profile && bodyEmail) {
+        const { data: byEmailDirect } = await supabaseAdmin
+          .from("profiles")
+          .select("id, auth_user_id, name, email, google_oauth")
+          .ilike("email", bodyEmail)
+          .maybeSingle();
+        if (byEmailDirect) profile = byEmailDirect;
       }
 
       if (!profile) {

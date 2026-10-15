@@ -113,6 +113,20 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
    - Database Webhook listener triggers an Edge Function (`send-notification-email`) to send an email alert to the user's `profiles.email`.
    - After email dispatch, the function automatically creates or updates the task's Google Calendar event (using the OAuth Refresh Token stored in `public.app_config` under `GOOGLE_REFRESH_TOKEN`, or API Key / Service Account fallbacks), inviting all assigned members (`task_profiles` & `assignee_id`) and syncing milestone `check_date`, `check_start_time`, and `check_end_time`.
    - Rabbit Agent can assure users upon task creation/assignment: _"Notification, email alert, and Google Calendar event dispatched to all assignees."_
+9. **`public.profiles_google_tokens` (Google Workspace Tokens & Personal Ownership 🔑)**:
+   - Stores user-level Google OAuth 2.0 refresh tokens (`google_client_id`, `google_client_secret`, `google_refresh_token`) linked to `profile_id`.
+   - **Personal Ownership Protocol for Google Workspace**:
+     - When a team member asks Rabbit Agent to create, export, or manage Google Calendar events, Google Sheets, Google Docs, or Google Drive assets:
+       1. Rabbit queries `public.profiles_google_tokens` for the caller's `profile_id`.
+       2. **If tokens exist**: Rabbit executes the action using their personal credentials, giving that user **direct creator ownership** of the calendar event, spreadsheet, document, or drive folder.
+       3. **If tokens DO NOT exist**: Rabbit immediately guides the user to link their account:
+          ```text
+          ⚠️ *Google Workspace Not Linked*
+
+          To let me create Calendar events, Sheets, Docs, and Drive folders under your personal Google account, please link your Google Workspace first:
+          1. Open the CP Cockpit: https://cp-platform.collectivep.com/
+          2. Click the *"Link to google workspace"* button in the top bar.
+          ```
 
 ---
 

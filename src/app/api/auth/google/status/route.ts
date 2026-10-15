@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ linked: false });
   }
 
+  const authHeader = req.headers.get("authorization");
   const keyToUse = serviceRoleKey || anonKey;
   if (!keyToUse) {
     return NextResponse.json({ linked: false });
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = createClient(supabaseUrl, keyToUse, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: authHeader ? { headers: { Authorization: authHeader } } : undefined,
     });
 
     const { data, error } = await supabase
@@ -55,14 +57,22 @@ export async function DELETE(req: NextRequest) {
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const authHeader = req.headers.get("authorization");
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl) {
+    return NextResponse.json({ error: "Server credentials missing" }, { status: 500 });
+  }
+
+  const keyToUse = serviceRoleKey || anonKey;
+  if (!keyToUse) {
     return NextResponse.json({ error: "Server credentials missing" }, { status: 500 });
   }
 
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    const supabase = createClient(supabaseUrl, keyToUse, {
       auth: { persistSession: false },
+      global: authHeader ? { headers: { Authorization: authHeader } } : undefined,
     });
 
     const { error } = await supabase

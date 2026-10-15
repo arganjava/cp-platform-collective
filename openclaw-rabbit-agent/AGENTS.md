@@ -13,17 +13,24 @@ OpenClaw Gateway / Rabbit Agent 🐇
        │ 3. RBAC Scoping:
        │    - admin: global view & CRU across all projects/tasks
        │    - member / guest: scoped strictly to assigned project_profiles & task_profiles
+       │ 4. Google Workspace Intent Check:
+       │    - If user asks for Calendar, Sheet, Doc, Drive, etc.:
+       │      Query public.profiles_google_tokens where profile_id = :caller_profile_id
+       │      If present: authenticate via google_client_id, google_client_secret & google_refresh_token
+       │      to grant the user personal creator/organizer ownership!
+       │      If missing: prompt user to click "Link to google workspace" on web app.
        ▼
 Supabase CRM Database (PostgreSQL / PostgREST) 🗄️
-  ├── public.profiles         (Team roster, roles, wa_number & soft deletes)
-  ├── public.clients          (Organizations, sponsors & commissioners)
-  ├── public.projects         (Creative initiatives & deliverables)
-  ├── public.project_profiles (Project team membership junction)
-  ├── public.tasks            (Action items, milestone check dates & labeled links)
-  ├── public.task_profiles     (Task assignees junction)
-  ├── public.sales            (Revenue deals & pipeline entries)
-  ├── public.sale_stages      (Stage progression history & PIC assignment)
-  └── public.notifications    (System activity & assignment alerts)
+  ├── public.profiles               (Team roster, roles, wa_number & google_oauth)
+  ├── public.profiles_google_tokens (Google Workspace OAuth tokens & personal ownership)
+  ├── public.clients                (Organizations, sponsors & commissioners)
+  ├── public.projects               (Creative initiatives & deliverables)
+  ├── public.project_profiles       (Project team membership junction)
+  ├── public.tasks                  (Action items, milestone check dates & labeled links)
+  ├── public.task_profiles          (Task assignees junction)
+  ├── public.sales                  (Revenue deals & pipeline entries)
+  ├── public.sale_stages            (Stage progression history & PIC assignment)
+  └── public.notifications          (System activity & assignment alerts)
        │ (Structured JSON responses)
        ▼
 Rabbit Agent 🐇
@@ -310,6 +317,46 @@ create table public.notifications (
    - Generates high-contrast branded HTML email for Collective Perspectives.
    - Dispatches email via Resend (`RESEND_API_KEY`) to `profiles.email` (or runs simulated dispatch with logging in local/test environments).
    - Updates `notification_webhook_logs` status to `sent` or `failed`.
+
+---
+
+### 9. `public.profiles_google_tokens` (Google Workspace Tokens & User Ownership)
+Stores OAuth 2.0 access credentials for team members who have linked their Google Workspace account.
+```sql
+create table public.profiles_google_tokens (
+  id                   uuid primary key default gen_random_uuid(),
+  profile_id           uuid not null references public.profiles (id) on delete cascade,
+  google_client_id     text,
+  google_client_secret text,
+  google_refresh_token text,
+  created_at           timestamptz not null default now(),
+  constraint uq_profiles_google_tokens_profile unique (profile_id)
+);
+```
+
+#### Rabbit Agent Ownership Rule for Google Workspace:
+When a WhatsApp user chats with Rabbit Agent regarding any Google Workspace resource:
+- **Google Calendar**: Creating events, scheduling milestone review sessions, client meetings, or inviting collaborators.
+- **Google Sheets**: Exporting task rosters, financial pipeline sheets, sponsor budgets, or milestone delivery logs.
+- **Google Docs**: Generating meeting briefs, exhibition curate sheets, proposals, or minutes.
+- **Google Drive**: Creating project asset folders, uploading artwork proofs, or generating shareable links.
+
+**Execution Protocol & Token Check:**
+1. **Resolve Profile**: Match caller WhatsApp mobile number to `public.profiles.wa_number` -> retrieve `caller_profile_id`.
+2. **Check Tokens Table**:
+   ```sql
+   select google_client_id, google_client_secret, google_refresh_token
+   from public.profiles_google_tokens
+   where profile_id = :caller_profile_id;
+   ```
+3. **If Tokens Exist (Linked)**:
+   - Exchange `google_refresh_token` using `google_client_id` and `google_client_secret` at `https://oauth2.googleapis.com/token` for a fresh access token.
+   - Call Google Workspace API using this access token so the **caller is the creator and owner** of the calendar event, sheet, document, or drive folder.
+   - Return the direct Google URL to the user in the WhatsApp response.
+4. **If Tokens Do NOT Exist (Not Linked)**:
+   - Do NOT fall back to generic service account or fail silently.
+   - Prompt the user with a helpful instruction to link their Google Workspace account:
+     > *"⚠️ Your Google Workspace is not linked yet. To let me create Calendar events, Sheets, Docs, and Drive folders under your account ownership, please open the CP Cockpit (https://cp-platform.collectivep.com/) and click the 'Link to google workspace' button in the top bar."*
 
 ---
 

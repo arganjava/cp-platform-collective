@@ -49,22 +49,62 @@ export function GoogleWorkspaceLinkButton() {
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
 
+  const [isCheckingToken, setIsCheckingToken] = useState<boolean>(true);
+
   const googleOAuth = currentUser?.googleOAuth as Record<string, unknown> | null | undefined;
   const hasConfig = Boolean(googleOAuth && Object.keys(googleOAuth).length > 0);
 
   const checkTokenStatus = useCallback(async () => {
     if (!currentUser?.id || !hasConfig) {
       setIsLinked(false);
+      setIsCheckingToken(false);
       return;
     }
+
+    // 1. Direct Supabase query if client is configured (authenticated via session)
+    if (isSupabaseConfigured) {
+      try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+          .from("profiles_google_tokens")
+          .select("id, profile_id, google_refresh_token")
+          .eq("profile_id", currentUser.id)
+          .maybeSingle();
+
+        if (!error && data) {
+          setIsLinked(true);
+          setIsCheckingToken(false);
+          return;
+        }
+      } catch {
+        // Fall back to API route below
+      }
+    }
+
+    // 2. Query /api/auth/google/status route
     try {
-      const res = await fetch(`/api/auth/google/status?profile_id=${encodeURIComponent(currentUser.id)}`);
+      const headers: Record<string, string> = {};
+      if (isSupabaseConfigured) {
+        try {
+          const { data } = await getSupabase().auth.getSession();
+          if (data?.session?.access_token) {
+            headers["Authorization"] = `Bearer ${data.session.access_token}`;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const res = await fetch(`/api/auth/google/status?profile_id=${encodeURIComponent(currentUser.id)}`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setIsLinked(Boolean(data.linked && data.hasRefreshToken));
+        setIsLinked(Boolean(data.linked));
+      } else {
+        setIsLinked(false);
       }
     } catch {
       // ignore status check failure
+    } finally {
+      setIsCheckingToken(false);
     }
   }, [currentUser?.id, hasConfig]);
 
@@ -98,7 +138,13 @@ export function GoogleWorkspaceLinkButton() {
     }
   }, [searchParams]);
 
-  if (!hasConfig || !currentUser) {
+  if (!hasConfig || !currentUser || (isCheckingToken && !modalOpen)) {
+    return null;
+  }
+
+  // If profiles.google_oauth exists and profiles_google_tokens.profile_id exists:
+  // do NOT display "Link to google workspace" on header!
+  if (isLinked && !modalOpen && !feedback) {
     return null;
   }
 
@@ -176,8 +222,19 @@ export function GoogleWorkspaceLinkButton() {
       }
     }
 
+    let accessToken: string | null = null;
+    if (isSupabaseConfigured) {
+      try {
+        const { data: sessionData } = await getSupabase().auth.getSession();
+        accessToken = sessionData?.session?.access_token || null;
+      } catch {
+        // ignore
+      }
+    }
+
     const payload = {
       profile_id: currentUser.id,
+      email: currentUser.email,
       code: cleanCode,
       raw_input: rawInput,
       redirect_uri: "http://localhost",
@@ -192,7 +249,10 @@ export function GoogleWorkspaceLinkButton() {
         const supabase = getSupabase();
         const { data: edgeData, error: edgeErr } = await supabase.functions.invoke(
           "google-oauth-callback",
-          { body: payload }
+          {
+            body: payload,
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+          }
         );
 
         if (!edgeErr && (edgeData?.success || edgeData?.linked)) {
@@ -219,9 +279,13 @@ export function GoogleWorkspaceLinkButton() {
     // 2. Secondary Fallback: Call Next.js API route (/api/auth/google/exchange)
     if (!success) {
       try {
+        const fetchHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (accessToken) {
+          fetchHeaders["Authorization"] = `Bearer ${accessToken}`;
+        }
         const res = await fetch("/api/auth/google/exchange", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: fetchHeaders,
           body: JSON.stringify(payload),
         });
 
@@ -307,22 +371,8 @@ export function GoogleWorkspaceLinkButton() {
         </div>
       )}
 
-      {/* Header Button */}
-      {isLinked ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setModalOpen(true)}
-          className="h-9 gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
-          title="Google Workspace is connected. Click to view permissions or re-authenticate."
-        >
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-          <span className="hidden sm:inline">Linked to Google Workspace</span>
-          <span className="sm:hidden">Google Linked</span>
-          <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-        </Button>
-      ) : (
+      {/* Header Button: Only display "Link to google workspace" if profiles.google_oauth exists and profiles_google_tokens.profile_id does NOT exist */}
+      {!isLinked && (
         <Button
           type="button"
           size="sm"

@@ -278,3 +278,56 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > `https://cp-platform.collectivep.com/users`
 >
 > Once added, I will be ready to help you manage your projects and tasks on the go! 🐇
+
+---
+
+### Example 11: Requesting a Google Calendar Meeting (Linked Account & Personal Ownership)
+**User** _(WhatsApp sender registered and linked in `profiles_google_tokens`)_:
+> Rabbit, schedule a Google Calendar review for the Singtel Art Exhibition milestone with Marcus on 16 Oct from 2pm to 3pm SGT. Add meeting link.
+
+**Rabbit Agent**:
+> 📅 *Google Calendar Event Created!*
+>
+> • *Event*: Singtel Art Exhibition Milestone Review
+> • *Date & Time*: 16 Oct 2026, 2:00 PM – 3:00 PM SGT
+> • *Organizer / Owner*: You (Marcus Tan is invited) 👤
+> • *Google Workspace Account*: Connected via your personal tokens
+> • *Meeting Link*: `https://meet.google.com/abc-defg-hij`
+> • *Calendar Link*: `https://calendar.google.com/event?eid=xyz...`
+>
+> 🚩 _Milestone checkpoint synchronized with the Singtel project workspace._
+
+---
+
+### Example 12: Exporting Project Deliverables to a Google Sheet (Personal Drive Ownership)
+**User** _(WhatsApp sender with linked Google Workspace)_:
+> Can you create a Google Sheet tracking all open tasks for the Inclusive Art Festival project?
+
+**Rabbit Agent**:
+> 📊 *Google Sheet Created in Your Google Drive!*
+>
+> • *Spreadsheet Title*: Inclusive Art Festival 2026 — Task Tracker
+> • *Owner*: Your Google Account 📁
+> • *Items Exported*: 8 open tasks (with assignees, priorities, due dates & milestone check dates)
+> • *Direct Link*: `https://docs.google.com/spreadsheets/d/1a2b3c4d5e...`
+>
+> 💡 _You have full edit and sharing ownership over this sheet._
+
+---
+
+### Example 13: Requesting Google Workspace When Account Is NOT Linked Yet
+**User** _(WhatsApp sender whose profile has NO record in `profiles_google_tokens`)_:
+> Rabbit, create a Google Doc for our exhibition curate notes and save it to Drive.
+
+**Rabbit Agent**:
+> ⚠️ *Google Workspace Not Linked*
+>
+> I checked your profile tokens and noticed your Google Workspace account has not been connected yet.
+>
+> To ensure that any Google Docs, Sheets, Drive folders, and Calendar events are created directly under **your personal Google ownership**:
+>
+> 1. Open the CP Cockpit: `https://cp-platform.collectivep.com/`
+> 2. Click the *"Link to google workspace"* button in the top navigation bar.
+> 3. Approve permissions and copy the authorization code to complete linking.
+>
+> Once linked, send me this request again and I will immediately generate your Google Doc! 🐇

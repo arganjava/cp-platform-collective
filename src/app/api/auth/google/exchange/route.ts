@@ -49,6 +49,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing profile_id" }, { status: 400 });
     }
 
+    const authHeader = req.headers.get("authorization");
+    const bearerToken = authHeader?.replace(/^Bearer\s+/i, "") || null;
+    const clientEmail = (body.email as string | undefined)?.trim();
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
@@ -57,16 +61,59 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Supabase URL is not configured on the server" }, { status: 500 });
     }
 
+    // If Next.js does not have the service role key, delegate directly to the Supabase Edge Function
+    // which has direct access to SUPABASE_SERVICE_ROLE_KEY in Deno.
+    if (!serviceRoleKey && anonKey) {
+      try {
+        const edgeRes = await fetch(`${supabaseUrl}/functions/v1/google-oauth-callback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: anonKey,
+            ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+          },
+          body: JSON.stringify({
+            profile_id,
+            email: clientEmail,
+            code,
+            redirect_uri,
+          }),
+        });
+
+        if (edgeRes.ok) {
+          const edgeData = await edgeRes.json();
+          return NextResponse.json(edgeData);
+        }
+      } catch {
+        // Fall back to local client execution below
+      }
+    }
+
+    const clientHeaders: Record<string, string> = {};
+    if (serviceRoleKey) {
+      clientHeaders["apikey"] = serviceRoleKey;
+      clientHeaders["Authorization"] = `Bearer ${serviceRoleKey}`;
+    } else if (bearerToken) {
+      clientHeaders["Authorization"] = `Bearer ${bearerToken}`;
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey || anonKey || "", {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: clientHeaders },
     });
 
-    // Match profile by id OR auth_user_id (crucial: auth users have auth.uid() matching auth_user_id)
-    let { data: profile } = await supabaseAdmin
+    // Match profile by id OR auth_user_id OR email
+    let profileQuery = supabaseAdmin
       .from("profiles")
-      .select("id, auth_user_id, name, email, google_oauth")
-      .or(`id.eq.${profile_id},auth_user_id.eq.${profile_id}`)
-      .maybeSingle();
+      .select("id, auth_user_id, name, email, google_oauth");
+
+    if (clientEmail) {
+      profileQuery = profileQuery.or(`id.eq.${profile_id},auth_user_id.eq.${profile_id},email.ilike.${clientEmail}`);
+    } else {
+      profileQuery = profileQuery.or(`id.eq.${profile_id},auth_user_id.eq.${profile_id}`);
+    }
+
+    let { data: profile } = await profileQuery.maybeSingle();
 
     if (!profile) {
       // Fallback: check auth user by ID to find email
@@ -83,6 +130,16 @@ export async function POST(req: NextRequest) {
       } catch {
         // ignore
       }
+    }
+
+    // Additional fallback: match by email substring or all active profiles if single user workspace
+    if (!profile && clientEmail) {
+      const { data: byEmailDirect } = await supabaseAdmin
+        .from("profiles")
+        .select("id, auth_user_id, name, email, google_oauth")
+        .ilike("email", clientEmail)
+        .maybeSingle();
+      if (byEmailDirect) profile = byEmailDirect;
     }
 
     if (!profile) {
@@ -113,7 +170,6 @@ export async function POST(req: NextRequest) {
 
     const oauthConfig = (profile.google_oauth as Record<string, unknown>) || {};
     const clientBlock = (oauthConfig.installed || oauthConfig.web || oauthConfig) as Record<string, unknown>;
-
     const clientId = (clientBlock.client_id || oauthConfig.client_id) as string | undefined;
     const clientSecret = (clientBlock.client_secret || oauthConfig.client_secret) as string | undefined;
     const tokenUri = (clientBlock.token_uri || oauthConfig.token_uri || "https://oauth2.googleapis.com/token") as string;
