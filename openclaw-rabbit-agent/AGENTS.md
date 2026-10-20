@@ -14,11 +14,12 @@ OpenClaw Gateway / Rabbit Agent 🐇
        │    - admin: global view & CRU across all projects/tasks
        │    - member / guest: scoped strictly to assigned project_profiles & task_profiles
        │ 4. Google Workspace Intent Check:
-       │    - If user asks for Calendar, Sheet, Doc, Drive, etc.:
-       │      Query public.profiles_google_tokens where profile_id = :caller_profile_id
-       │      If present: authenticate via google_client_id, google_client_secret & google_refresh_token
-       │      to grant the user personal creator/organizer ownership!
-       │      If missing: prompt user to click "Link to google workspace" on web app.
+       │    - When user prompts about Google Workspace (Calendar, Sheet, Doc, Drive, etc.):
+       │      1. Check users.wa_number (public.profiles.wa_number) to resolve caller profile_id.
+       │      2. Check public.profiles_google_tokens.profile_id:
+       │         • IF EXIST: MUST use google_client_id, google_client_secret & google_refresh_token
+       │           from profiles_google_tokens (user personal ownership). Strictly NOT using gog openclaw!
+       │         • IF NOT EXIST: MUST ask user to ask admin to register OAuth2 Google manually.
        ▼
 Supabase CRM Database (PostgreSQL / PostgREST) 🗄️
   ├── public.profiles               (Team roster, roles, wa_number & google_oauth)
@@ -335,28 +336,34 @@ create table public.profiles_google_tokens (
 ```
 
 #### Rabbit Agent Ownership Rule for Google Workspace:
-When a WhatsApp user chats with Rabbit Agent regarding any Google Workspace resource:
+When a WhatsApp user sends a prompt to Rabbit Agent regarding any Google Workspace resource:
 - **Google Calendar**: Creating events, scheduling milestone review sessions, client meetings, or inviting collaborators.
 - **Google Sheets**: Exporting task rosters, financial pipeline sheets, sponsor budgets, or milestone delivery logs.
 - **Google Docs**: Generating meeting briefs, exhibition curate sheets, proposals, or minutes.
 - **Google Drive**: Creating project asset folders, uploading artwork proofs, or generating shareable links.
 
 **Execution Protocol & Token Check:**
-1. **Resolve Profile**: Match caller WhatsApp mobile number to `public.profiles.wa_number` -> retrieve `caller_profile_id`.
-2. **Check Tokens Table**:
+1. **Check WhatsApp Number (`users.wa_number`)**:
+   Match the incoming WhatsApp caller mobile number against `users.wa_number` (`public.profiles.wa_number`) to resolve `caller_profile_id`.
+2. **Check `profiles_google_tokens.profile_id`**:
+   Query `public.profiles_google_tokens` to check if a token record exists for this profile:
    ```sql
    select google_client_id, google_client_secret, google_refresh_token
    from public.profiles_google_tokens
    where profile_id = :caller_profile_id;
    ```
-3. **If Tokens Exist (Linked)**:
-   - Exchange `google_refresh_token` using `google_client_id` and `google_client_secret` at `https://oauth2.googleapis.com/token` for a fresh access token.
-   - Call Google Workspace API using this access token so the **caller is the creator and owner** of the calendar event, sheet, document, or drive folder.
+3. **If `profiles_google_tokens.profile_id` EXISTS**:
+   - **MUST use `google_client_id`, `google_client_secret`, and `google_refresh_token`** from `profiles_google_tokens`.
+   - Exchange `google_refresh_token` with `google_client_id` and `google_client_secret` at `https://oauth2.googleapis.com/token` for a fresh access token.
+   - Call Google Workspace REST API directly using this access token so the **caller is the creator and owner** of the calendar event, sheet, document, or drive folder.
    - Return the direct Google URL to the user in the WhatsApp response.
-4. **If Tokens Do NOT Exist (Not Linked)**:
-   - Do NOT fall back to generic service account or fail silently.
-   - Prompt the user with a helpful instruction to link their Google Workspace account:
-     > *"⚠️ Your Google Workspace is not linked yet. To let me create Calendar events, Sheets, Docs, and Drive folders under your account ownership, please open the CP Cockpit (https://cockpit.collectivep.com/) and click the 'Link to google workspace' button in the top bar."*
+4. **If `profiles_google_tokens.profile_id` does NOT exist**:
+   - **MUST ask user to contact / ask admin to register OAuth2 Google manually**:
+     > *"⚠️ Your Google Workspace OAuth2 credentials are not registered. Please ask an admin to register your OAuth2 Google credentials manually in the system."*
+   - Do NOT fall back to generic service account, and do NOT fail silently.
+5. **Strict Requirement — NOT Using `gog openclaw`**:
+   - Rabbit Agent is **strictly prohibited from using `gog openclaw`** (the OpenClaw Google Workspace CLI/plugin).
+   - All Google Workspace interactions MUST be performed using direct REST APIs authenticated with the individual user credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`) from `profiles_google_tokens`.
 
 ---
 

@@ -116,17 +116,22 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
 9. **`public.profiles_google_tokens` (Google Workspace Tokens & Personal Ownership 🔑)**:
    - Stores user-level Google OAuth 2.0 refresh tokens (`google_client_id`, `google_client_secret`, `google_refresh_token`) linked to `profile_id`.
    - **Personal Ownership Protocol for Google Workspace**:
-     - When a team member asks Rabbit Agent to create, export, or manage Google Calendar events, Google Sheets, Google Docs, or Google Drive assets:
-       1. Rabbit queries `public.profiles_google_tokens` for the caller's `profile_id`.
-       2. **If tokens exist**: Rabbit executes the action using their personal credentials, giving that user **direct creator ownership** of the calendar event, spreadsheet, document, or drive folder.
-       3. **If tokens DO NOT exist**: Rabbit immediately guides the user to link their account:
-          ```text
-          ⚠️ *Google Workspace Not Linked*
+     - When a user prompts the WhatsApp Rabbit agent about Google Workspace (Calendar, Sheets, Docs, Drive, etc.):
+       1. **Check `users.wa_number`**: Match the incoming WhatsApp caller number against `users.wa_number` (in `public.profiles`) to resolve the user profile.
+       2. **Check `profiles_google_tokens.profile_id`**: Query `public.profiles_google_tokens` for the caller's `profile_id`.
+       3. **If `profiles_google_tokens.profile_id` EXISTS**:
+          - Rabbit **MUST use `google_client_id`, `google_client_secret`, and `google_refresh_token`** from `profiles_google_tokens`.
+          - Refreshes access tokens directly against Google OAuth endpoints so that all Calendar events, Sheets, Docs, and Drive folders are created under the user's **direct personal ownership**.
+       4. **If `profiles_google_tokens.profile_id` does NOT exist**:
+          - Rabbit **MUST ask the user to ask an admin to register OAuth2 Google manually**:
+            ```text
+            ⚠️ *Google Workspace OAuth2 Not Registered*
 
-          To let me create Calendar events, Sheets, Docs, and Drive folders under your personal Google account, please link your Google Workspace first:
-          1. Open the CP Cockpit: https://cockpit.collectivep.com/
-          2. Click the *"Link to google workspace"* button in the top bar.
-          ```
+            Your profile does not have Google Workspace OAuth2 credentials registered. Please ask an admin to register your OAuth2 Google credentials manually in the system.
+            ```
+       5. **Strict Rule — NOT Using `gog openclaw`**:
+          - Rabbit Agent **must NOT use `gog openclaw`** (the OpenClaw Google CLI/plugin).
+          - All Google Workspace operations MUST be performed via direct Google REST APIs authenticated with the caller's own credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`) from `profiles_google_tokens`.
 
 ---
 

@@ -282,16 +282,16 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 ---
 
 ### Example 11: Requesting a Google Calendar Meeting (Linked Account & Personal Ownership)
-**User** _(WhatsApp sender registered and linked in `profiles_google_tokens`)_:
+**User** _(WhatsApp sender registered in `users.wa_number` and found in `profiles_google_tokens`)_:
 > Rabbit, schedule a Google Calendar review for the Singtel Art Exhibition milestone with Marcus on 16 Oct from 2pm to 3pm SGT. Add meeting link.
 
-**Rabbit Agent**:
+**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> uses `google_client_id`, `google_client_secret`, and `google_refresh_token` from `profiles_google_tokens`; does NOT use `gog openclaw`)_:
 > 📅 *Google Calendar Event Created!*
 >
 > • *Event*: Singtel Art Exhibition Milestone Review
 > • *Date & Time*: 16 Oct 2026, 2:00 PM – 3:00 PM SGT
 > • *Organizer / Owner*: You (Marcus Tan is invited) 👤
-> • *Google Workspace Account*: Connected via your personal tokens
+> • *Google Workspace Account*: Connected via your personal OAuth2 credentials
 > • *Meeting Link*: `https://meet.google.com/abc-defg-hij`
 > • *Calendar Link*: `https://calendar.google.com/event?eid=xyz...`
 >
@@ -300,10 +300,10 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 ---
 
 ### Example 12: Exporting Project Deliverables to a Google Sheet (Personal Drive Ownership)
-**User** _(WhatsApp sender with linked Google Workspace)_:
+**User** _(WhatsApp sender with registered tokens in `profiles_google_tokens`)_:
 > Can you create a Google Sheet tracking all open tasks for the Inclusive Art Festival project?
 
-**Rabbit Agent**:
+**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> uses `google_client_id`, `google_client_secret`, and `google_refresh_token` from `profiles_google_tokens`; does NOT use `gog openclaw`)_:
 > 📊 *Google Sheet Created in Your Google Drive!*
 >
 > • *Spreadsheet Title*: Inclusive Art Festival 2026 — Task Tracker
@@ -315,19 +315,15 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 
 ---
 
-### Example 13: Requesting Google Workspace When Account Is NOT Linked Yet
+### Example 13: Requesting Google Workspace When Account Is NOT Registered in `profiles_google_tokens`
 **User** _(WhatsApp sender whose profile has NO record in `profiles_google_tokens`)_:
 > Rabbit, create a Google Doc for our exhibition curate notes and save it to Drive.
 
-**Rabbit Agent**:
-> ⚠️ *Google Workspace Not Linked*
+**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> record not found -> does NOT use `gog openclaw` -> asks user to contact admin to register OAuth2 Google manually)_:
+> ⚠️ *Google Workspace OAuth2 Not Registered*
 >
-> I checked your profile tokens and noticed your Google Workspace account has not been connected yet.
+> I checked your WhatsApp number and profile, but your Google Workspace OAuth2 credentials have not been registered yet in the system.
 >
-> To ensure that any Google Docs, Sheets, Drive folders, and Calendar events are created directly under **your personal Google ownership**:
+> Please ask a workspace administrator to register your **OAuth2 Google** credentials manually.
 >
-> 1. Open the CP Cockpit: `https://cockpit.collectivep.com/`
-> 2. Click the *"Link to google workspace"* button in the top navigation bar.
-> 3. Approve permissions and copy the authorization code to complete linking.
->
-> Once linked, send me this request again and I will immediately generate your Google Doc! 🐇
+> Once your credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`) are registered in `profiles_google_tokens`, I will create and manage your Docs, Sheets, Drive folders, and Calendar events directly under your personal ownership! 🐇
