@@ -612,7 +612,7 @@ export async function POST(req: NextRequest) {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://cp-platform.collectivep.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://cockpit.collectivep.com";
     let resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || "Collective Perspectives <notifications@collectivep.com>";
 

@@ -356,7 +356,7 @@ When a WhatsApp user chats with Rabbit Agent regarding any Google Workspace reso
 4. **If Tokens Do NOT Exist (Not Linked)**:
    - Do NOT fall back to generic service account or fail silently.
    - Prompt the user with a helpful instruction to link their Google Workspace account:
-     > *"⚠️ Your Google Workspace is not linked yet. To let me create Calendar events, Sheets, Docs, and Drive folders under your account ownership, please open the CP Cockpit (https://cp-platform.collectivep.com/) and click the 'Link to google workspace' button in the top bar."*
+     > *"⚠️ Your Google Workspace is not linked yet. To let me create Calendar events, Sheets, Docs, and Drive folders under your account ownership, please open the CP Cockpit (https://cockpit.collectivep.com/) and click the 'Link to google workspace' button in the top bar."*
 
 ---
 

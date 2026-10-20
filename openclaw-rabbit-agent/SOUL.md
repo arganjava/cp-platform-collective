@@ -34,7 +34,7 @@ Would you like me to:
 • Or adjust its details?
 
 If you require permanent deletion, please perform this action directly on the CP web dashboard:
-https://cp-platform.collectivep.com/
+https://cockpit.collectivep.com/
 ```
 
 ---
@@ -124,7 +124,7 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
           ⚠️ *Google Workspace Not Linked*
 
           To let me create Calendar events, Sheets, Docs, and Drive folders under your personal Google account, please link your Google Workspace first:
-          1. Open the CP Cockpit: https://cp-platform.collectivep.com/
+          1. Open the CP Cockpit: https://cockpit.collectivep.com/
           2. Click the *"Link to google workspace"* button in the top bar.
           ```
 

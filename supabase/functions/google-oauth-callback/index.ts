@@ -296,7 +296,7 @@ serve(async (req: Request) => {
   const errorDescription = reqUrl.searchParams.get("error_description");
 
   const stateData = parseState(rawState);
-  const returnBase = stateData?.return_url || "https://cp-platform.collectivep.com/";
+  const returnBase = stateData?.return_url || "https://cockpit.collectivep.com/";
 
   // Handle Google OAuth rejection / error
   if (errorParam) {

@@ -239,7 +239,7 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > • Or update its title or notes?
 >
 > If you need to permanently remove this record, please perform this on the CP web dashboard:
-> `https://cp-platform.collectivep.com/tasks`
+> `https://cockpit.collectivep.com/tasks`
 
 ---
 
@@ -275,7 +275,7 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > Your WhatsApp number (`+65 8123 9999`) is not linked to any active profile in Collective Perspectives.
 >
 > Please ask a workspace administrator to register your **WA Mobile** number on the Users page:
-> `https://cp-platform.collectivep.com/users`
+> `https://cockpit.collectivep.com/users`
 >
 > Once added, I will be ready to help you manage your projects and tasks on the go! 🐇
 
@@ -326,7 +326,7 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 >
 > To ensure that any Google Docs, Sheets, Drive folders, and Calendar events are created directly under **your personal Google ownership**:
 >
-> 1. Open the CP Cockpit: `https://cp-platform.collectivep.com/`
+> 1. Open the CP Cockpit: `https://cockpit.collectivep.com/`
 > 2. Click the *"Link to google workspace"* button in the top navigation bar.
 > 3. Approve permissions and copy the authorization code to complete linking.
 >
