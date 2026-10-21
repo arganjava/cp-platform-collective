@@ -44,11 +44,14 @@ create table if not exists public.profiles_google_tokens (
   google_client_id     text,
   google_client_secret text,
   google_refresh_token text,
+  access_token         text,
+  access_token_expire  timestamptz,
   created_at           timestamptz not null default now(),
   constraint uq_profiles_google_tokens_profile unique (profile_id)
 );
 
 create index if not exists idx_profiles_google_tokens_profile_id on public.profiles_google_tokens (profile_id);
+create index if not exists idx_profiles_google_tokens_expire on public.profiles_google_tokens (access_token_expire);
 
 create table if not exists public.projects (
   id          uuid primary key default gen_random_uuid(),

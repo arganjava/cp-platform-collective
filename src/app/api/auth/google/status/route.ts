@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("profiles_google_tokens")
-      .select("id, profile_id, google_client_id, created_at, google_refresh_token")
+      .select("id, profile_id, google_client_id, created_at, google_refresh_token, access_token, access_token_expire")
       .eq("profile_id", profileId)
       .maybeSingle();
 
@@ -37,9 +37,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ linked: false });
     }
 
+    const hasAccessToken = Boolean(data.access_token);
+    const accessTokenExpire = data.access_token_expire;
+    const isAccessTokenValid = Boolean(
+      accessTokenExpire && new Date(accessTokenExpire).getTime() > Date.now()
+    );
+
     return NextResponse.json({
       linked: true,
       hasRefreshToken: Boolean(data.google_refresh_token),
+      hasAccessToken,
+      accessTokenExpire,
+      isAccessTokenValid,
       clientId: data.google_client_id,
       createdAt: data.created_at,
     });

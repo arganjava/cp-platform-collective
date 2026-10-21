@@ -250,6 +250,9 @@ serve(async (req: Request) => {
         }
       }
 
+      const expiresInSec = Number(tokenData.expires_in) || 3600;
+      const accessTokenExpire = new Date(Date.now() + expiresInSec * 1000).toISOString();
+
       const { error: upsertErr } = await supabaseAdmin
         .from("profiles_google_tokens")
         .upsert(
@@ -258,6 +261,8 @@ serve(async (req: Request) => {
             google_client_id: clientId,
             google_client_secret: clientSecret,
             google_refresh_token: finalRefreshToken || null,
+            access_token: (tokenData.access_token as string) || null,
+            access_token_expire: accessTokenExpire,
             created_at: new Date().toISOString(),
           },
           { onConflict: "profile_id" }
@@ -396,6 +401,9 @@ serve(async (req: Request) => {
       }
     }
 
+    const expiresInSec = Number(tokenData.expires_in) || 3600;
+    const accessTokenExpire = new Date(Date.now() + expiresInSec * 1000).toISOString();
+
     const { error: upsertErr } = await supabaseAdmin
       .from("profiles_google_tokens")
       .upsert(
@@ -404,6 +412,8 @@ serve(async (req: Request) => {
           google_client_id: clientId,
           google_client_secret: clientSecret,
           google_refresh_token: finalRefreshToken || null,
+          access_token: (tokenData.access_token as string) || null,
+          access_token_expire: accessTokenExpire,
           created_at: new Date().toISOString(),
         },
         { onConflict: "profile_id" }

@@ -114,14 +114,16 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
    - After email dispatch, the function automatically creates or updates the task's Google Calendar event (using the OAuth Refresh Token stored in `public.app_config` under `GOOGLE_REFRESH_TOKEN`, or API Key / Service Account fallbacks), inviting all assigned members (`task_profiles` & `assignee_id`) and syncing milestone `check_date`, `check_start_time`, and `check_end_time`.
    - Rabbit Agent can assure users upon task creation/assignment: _"Notification, email alert, and Google Calendar event dispatched to all assignees."_
 9. **`public.profiles_google_tokens` (Google Workspace Tokens & Personal Ownership 🔑)**:
-   - Stores user-level Google OAuth 2.0 refresh tokens (`google_client_id`, `google_client_secret`, `google_refresh_token`) linked to `profile_id`.
-   - **Personal Ownership Protocol for Google Workspace**:
+   - Stores user-level Google OAuth 2.0 refresh tokens (`google_client_id`, `google_client_secret`, `google_refresh_token`) and cached access tokens (`access_token`, `access_token_expire`) linked to `profile_id`.
+   - **Personal Ownership & Access Token Caching Protocol**:
      - When a user prompts the WhatsApp Rabbit agent about Google Workspace (Calendar, Sheets, Docs, Drive, etc.):
        1. **Check `users.wa_number`**: Match the incoming WhatsApp caller number against `users.wa_number` (in `public.profiles`) to resolve the user profile.
        2. **Check `profiles_google_tokens.profile_id`**: Query `public.profiles_google_tokens` for the caller's `profile_id`.
        3. **If `profiles_google_tokens.profile_id` EXISTS**:
-          - Rabbit **MUST use `google_client_id`, `google_client_secret`, and `google_refresh_token`** from `profiles_google_tokens`.
-          - Refreshes access tokens directly against Google OAuth endpoints so that all Calendar events, Sheets, Docs, and Drive folders are created under the user's **direct personal ownership**.
+          - **Check `access_token` and `access_token_expire` before using `google_refresh_token`**:
+            * **Reuse Active Token**: If `access_token` is NOT null and `access_token_expire` is NOT null and `access_token_expire > now()`, **REUSE `access_token` directly**. Do not make redundant refresh calls to Google, avoiding rate-limiting and `invalid_grant` token revocation errors.
+            * **Regenerate If Expired or Null**: If `access_token` is null, `access_token_expire` is null, or `access_token_expire <= now()`, exchange `google_refresh_token` (`google_client_id`, `google_client_secret`) at `https://oauth2.googleapis.com/token` to regenerate a fresh `access_token`, compute updated `access_token_expire` (`now() + expires_in seconds`), and immediately update `profiles_google_tokens`.
+          - Execute Google REST APIs using the active `access_token` so that all Calendar events, Sheets, Docs, and Drive folders are created under the user's **direct personal ownership**.
        4. **If `profiles_google_tokens.profile_id` does NOT exist**:
           - Rabbit **MUST ask the user to ask an admin to register OAuth2 Google manually**:
             ```text
@@ -131,7 +133,7 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
             ```
        5. **Strict Rule — NOT Using `gog openclaw`**:
           - Rabbit Agent **must NOT use `gog openclaw`** (the OpenClaw Google CLI/plugin).
-          - All Google Workspace operations MUST be performed via direct Google REST APIs authenticated with the caller's own credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`) from `profiles_google_tokens`.
+          - All Google Workspace operations MUST be performed via direct Google REST APIs authenticated with the caller's own credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`, `access_token`, `access_token_expire`) from `profiles_google_tokens`.
 
 ---
 

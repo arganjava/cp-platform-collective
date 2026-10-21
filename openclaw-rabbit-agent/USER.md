@@ -281,17 +281,17 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 
 ---
 
-### Example 11: Requesting a Google Calendar Meeting (Linked Account & Personal Ownership)
-**User** _(WhatsApp sender registered in `users.wa_number` and found in `profiles_google_tokens`)_:
+### Example 11: Requesting a Google Calendar Meeting (Valid Cached Access Token Reused)
+**User** _(WhatsApp sender registered in `users.wa_number` and found in `profiles_google_tokens`, with valid unexpired `access_token`)_:
 > Rabbit, schedule a Google Calendar review for the Singtel Art Exhibition milestone with Marcus on 16 Oct from 2pm to 3pm SGT. Add meeting link.
 
-**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> uses `google_client_id`, `google_client_secret`, and `google_refresh_token` from `profiles_google_tokens`; does NOT use `gog openclaw`)_:
+**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> verifies `access_token` is valid & unexpired (`access_token_expire > now()`) -> reuses cached `access_token` directly without refreshing -> does NOT use `gog openclaw`)_:
 > 📅 *Google Calendar Event Created!*
 >
 > • *Event*: Singtel Art Exhibition Milestone Review
 > • *Date & Time*: 16 Oct 2026, 2:00 PM – 3:00 PM SGT
 > • *Organizer / Owner*: You (Marcus Tan is invited) 👤
-> • *Google Workspace Account*: Connected via your personal OAuth2 credentials
+> • *Google Workspace Account*: Connected via your personal OAuth2 credentials (active token reused)
 > • *Meeting Link*: `https://meet.google.com/abc-defg-hij`
 > • *Calendar Link*: `https://calendar.google.com/event?eid=xyz...`
 >
@@ -299,15 +299,16 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 
 ---
 
-### Example 12: Exporting Project Deliverables to a Google Sheet (Personal Drive Ownership)
-**User** _(WhatsApp sender with registered tokens in `profiles_google_tokens`)_:
+### Example 12: Exporting Deliverables to Google Sheets (Expired Token Regenerated & Saved)
+**User** _(WhatsApp sender with registered tokens in `profiles_google_tokens`, but cached `access_token` has expired)_:
 > Can you create a Google Sheet tracking all open tasks for the Inclusive Art Festival project?
 
-**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> uses `google_client_id`, `google_client_secret`, and `google_refresh_token` from `profiles_google_tokens`; does NOT use `gog openclaw`)_:
+**Rabbit Agent** _(Checks `users.wa_number` -> checks `profiles_google_tokens.profile_id` -> finds `access_token_expire <= now()` -> regenerates access token via `google_refresh_token` (`https://oauth2.googleapis.com/token`) -> persists new `access_token` & `access_token_expire` in `profiles_google_tokens` -> does NOT use `gog openclaw`)_:
 > 📊 *Google Sheet Created in Your Google Drive!*
 >
 > • *Spreadsheet Title*: Inclusive Art Festival 2026 — Task Tracker
 > • *Owner*: Your Google Account 📁
+> • *Token Lifecycle*: Access token safely regenerated from your refresh token and cached
 > • *Items Exported*: 8 open tasks (with assignees, priorities, due dates & milestone check dates)
 > • *Direct Link*: `https://docs.google.com/spreadsheets/d/1a2b3c4d5e...`
 >
@@ -327,3 +328,20 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > Please ask a workspace administrator to register your **OAuth2 Google** credentials manually.
 >
 > Once your credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`) are registered in `profiles_google_tokens`, I will create and manage your Docs, Sheets, Drive folders, and Calendar events directly under your personal ownership! 🐇
+
+---
+
+### Example 14: Refresh Token Rejection (`invalid_grant` / Revocation Recovery)
+**User** _(User prompts Rabbit to update remarks in a Google Sheet after Google revoked or rotated the refresh token)_:
+> Rabbit, add Daphne's team intro to the Zoho CRM remarks in my To-Do Sheet.
+
+**Rabbit Agent** _(Checks `access_token_expire`: expired -> attempts refresh via `google_refresh_token` -> Google responds with `invalid_grant` -> saves local state and politely requests re-authorization)_:
+> ⚠️ *Google Workspace Re-authorization Required*
+>
+> Hit a snag: your Google Workspace Auth refresh token has just been rejected by Google (`invalid_grant`). It was likely revoked, expired, or rotated.
+>
+> *What's pending*:
+> • Daphne's team intro saved locally (Rae, Daphne, Waiwai, Pei Shan - roles noted)
+> • Adding them to the Zoho CRM task remarks in your To-Do Sheet is blocked until your Google access is re-authorized.
+>
+> *Fix*: Please ask the workspace admin to re-register your OAuth2 Google credentials (or re-run the Google authorization link for your account). Once re-registered, say *"go"* and I will finish the sheet update immediately! 🐇

@@ -217,6 +217,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const expiresInSec = Number(tokenData.expires_in) || 3600;
+    const accessTokenExpire = new Date(Date.now() + expiresInSec * 1000).toISOString();
+
     const { error: upsertErr } = await supabaseAdmin
       .from("profiles_google_tokens")
       .upsert(
@@ -225,6 +228,8 @@ export async function POST(req: NextRequest) {
           google_client_id: clientId,
           google_client_secret: clientSecret,
           google_refresh_token: finalRefreshToken,
+          access_token: (tokenData.access_token as string) || null,
+          access_token_expire: accessTokenExpire,
           created_at: new Date().toISOString(),
         },
         { onConflict: "profile_id" }

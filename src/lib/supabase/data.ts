@@ -1019,7 +1019,7 @@ export async function getProfileGoogleToken(profileId: string): Promise<Record<s
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from("profiles_google_tokens")
-      .select("id, profile_id, google_client_id, created_at, google_refresh_token")
+      .select("id, profile_id, google_client_id, created_at, google_refresh_token, access_token, access_token_expire")
       .eq("profile_id", profileId)
       .maybeSingle();
     if (error) {
