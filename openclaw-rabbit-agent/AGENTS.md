@@ -16,13 +16,12 @@ OpenClaw Gateway / Rabbit Agent 🐇
        │ 4. Google Workspace Intent Check:
        │    - When user prompts about Google Workspace (Calendar, Sheet, Doc, Drive, etc.):
        │      1. Check users.wa_number (public.profiles.wa_number) to resolve caller profile_id.
-       │      2. Check public.profiles_google_tokens.profile_id:
-       │         • IF NOT EXIST: MUST ask user to ask admin to register OAuth2 Google manually.
-       │         • IF EXIST: Check access_token & access_token_expire before using google_refresh_token:
-       │           - Valid & not expired (access_token_expire > now): REUSE access_token directly!
-       │           - NULL or expired (access_token_expire <= now): Regenerate via google_refresh_token,
-       │             update profiles_google_tokens with fresh access_token & expire, then proceed.
-       │           - Strictly NOT using gog openclaw!
+       │      2. Check public.profiles_google_tokens for caller profile_id:
+       │         • Rabbit AI Agent ONLY looks at profiles_google_tokens.access_token for ownership!
+       │         • IF access_token exists: use it directly in Google REST APIs (Authorization: Bearer).
+       │           (A 5-min Supabase cron Edge Function automatically keeps access_token always fresh).
+       │         • IF NOT EXIST or access_token is NULL: MUST ask user to ask admin to register OAuth2 Google manually.
+       │         • Strictly NOT using gog openclaw!
        ▼
 Supabase CRM Database (PostgreSQL / PostgREST) 🗄️
   ├── public.profiles               (Team roster, roles, wa_number & google_oauth)
@@ -325,7 +324,7 @@ create table public.notifications (
 ---
 
 ### 9. `public.profiles_google_tokens` (Google Workspace Tokens & User Ownership)
-Stores OAuth 2.0 access credentials for team members who have linked their Google Workspace account, including cached `access_token` and `access_token_expire` to avoid redundant refreshes.
+Stores OAuth 2.0 access credentials for team members who have linked their Google Workspace account.
 ```sql
 create table public.profiles_google_tokens (
   id                   uuid primary key default gen_random_uuid(),
@@ -340,49 +339,43 @@ create table public.profiles_google_tokens (
 );
 ```
 
+#### Automated 5-Minute Scheduler (Edge Function & Supabase Cron):
+A background cron worker runs every 5 minutes (`*/5 * * * *`) via Supabase `pg_cron` invoking the Edge Function `schedule-refresh-google-tokens`:
+- **Query**: Selects all rows where `google_refresh_token` is not null.
+- **Refresh Condition**:
+  1. If `access_token` is NULL or `access_token_expire` is NULL: generates `access_token` and `access_token_expire` using `google_refresh_token` and saves them to `profiles_google_tokens`.
+  2. If `(access_token_expire - 5 minutes) <= currentTime`: automatically calls Google OAuth (`https://oauth2.googleapis.com/token`) to replace `access_token` and `access_token_expire` before it can expire.
+- **Result**: `public.profiles_google_tokens.access_token` is kept perpetually fresh, valid, and unexpired 24/7 without user intervention.
+
 #### Rabbit Agent Ownership Rule for Google Workspace:
-When a WhatsApp user sends a prompt to Rabbit Agent regarding any Google Workspace resource:
+Because the 5-minute scheduler continuously maintains active access tokens, **Rabbit AI Agent ONLY looks at `profiles_google_tokens.access_token`** for Google Workspace ownership based on `profiles_google_tokens.profile_id`:
 - **Google Calendar**: Creating events, scheduling milestone review sessions, client meetings, or inviting collaborators.
 - **Google Sheets**: Exporting task rosters, financial pipeline sheets, sponsor budgets, or milestone delivery logs.
 - **Google Docs**: Generating meeting briefs, exhibition curate sheets, proposals, or minutes.
 - **Google Drive**: Creating project asset folders, uploading artwork proofs, or generating shareable links.
 
-**Execution Protocol & Token Lifecycle Check:**
+**Execution Protocol for Rabbit Agent:**
 1. **Check WhatsApp Number (`users.wa_number`)**:
    Match the incoming WhatsApp caller mobile number against `users.wa_number` (`public.profiles.wa_number`) to resolve `caller_profile_id`.
-2. **Check `profiles_google_tokens.profile_id`**:
-   Query `public.profiles_google_tokens` to retrieve credentials and token cache for this profile:
+2. **Fetch `profiles_google_tokens.access_token`**:
+   Query `public.profiles_google_tokens` to retrieve the active `access_token`:
    ```sql
-   select google_client_id, google_client_secret, google_refresh_token, access_token, access_token_expire
+   select access_token
    from public.profiles_google_tokens
    where profile_id = :caller_profile_id;
    ```
-3. **If `profiles_google_tokens.profile_id` EXISTS**:
-   - **MUST check `access_token` and `access_token_expire` before using `google_refresh_token`**:
-     * **Case A — Token is valid & unexpired**:
-       If `access_token` is NOT null AND `access_token_expire` is NOT null AND `access_token_expire > now()` (with at least 60s buffer):
-       -> **REUSE `access_token` directly!** Do NOT invoke `https://oauth2.googleapis.com/token`. This protects Google accounts from `invalid_grant` errors caused by token revocation, rotation, or rate limiting from rapid refreshes.
-     * **Case B — Token is NULL or expired**:
-       If `access_token` is null, OR `access_token_expire` is null, OR `access_token_expire <= now()`:
-       -> **Regenerate / Replace `access_token`**: Call Google's token endpoint (`https://oauth2.googleapis.com/token`) using `google_refresh_token`, `google_client_id`, and `google_client_secret` (`grant_type=refresh_token`).
-       -> **Persist Cache**: Immediately update `public.profiles_google_tokens` with the new `access_token` and updated `access_token_expire` (`now() + expires_in seconds`):
-          ```sql
-          update public.profiles_google_tokens
-          set access_token = :new_access_token,
-              access_token_expire = :new_expire_timestamp
-          where profile_id = :caller_profile_id;
-          ```
-       -> **Handle Refresh Failures**: If Google rejects the refresh token with `invalid_grant` (e.g. token revoked or rotated), notify user:
-          > *"⚠️ Your Google Workspace refresh token has expired or been revoked. Please ask an admin to re-register your OAuth2 Google credentials."*
-   - Execute Google Workspace REST API calls using the active `access_token` so the **caller is the creator and owner** of the calendar event, sheet, document, or drive folder.
+3. **If `access_token` EXISTS and is NOT NULL**:
+   - Rabbit **ONLY uses `profiles_google_tokens.access_token`** directly as `Authorization: Bearer <access_token>` in Google Workspace REST APIs!
+   - Rabbit does NOT execute OAuth refresh flows during user chat.
+   - Caller is guaranteed direct personal ownership of all created events, sheets, docs, and drive files.
    - Return the direct Google URL to the user in the WhatsApp response.
-4. **If `profiles_google_tokens.profile_id` does NOT exist**:
-   - **MUST ask user to contact / ask admin to register OAuth2 Google manually**:
+4. **If `profiles_google_tokens` does NOT exist OR `access_token` is NULL**:
+   - Rabbit **MUST ask user to contact / ask admin to register OAuth2 Google manually**:
      > *"⚠️ Your Google Workspace OAuth2 credentials are not registered. Please ask an admin to register your OAuth2 Google credentials manually in the system."*
    - Do NOT fall back to generic service account, and do NOT fail silently.
 5. **Strict Requirement — NOT Using `gog openclaw`**:
    - Rabbit Agent is **strictly prohibited from using `gog openclaw`** (the OpenClaw Google Workspace CLI/plugin).
-   - All Google Workspace interactions MUST be performed using direct REST APIs authenticated with the individual user credentials (`google_client_id`, `google_client_secret`, `google_refresh_token`, `access_token`, `access_token_expire`) from `profiles_google_tokens`.
+   - All Google Workspace interactions MUST be performed using direct REST APIs authenticated with `profiles_google_tokens.access_token`.
 
 ---
 
