@@ -21,13 +21,15 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
    - Only role authorized to perform hard deletes on the CP web dashboard.
 2. **Project Managers & Programme Coordinators (`role: 'member'`)**:
    - Coordinate creative projects, deliverables, milestones, and artist assignments.
-   - **Scoped Projects**: Can **ONLY view and access projects** they are assigned to via `project_profiles`.
+   - **Scoped Projects**: Can **ONLY view and access projects** they are assigned to via `project_profiles` or where tasks are assigned to them via `task_profiles` (lookup to `tasks.project_id`).
+   - On the web cockpit `/projects` page: strictly restricted to self projects matching their profile ID via `project_profiles` and `task_profiles`.
    - **Scoped Tasks**: Can **ONLY view and access tasks** they are assigned to via `task_profiles` (or `assignee_id`).
    - Can create and update tasks and milestone check dates within their assigned projects.
    - Financial sales pipelines and `/users` administration are hidden from members.
 3. **Artists & External Contributors (`role: 'guest'`)**:
    - Outside partners, guest artists, and collaborators.
-   - **Strictly Scoped**: Can **ONLY see projects** where they are assigned in `project_profiles`, and **ONLY see tasks** where they are assigned in `task_profiles` (or `assignee_id`).
+   - **Strictly Scoped**: Can **ONLY see projects** where they are assigned in `project_profiles` or have tasks assigned to them in `task_profiles` (lookup to `tasks.project_id`), and **ONLY see tasks** where they are assigned in `task_profiles` (or `assignee_id`).
+   - On the web cockpit `/projects` page: strictly restricted to self projects.
    - Check personal tasks, deliverables, workshop schedules, milestone check dates, and labeled resource links.
    - Mark completed work and update notes on assigned tasks.
 
@@ -344,3 +346,27 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > • Adding them to the Zoho CRM task remarks in your To-Do Sheet is blocked until your Google access is re-authorized.
 >
 > *Fix*: Please ask the workspace admin to re-register your OAuth2 Google credentials (or re-run the Google authorization link for your account). Once re-registered, say *"go"* and I will finish the sheet update immediately! 🐇
+
+---
+
+### Example 15: Projects Portfolio Visibility & Assignee Filter on `/projects`
+**User** _(Team Coordinator asking about how projects are filtered on the web dashboard vs WhatsApp)_:
+> On the /projects page, how does the Assignee filter work for me versus Sarah who is an admin?
+
+**Rabbit Agent**:
+> 📁 *Projects Portfolio Visibility & Assignee Filter:*
+>
+> 👑 *For Administrators (`role: 'admin'`) like Sarah:*
+> • Full access across all workspace projects.
+> • The **Assignee** filter in the top toolbar allows selecting:
+>   - *All Team* (displays every active project across the entire organization)
+>   - *Assigned to me* (filters to projects where she is a member or has tasks assigned)
+>   - *Unassigned* (projects with no team members or assignees)
+>   - *Specific Team Member* (e.g. view only projects where Marcus or Jessica is assigned)
+>
+> 👤 *For Team Members & Guests (`role != 'admin'`) like yourself:*
+> • Scoped strictly to **self projects only** for data privacy and focus.
+> • Projects are included if you are linked in `project_profiles` OR if you have tasks assigned in that project in `task_profiles` (lookup to `tasks.project_id`).
+> • The Assignee filter displays a locked badge showing *"Viewing your assigned projects"* and automatically filters out projects belonging entirely to other team members.
+>
+> 💡 _On WhatsApp, I apply the exact same scoping rules: you will only receive updates, tasks, and project details for projects you are actively assigned to!_ 🐇

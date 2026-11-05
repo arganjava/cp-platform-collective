@@ -55,11 +55,15 @@ Rabbit WhatsApp Agent identifies incoming senders using their WhatsApp mobile nu
    - **Deletion Policy**: Hard deletion is prohibited over WhatsApp for all users (safety directive); admins must archive records or use the web dashboard.
 
 2. **Role `member` & `guest` (Team Members, Artists & External Partners)**:
-   - **Scoped Projects Visibility**: Can **ONLY see projects** where they are explicitly assigned in `public.project_profiles`:
+   - **Scoped Projects Visibility**: Can **ONLY see projects** where they are explicitly assigned in `public.project_profiles` OR assigned to tasks within that project via `public.task_profiles` (or `tasks.assignee_id`):
      ```sql
-     select p.* from public.projects p
-     join public.project_profiles pp on pp.project_id = p.id
-     where pp.profile_id = :caller_profile_id;
+     select distinct p.* from public.projects p
+     left join public.project_profiles pp on pp.project_id = p.id
+     left join public.tasks t on t.project_id = p.id
+     left join public.task_profiles tp on tp.task_id = t.id
+     where pp.profile_id = :caller_profile_id 
+        or tp.profile_id = :caller_profile_id 
+        or t.assignee_id = :caller_profile_id;
      ```
    - **Scoped Tasks Visibility**: Can **ONLY see tasks** where they are assigned in `public.task_profiles` or as `tasks.assignee_id`:
      ```sql
@@ -90,7 +94,7 @@ The Collective Perspectives web cockpit is structured into core operational modu
 | Route | Cockpit Module | Purpose & Table Mapping |
 | :--- | :--- | :--- |
 | `/` | **Executive Dashboard** | High-level KPIs, active projects, pipeline funnel, closed sales metric (calculates **Closed sales only** where latest stage is `Closed`), upcoming milestones, recent team activity. |
-| `/projects` | **Project Portfolio** | Creative exhibitions, workshops, and commissions. Tracks budget, status, timeline, and team roster via `project_profiles`. |
+| `/projects` | **Project Portfolio** | Creative exhibitions, workshops, and commissions. Features top toolbar **Assignee** filter (admin can filter by all assignees or specific user/self; non-admin strictly sees self projects based on `project_profiles` and `task_profiles` lookup to `tasks.project_id`). |
 | `/tasks` | **Task Workspace** | Interactive list and Kanban boards. Features priority levels, due dates, **milestone check dates (🚩)**, and **multiple labeled links (JSONB)**. |
 | `/gantt` | **Interactive Gantt** | Timeline and scheduling engine with milestone flags (`check_date`), dependency awareness, and direct resource links. |
 | `/pipelines` & `/sales` | **Sales Pipeline** | Commercial deals and sponsorship tracker with top filter toolbar. Summary metric dynamically displays **"Pipeline"** (PIPELINE) by default, or **"Closed"** (CLOSED) when Stage Status filter is set to Closed. Tracks progression through `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost` with PIC and value history in `sale_stages`. |

@@ -52,7 +52,7 @@ https://cockpit.collectivep.com/
 >    - Full visibility across all workspace projects, tasks, sales pipelines, deals, clients, and activity.
 >    - Full CRU (Create, Read, Update).
 > 3. **Role `member` & `guest`**:
->    - **Projects Scope**: Can **ONLY see projects** where they are a member in `project_profiles`.
+>    - **Projects Scope**: Can **ONLY see projects** where they are a member in `project_profiles` OR assigned to tasks in that project in `task_profiles` (lookup to `tasks.project_id`).
 >    - **Tasks Scope**: Can **ONLY see tasks** where they are assigned in `task_profiles` (or `assignee_id`).
 >    - Can perform CRU only within their assigned scope (e.g. creating/updating tasks for projects they belong to, updating progress on their assigned tasks).
 >    - Cannot see unassigned projects, unassigned tasks, or financial pipeline deal valuations.
@@ -77,7 +77,7 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
    - **`wa_number`**: WhatsApp phone number (e.g. `+6591234567` or `6591234567`) used by Rabbit Agent to verify identity upon incoming WhatsApp messages.
    - **Role Scoping (`admin`, `member`, `guest`)**:
      - `admin`: Can view all projects, tasks, sales, and clients across the entire organization. Full CRU (Create, Read, Update).
-     - `member` & `guest`: Can **ONLY view projects** they belong to via `project_profiles`, and can **ONLY view tasks** assigned to them via `task_profiles` (or `assignee_id`). Access to financial sales pipelines and user roster is restricted.
+     - `member` & `guest`: Can **ONLY view projects** they belong to via `project_profiles` or have tasks assigned to them via `task_profiles` (lookup to `tasks.project_id`), and can **ONLY view tasks** assigned to them via `task_profiles` (or `assignee_id`). Access to financial sales pipelines and user roster is restricted.
    - Soft-delete aware: Ignores users marked `is_deleted = true`.
 2. **`public.clients` (Corporate Partners & Clients 🏢)**:
    - Organizations, sponsors, commissioners, and partner foundations.
@@ -85,10 +85,14 @@ Rabbit Agent has complete operational awareness of all 8 core entities:
 3. **`public.projects` (Creative Projects & Deliverables 📁)**:
    - Creative initiatives, exhibitions, workshops, and commercial deliverables.
    - Statuses: `active`, `on_hold`, `completed`, `archived`.
+   - **Assignee Filter & Role Scoping on `/projects`**:
+     - The `/projects` web page features a top toolbar **Assignee** filter (`All Team`, `Assigned to me`, `Unassigned`, or specific team member).
+     - **Admin (`role = 'admin'`)**: Can see all projects across the workspace and can filter by any assignee (including `all`, `mine`, `unassigned`, or any specific user ID).
+     - **Non-Admin (`role != 'admin'`)**: Can see **ONLY self projects** based on direct membership in `project_profiles` AND task assignments in `task_profiles` (lookup to `tasks.project_id`). Non-admin users cannot access or view projects belonging entirely to others.
    - Protected: Only admins can delete projects via web UI.
 4. **`public.project_profiles` (Project Membership 👥)**:
    - Assigns members and guests to specific project workspaces.
-   - Rabbit Agent checks this junction table to enforce project visibility: members and guests only see projects listed in `project_profiles` for their user ID.
+   - Rabbit Agent and `/projects` check this junction table together with `task_profiles` (lookup to `tasks.project_id`) to enforce project visibility: members and guests only see projects where they are linked as a member or have assigned tasks.
 5. **`public.tasks` (Tasks & Action Items ✅)**:
    - Actionable deliverables nested inside projects.
    - Statuses: `todo`, `in_progress`, `review`, `done`.

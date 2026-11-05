@@ -31,11 +31,13 @@ const statusConfig = {
 };
 
 export default function ProjectsPage() {
-  const { projects, tasks, users, projectProfiles, currentUserId, getUserById, updateTaskStatus, addTask, deleteTask, addProject, updateProject, deleteProject, searchQuery } = useStore();
+  const { projects, tasks, users, projectProfiles, taskProfiles, currentUserId, getUserById, getActiveUsers, updateTaskStatus, addTask, deleteTask, addProject, updateProject, deleteProject, searchQuery } = useStore();
   const currentUser = getUserById(currentUserId);
   const isAdmin = currentUser?.role === "admin";
+  const activeUsers = getActiveUsers();
 
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [view, setView] = useState<"board" | "list">("board");
   const [showNewTask, setShowNewTask] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -57,48 +59,114 @@ export default function ProjectsPage() {
     color: string;
   }>({ title: "", description: "", status: "active", color: "var(--primary)" });
 
+  // Sync non-admin assignee filter to self
+  React.useEffect(() => {
+    if (!isAdmin && currentUserId) {
+      setFilterAssignee(currentUserId);
+    }
+  }, [isAdmin, currentUserId]);
+
+  const effectiveAssignee = isAdmin
+    ? (filterAssignee === "mine" ? currentUserId || "all" : filterAssignee)
+    : (currentUserId || "all");
+
   const eligibleUsers = useMemo(() => {
     return users.filter(
       (u) => !u.isDeleted && !u.deletedAt && (u.role === "member" || u.role === "guest")
     );
   }, [users]);
 
-  // Role-based visibility: admin can view all data; member/guest base on tasks.assignee_id and project_profiles
-  const userMemberProjectIds = useMemo(() => {
-    if (isAdmin) return null;
-    if (!currentUserId) return new Set<string>();
-    return new Set(
-      projectProfiles
-        .filter((pp) => pp.profileId === currentUserId)
-        .map((pp) => pp.projectId)
-    );
-  }, [projectProfiles, isAdmin, currentUserId]);
+  // Check if a task is assigned to a specific profile
+  const isTaskAssignee = React.useCallback(
+    (t: Task, profileId: string) => {
+      if (t.assigneeId === profileId) return true;
+      if (t.assigneeIds && t.assigneeIds.includes(profileId)) return true;
+      if (taskProfiles.some((tp) => tp.taskId === t.id && tp.profileId === profileId)) return true;
+      return false;
+    },
+    [taskProfiles]
+  );
 
-  const userAssignedProjectIds = useMemo(() => {
-    if (isAdmin) return null;
-    if (!currentUserId) return new Set<string>();
-    return new Set(
-      tasks.filter((t) => t.assigneeId === currentUserId).map((t) => t.projectId)
-    );
-  }, [tasks, isAdmin, currentUserId]);
+  // Helper to check if project belongs to an assignee based on project_profiles, task_profiles, or direct assignment
+  const isProjectMatchingAssignee = React.useCallback(
+    (p: Project, profileId: string) => {
+      // 1. Direct project membership via project_profiles
+      if (projectProfiles.some((pp) => pp.projectId === p.id && pp.profileId === profileId)) {
+        return true;
+      }
+      // 2. Task assignment via task_profiles (or tasks.assignee_id / assigneeIds) pointing to this project
+      if (tasks.some((t) => t.projectId === p.id && isTaskAssignee(t, profileId))) {
+        return true;
+      }
+      // 3. Fallback to owner or legacy memberIds
+      if (p.ownerId === profileId || (p.memberIds && p.memberIds.includes(profileId))) {
+        return true;
+      }
+      return false;
+    },
+    [projectProfiles, tasks, isTaskAssignee]
+  );
 
+  // Visible projects:
+  // - If role=admin: can see all projects or filter by selected assignee (including self/mine or specific user).
+  // - If role!=admin: can see ONLY self projects based on project_profiles and task_profiles (lookup to tasks.project_id).
   const visibleProjects = useMemo(() => {
-    if (isAdmin) return projects;
-    if (!currentUserId) return [];
-    return projects.filter(
-      (p) =>
-        (userMemberProjectIds && userMemberProjectIds.has(p.id)) ||
-        (userAssignedProjectIds && userAssignedProjectIds.has(p.id)) ||
-        p.ownerId === currentUserId
-    );
-  }, [projects, isAdmin, currentUserId, userMemberProjectIds, userAssignedProjectIds]);
+    if (!isAdmin) {
+      if (!currentUserId) return [];
+      return projects.filter((p) => isProjectMatchingAssignee(p, currentUserId));
+    }
+
+    // Role is admin:
+    if (effectiveAssignee === "all") {
+      return projects;
+    }
+
+    if (effectiveAssignee === "unassigned") {
+      return projects.filter((p) =>
+        tasks.some(
+          (t) =>
+            t.projectId === p.id &&
+            !t.assigneeId &&
+            (!t.assigneeIds || t.assigneeIds.length === 0) &&
+            !taskProfiles.some((tp) => tp.taskId === t.id)
+        )
+      );
+    }
+
+    return projects.filter((p) => isProjectMatchingAssignee(p, effectiveAssignee));
+  }, [projects, isAdmin, effectiveAssignee, currentUserId, isProjectMatchingAssignee, tasks, taskProfiles]);
 
   const activeProjects = visibleProjects.filter((p) => p.status === "active");
+
+  // Keep selected project in sync if it's no longer visible
+  React.useEffect(() => {
+    if (selectedProject && !visibleProjects.some((p) => p.id === selectedProject)) {
+      setSelectedProject(null);
+    }
+  }, [selectedProject, visibleProjects]);
+
+  // Tasks visible according to role and assignee filter
   const visibleTasks = useMemo(() => {
-    if (isAdmin) return tasks;
-    if (!currentUserId) return [];
-    return tasks.filter((t) => t.assigneeId === currentUserId);
-  }, [tasks, isAdmin, currentUserId]);
+    let pool = tasks;
+    if (!isAdmin) {
+      if (!currentUserId) return [];
+      pool = tasks.filter((t) => isTaskAssignee(t, currentUserId));
+    } else if (effectiveAssignee !== "all") {
+      if (effectiveAssignee === "unassigned") {
+        pool = tasks.filter(
+          (t) =>
+            !t.assigneeId &&
+            (!t.assigneeIds || t.assigneeIds.length === 0) &&
+            !taskProfiles.some((tp) => tp.taskId === t.id)
+        );
+      } else {
+        pool = tasks.filter((t) => isTaskAssignee(t, effectiveAssignee));
+      }
+    }
+    // Only return tasks belonging to visible projects
+    const visibleProjectIds = new Set(visibleProjects.map((p) => p.id));
+    return pool.filter((t) => visibleProjectIds.has(t.projectId));
+  }, [tasks, isAdmin, currentUserId, effectiveAssignee, visibleProjects, isTaskAssignee, taskProfiles]);
 
   const effectiveSelectedProject = selectedProject && visibleProjects.some((p) => p.id === selectedProject)
     ? selectedProject
@@ -256,8 +324,44 @@ export default function ProjectsPage() {
             </>
           }
         />
-        {/* Project chips + search */}
-        <Toolbar className="gap-3">
+        {/* Project chips + Assignee filter + search */}
+        <Toolbar className="gap-3 flex-wrap items-center">
+          {/* Assignee Filter: admin can select any assignee (or all, unassigned, mine); member/guest sees assigned to self */}
+          <div className="flex items-center gap-2 mr-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-subtle-foreground whitespace-nowrap">
+              Assignee:
+            </span>
+            {isAdmin ? (
+              <Select
+                id="filter-project-assignee"
+                aria-label="Filter projects by assignee"
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="w-48 text-xs h-8"
+              >
+                <option value="all">All Assignees</option>
+                {currentUserId && <option value="mine">Assigned to Me</option>}
+                <option value="unassigned">Unassigned</option>
+                {activeUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{u.id === currentUserId ? " (You)" : ""}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <div
+                className="flex items-center gap-1.5"
+                title="As a member or guest, you view only projects you are assigned to"
+              >
+                <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-secondary text-foreground border border-border">
+                  Assigned to You
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="h-4 w-px bg-border hidden sm:block" />
+
           <button
             onClick={() => setSelectedProject(null)}
             className={cn(
