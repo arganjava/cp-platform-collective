@@ -3,7 +3,12 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { useStore } from "@/lib/store";
-import type { Sale, SaleStage } from "@/lib/types";
+import {
+  buildClosedMonthOptions,
+  filterClosedSalesByMonth,
+  getClosedSalesWithStage,
+  getCurrentMonthKey,
+} from "@/lib/closed-sales";
 import { cn, formatDate, getInitials } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -85,49 +90,34 @@ export default function DashboardPage() {
     return new Date(t.dueDate) < new Date();
   }).length;
 
-  const closedSalesWithStage = React.useMemo(() => {
-    const list: { sale: Sale; latestStage: SaleStage; amount: number }[] = [];
-    for (const s of sales) {
-      const saleId = s.id || (s as any).sale_id;
-      const matching = saleStages.filter((st) => {
-        const stageSaleId = st.saleId || (st as any).sale_id;
-        return String(stageSaleId).trim() === String(saleId).trim();
-      });
-      if (matching.length === 0) continue;
-      const latest = [...matching].sort((a, b) => {
-        const timeB = Math.max(
-          b.createdAt ? new Date(b.createdAt).getTime() : 0,
-          (b as any).created_at ? new Date((b as any).created_at).getTime() : 0,
-          b.date ? new Date(b.date).getTime() : 0
-        );
-        const timeA = Math.max(
-          a.createdAt ? new Date(a.createdAt).getTime() : 0,
-          (a as any).created_at ? new Date((a as any).created_at).getTime() : 0,
-          a.date ? new Date(a.date).getTime() : 0
-        );
-        return timeB - timeA;
-      })[0];
-      const status = (latest?.status ?? "").trim().toLowerCase();
-      if (status === "closed") {
-        const amount = Number(s.amount) || Number(latest.value) || 0;
-        list.push({ sale: s, latestStage: latest, amount });
-      }
-    }
-    return list;
-  }, [sales, saleStages]);
+  const [selectedClosedMonth, setSelectedClosedMonth] = React.useState<string>(() =>
+    getCurrentMonthKey()
+  );
 
-  const totalClosed = closedSalesWithStage.reduce((sum, item) => sum + item.amount, 0);
+  const closedSalesWithStage = React.useMemo(
+    () => getClosedSalesWithStage(sales, saleStages),
+    [sales, saleStages]
+  );
 
-  const thisMonthClosed = closedSalesWithStage.reduce((sum, item) => {
-    const stageDateStr = item.latestStage.date || item.latestStage.createdAt || (item.latestStage as any).created_at || item.sale.date;
-    if (!stageDateStr) return sum;
-    const d = new Date(stageDateStr);
-    const now = new Date();
-    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
-      return sum + item.amount;
-    }
-    return sum;
-  }, 0);
+  const closedMonthOptions = React.useMemo(
+    () => buildClosedMonthOptions(closedSalesWithStage),
+    [closedSalesWithStage]
+  );
+
+  const totalClosed = React.useMemo(
+    () => closedSalesWithStage.reduce((sum, item) => sum + item.amount, 0),
+    [closedSalesWithStage]
+  );
+
+  const filteredClosedSales = React.useMemo(
+    () => filterClosedSalesByMonth(closedSalesWithStage, selectedClosedMonth),
+    [closedSalesWithStage, selectedClosedMonth]
+  );
+
+  const filteredClosedTotal = React.useMemo(
+    () => filteredClosedSales.reduce((sum, item) => sum + item.amount, 0),
+    [filteredClosedSales]
+  );
 
   const upcomingDeadlines = [...visibleTasks]
     .filter((t) => t.status !== "done" && t.dueDate)
@@ -162,11 +152,34 @@ export default function DashboardPage() {
           <SummaryMetric id="dashboard-metric-overdue" value={overdueTasks} label="Overdue" indicator={overdueTasks > 0 ? <Badge variant="danger">{overdueTasks} need attention</Badge> : <Badge variant="positive">On track</Badge>} />
           <SummaryMetric
             id="dashboard-metric-revenue"
-            value={`$${totalClosed.toLocaleString()}`}
-            label="Closed"
+            value={`$${filteredClosedTotal.toLocaleString()}`}
+            label={
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>Closed</span>
+                <select
+                  id="dashboard-closed-month-filter"
+                  aria-label="Filter closed sales by month"
+                  value={selectedClosedMonth}
+                  onChange={(e) => setSelectedClosedMonth(e.target.value)}
+                  className="h-6 border border-border bg-card px-1.5 py-0 text-[11px] font-medium normal-case tracking-normal text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+                >
+                  {closedMonthOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                  <option value="all">All Months</option>
+                </select>
+              </div>
+            }
             indicator={
-              <Badge variant="neutral">
-                {thisMonthClosed > 0 ? `+$${thisMonthClosed.toLocaleString()} this month` : "+$0 this month"}
+              <Badge
+                variant="neutral"
+                title={`${filteredClosedSales.length} closed ${filteredClosedSales.length === 1 ? "deal" : "deals"}`}
+              >
+                {selectedClosedMonth === "all"
+                  ? `${filteredClosedSales.length} ${filteredClosedSales.length === 1 ? "deal" : "deals"}`
+                  : `Total $${totalClosed.toLocaleString()}`}
               </Badge>
             }
           />

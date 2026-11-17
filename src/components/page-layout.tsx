@@ -50,7 +50,7 @@ export function SheetSummary({ className, children, ...props }: React.HTMLAttrib
 
 interface SummaryMetricProps extends React.HTMLAttributes<HTMLDivElement> {
   value: React.ReactNode;
-  label: string;
+  label: React.ReactNode;
   indicator?: React.ReactNode;
   className?: string;
 }
@@ -62,7 +62,7 @@ export function SummaryMetric({ value, label, indicator, className, ...props }: 
         <span className="font-heading text-2xl font-bold tracking-tight text-foreground tabular">{value}</span>
         {indicator}
       </div>
-      <span className="text-xs font-medium uppercase tracking-wider text-subtle-foreground">{label}</span>
+      <div className="text-xs font-medium uppercase tracking-wider text-subtle-foreground">{label}</div>
     </div>
   );
 }
