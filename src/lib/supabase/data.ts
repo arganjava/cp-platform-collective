@@ -9,6 +9,7 @@ import type {
   SaleStageRow,
   NotificationRow,
   ClientRow,
+  PwdRow,
 } from "./types";
 import type {
   User,
@@ -25,6 +26,7 @@ import type {
   ProjectStatus,
   SaleType,
   Client,
+  PwdRecord,
   ProjectProfile,
   TaskProfile,
 } from "../types";
@@ -113,6 +115,31 @@ export function fromClientRow(r: ClientRow): Client {
   return {
     id: r.id,
     name: r.name,
+    createdAt: r.created_at ?? new Date().toISOString(),
+    createdBy: r.created_by ?? null,
+    updatedAt: r.updated_at ?? new Date().toISOString(),
+    updatedBy: r.updated_by ?? null,
+  };
+}
+
+export function fromPwdRow(r: PwdRow): PwdRecord {
+  return {
+    id: r.id,
+    serialNo: r.serial_no ?? null,
+    name: r.name,
+    email: r.email ?? null,
+    mobilePhone: r.mobile_phone ?? null,
+    primaryTalent: r.primary_talent ?? null,
+    secondaryRole: r.secondary_role ?? null,
+    disabilityType: r.disability_type ?? null,
+    age: r.age ?? null,
+    gender: r.gender ?? null,
+    standardRate: r.standard_rate !== null && r.standard_rate !== undefined && r.standard_rate !== "" ? Number(r.standard_rate) : null,
+    currency: r.currency || "SGD",
+    accessibilityRequirements: r.accessibility_requirements ?? null,
+    previousCollaborations: r.previous_collaborations ?? null,
+    portfolioLink: r.portfolio_link ?? null,
+    notes: r.notes ?? null,
     createdAt: r.created_at ?? new Date().toISOString(),
     createdBy: r.created_by ?? null,
     updatedAt: r.updated_at ?? new Date().toISOString(),
@@ -221,6 +248,29 @@ export function clientColumns(c: Partial<Client>): Record<string, unknown> {
   return cols;
 }
 
+export function pwdColumns(p: Partial<PwdRecord>): Record<string, unknown> {
+  const cols: Record<string, unknown> = {};
+  if (p.id !== undefined) cols.id = p.id;
+  if (p.serialNo !== undefined) cols.serial_no = p.serialNo ?? null;
+  if (p.name !== undefined) cols.name = p.name;
+  if (p.email !== undefined) cols.email = p.email || null;
+  if (p.mobilePhone !== undefined) cols.mobile_phone = p.mobilePhone || null;
+  if (p.primaryTalent !== undefined) cols.primary_talent = p.primaryTalent || null;
+  if (p.secondaryRole !== undefined) cols.secondary_role = p.secondaryRole || null;
+  if (p.disabilityType !== undefined) cols.disability_type = p.disabilityType || null;
+  if (p.age !== undefined) cols.age = p.age ?? null;
+  if (p.gender !== undefined) cols.gender = p.gender || null;
+  if (p.standardRate !== undefined) cols.standard_rate = p.standardRate ?? null;
+  if (p.currency !== undefined) cols.currency = p.currency || "SGD";
+  if (p.accessibilityRequirements !== undefined) cols.accessibility_requirements = p.accessibilityRequirements || null;
+  if (p.previousCollaborations !== undefined) cols.previous_collaborations = p.previousCollaborations || null;
+  if (p.portfolioLink !== undefined) cols.portfolio_link = p.portfolioLink || null;
+  if (p.notes !== undefined) cols.notes = p.notes || null;
+  if (p.createdBy !== undefined) cols.created_by = p.createdBy || null;
+  if (p.updatedBy !== undefined) cols.updated_by = p.updatedBy || null;
+  return cols;
+}
+
 export function saleColumns(s: Partial<Sale>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
   if (s.id !== undefined) cols.id = s.id;
@@ -284,6 +334,7 @@ export interface TeamData {
   saleStages: SaleStage[];
   notifications: Notification[];
   clients: Client[];
+  pwds: PwdRecord[];
   projectProfiles: ProjectProfile[];
   taskProfiles: TaskProfile[];
 }
@@ -343,6 +394,16 @@ async function fetchTaskProfilesSafe(
   }
 }
 
+async function fetchPwdsSafe(supabase: ReturnType<typeof getSupabase>): Promise<PwdRow[]> {
+  try {
+    const res = await supabase.from("pwds").select("*").order("name");
+    if (!res.error && res.data) return res.data as PwdRow[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchTeamData(): Promise<TeamData> {
   const supabase = getSupabase();
   const [
@@ -352,6 +413,7 @@ export async function fetchTeamData(): Promise<TeamData> {
     notifications,
     salesRows,
     clientsRows,
+    pwdsRows,
     saleStageRows,
     projectProfilesRows,
     taskProfilesRows,
@@ -362,6 +424,7 @@ export async function fetchTeamData(): Promise<TeamData> {
     supabase.from("notifications").select("*").order("created_at", { ascending: false }),
     fetchSalesSafe(supabase),
     fetchClientsSafe(supabase),
+    fetchPwdsSafe(supabase),
     fetchSaleStagesSafe(supabase),
     fetchProjectProfilesSafe(supabase),
     fetchTaskProfilesSafe(supabase),
@@ -423,6 +486,7 @@ export async function fetchTeamData(): Promise<TeamData> {
       fromNotificationRow
     ),
     clients: clientsRows.map(fromClientRow),
+    pwds: pwdsRows.map(fromPwdRow),
     projectProfiles: mappedProjectProfiles,
     taskProfiles: mappedTaskProfiles,
   };
@@ -595,6 +659,34 @@ export async function updateClientRow(id: string, updates: Partial<Client>) {
 
 export async function deleteClientRow(id: string) {
   const { error } = await getSupabase().from("clients").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function insertPwd(pwd: PwdRecord) {
+  const { error } = await getSupabase()
+    .from("pwds")
+    .insert(pwdColumns(pwd));
+  if (error) throw error;
+}
+
+export async function insertPwdsBulk(pwds: PwdRecord[]) {
+  if (pwds.length === 0) return;
+  const { error } = await getSupabase()
+    .from("pwds")
+    .insert(pwds.map((p) => pwdColumns(p)));
+  if (error) throw error;
+}
+
+export async function updatePwdRow(id: string, updates: Partial<PwdRecord>) {
+  const { error } = await getSupabase()
+    .from("pwds")
+    .update({ ...pwdColumns(updates), updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deletePwdRow(id: string) {
+  const { error } = await getSupabase().from("pwds").delete().eq("id", id);
   if (error) throw error;
 }
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
-import { Menu, LayoutDashboard, FolderKanban, CheckSquare, GanttChart, DollarSign, BarChart3, Users, Building2, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Menu, LayoutDashboard, FolderKanban, CheckSquare, GanttChart, DollarSign, BarChart3, Users, Building2, Accessibility, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -24,6 +24,7 @@ const allNavItems: NavItem[] = [
   { href: "/clients", label: "Clients", icon: Building2, sheet: "06", adminOnly: true },
   { href: "/reports", label: "Reports", icon: BarChart3, sheet: "07", adminOnly: true },
   { href: "/users", label: "Users", icon: Users, sheet: "08", adminOnly: true },
+  { href: "/pwd", label: "PWD", icon: Accessibility, sheet: "09", adminOnly: true },
 ];
 
 export function Sidebar() {

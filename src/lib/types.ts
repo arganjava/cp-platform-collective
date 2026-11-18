@@ -94,6 +94,29 @@ export interface Client {
   updatedBy?: string | null;
 }
 
+export interface PwdRecord {
+  id: string;
+  serialNo?: number | null;
+  name: string;
+  email?: string | null;
+  mobilePhone?: string | null;
+  primaryTalent?: string | null;
+  secondaryRole?: string | null;
+  disabilityType?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  standardRate?: number | null;
+  currency: string;
+  accessibilityRequirements?: string | null;
+  previousCollaborations?: string | null;
+  portfolioLink?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  createdBy?: string | null;
+  updatedAt: string;
+  updatedBy?: string | null;
+}
+
 export interface Sale {
   id: string;
   projectId: string;

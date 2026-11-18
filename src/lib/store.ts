@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   ProjectStatus,
   Client,
+  PwdRecord,
   ProjectProfile,
   TaskProfile,
 } from "./types";
@@ -28,6 +29,10 @@ import {
   insertClient,
   updateClientRow,
   deleteClientRow,
+  insertPwd,
+  insertPwdsBulk,
+  updatePwdRow,
+  deletePwdRow,
   insertNotification,
   updateNotificationRow,
   updateAllNotificationsRead,
@@ -63,6 +68,7 @@ interface AppState {
   saleStages: SaleStage[];
   notifications: Notification[];
   clients: Client[];
+  pwds: PwdRecord[];
   projectProfiles: ProjectProfile[];
   taskProfiles: TaskProfile[];
   currentUserId: string | null;
@@ -85,6 +91,7 @@ interface AppState {
     saleStages?: SaleStage[];
     notifications: Notification[];
     clients?: Client[];
+    pwds?: PwdRecord[];
     projectProfiles?: ProjectProfile[];
     taskProfiles?: TaskProfile[];
     currentUserId: string | null;
@@ -128,6 +135,12 @@ interface AppState {
   updateClient: (id: string, updates: Partial<Client>) => void;
   deleteClient: (id: string) => void;
 
+  // PWD actions
+  addPwd: (pwd: PwdRecord) => Promise<void>;
+  addPwdsBulk: (pwds: PwdRecord[]) => Promise<void>;
+  updatePwd: (id: string, updates: Partial<PwdRecord>) => void;
+  deletePwd: (id: string) => void;
+
   // User actions
   addUser: (user: User, password?: string) => Promise<void>;
   updateUser: (id: string, updates: Partial<User>, skipPersist?: boolean) => void;
@@ -148,6 +161,7 @@ interface AppState {
   getProjectById: (id: string) => Project | undefined;
   getUserById: (id: string | null) => User | undefined;
   getClientById: (id: string | null | undefined) => Client | undefined;
+  getPwdById: (id: string | null | undefined) => PwdRecord | undefined;
   getSalesByProject: (projectId: string) => Sale[];
   getSaleStagesBySaleId: (saleId: string) => SaleStage[];
   getProjectsByStatus: (status: ProjectStatus) => Project[];
@@ -165,6 +179,7 @@ const initialDataState = {
   saleStages: [] as SaleStage[],
   notifications: [] as Notification[],
   clients: [] as Client[],
+  pwds: [] as PwdRecord[],
   projectProfiles: [] as ProjectProfile[],
   taskProfiles: [] as TaskProfile[],
   currentUserId: null as string | null,
@@ -191,6 +206,7 @@ export const useStore = create<AppState>((set, get) => ({
     saleStages,
     notifications,
     clients,
+    pwds,
     projectProfiles,
     taskProfiles,
     currentUserId,
@@ -203,6 +219,7 @@ export const useStore = create<AppState>((set, get) => ({
       saleStages: saleStages ?? [],
       notifications,
       clients: clients ?? [],
+      pwds: pwds ?? [],
       projectProfiles: projectProfiles ?? [],
       taskProfiles: taskProfiles ?? [],
       currentUserId,
@@ -428,6 +445,29 @@ export const useStore = create<AppState>((set, get) => ({
     persist(deleteClientRow(id));
   },
 
+  // PWD actions
+  addPwd: async (pwd) => {
+    set((s) => ({ pwds: [...s.pwds, pwd] }));
+    await persist(insertPwd(pwd));
+  },
+  addPwdsBulk: async (records) => {
+    if (records.length === 0) return;
+    set((s) => ({ pwds: [...s.pwds, ...records] }));
+    await persist(insertPwdsBulk(records));
+  },
+  updatePwd: (id, updates) => {
+    set((s) => ({
+      pwds: s.pwds.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+    }));
+    persist(updatePwdRow(id, updates));
+  },
+  deletePwd: (id) => {
+    set((s) => ({
+      pwds: s.pwds.filter((p) => p.id !== id),
+    }));
+    persist(deletePwdRow(id));
+  },
+
   // User actions
   addUser: async (user, password) => {
     const normalizedEmail = user.email.trim().toLowerCase();
@@ -536,6 +576,10 @@ export const useStore = create<AppState>((set, get) => ({
   getClientById: (id) => {
     if (!id) return undefined;
     return get().clients.find((c) => c.id === id);
+  },
+  getPwdById: (id) => {
+    if (!id) return undefined;
+    return get().pwds.find((p) => p.id === id);
   },
   getSalesByProject: (projectId) => get().sales.filter((s) => s.projectId === projectId),
   getSaleStagesBySaleId: (saleId) =>

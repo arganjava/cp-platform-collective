@@ -86,6 +86,29 @@ export interface ClientRow {
   updated_by: string | null;
 }
 
+export interface PwdRow {
+  id: string;
+  serial_no: number | null;
+  name: string;
+  email: string | null;
+  mobile_phone: string | null;
+  primary_talent: string | null;
+  secondary_role: string | null;
+  disability_type: string | null;
+  age: number | null;
+  gender: string | null;
+  standard_rate: number | string | null;
+  currency: string;
+  accessibility_requirements: string | null;
+  previous_collaborations: string | null;
+  portfolio_link: string | null;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
 export interface SaleRow {
   id: string;
   project_id: string | null;
@@ -131,6 +154,7 @@ export type Database = {
       tasks: { Row: TaskRow; Insert: Partial<TaskRow>; Update: Partial<TaskRow>; Relationships: [] };
       task_profiles: { Row: TaskProfileRow; Insert: Partial<TaskProfileRow>; Update: Partial<TaskProfileRow>; Relationships: [] };
       clients: { Row: ClientRow; Insert: Partial<ClientRow>; Update: Partial<ClientRow>; Relationships: [] };
+      pwds: { Row: PwdRow; Insert: Partial<PwdRow>; Update: Partial<PwdRow>; Relationships: [] };
       sales: { Row: SaleRow; Insert: Partial<SaleRow>; Update: Partial<SaleRow>; Relationships: [] };
       sale_stages: { Row: SaleStageRow; Insert: Partial<SaleStageRow>; Update: Partial<SaleStageRow>; Relationships: [] };
       notifications: { Row: NotificationRow; Insert: Partial<NotificationRow>; Update: Partial<NotificationRow>; Relationships: [] };
