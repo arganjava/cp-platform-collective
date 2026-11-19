@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { formatDate, generateId, getInitials } from "@/lib/utils";
-import { exportPwdsToCsv, parsePwdCsv } from "@/lib/pwd-csv";
 import type { PwdRecord } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import {
@@ -30,7 +29,6 @@ import {
   Accessibility,
   ArrowLeft,
   DollarSign,
-  Download,
   ExternalLink,
   Eye,
   Mail,
@@ -40,7 +38,6 @@ import {
   ShieldAlert,
   Sparkles,
   Trash2,
-  Upload,
   Users,
 } from "lucide-react";
 
@@ -115,7 +112,6 @@ export default function PwdPage() {
   const {
     pwds,
     addPwd,
-    addPwdsBulk,
     updatePwd,
     deletePwd,
     searchQuery,
@@ -127,7 +123,6 @@ export default function PwdPage() {
   const isAdmin = currentUser?.role === "admin";
 
   const [localSearch, setLocalSearch] = useState("");
-  const [filterDisability, setFilterDisability] = useState("all");
   const [sortBy, setSortBy] = useState<
     "name_asc" | "name_desc" | "serial_asc" | "rate_desc" | "recent"
   >("name_asc");
@@ -139,9 +134,6 @@ export default function PwdPage() {
 
   const [viewingRecord, setViewingRecord] = useState<PwdRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<PwdRecord | null>(null);
-  const [importNotice, setImportNotice] = useState<string | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const disabilityOptions = useMemo(() => {
     const set = new Set<string>();
@@ -171,15 +163,9 @@ export default function PwdPage() {
   const filteredPwds = useMemo(() => {
     return pwds
       .filter((p) => {
-        if (filterDisability === "__unspecified__") {
-          if (p.disabilityType && p.disabilityType.trim()) return false;
-        } else if (filterDisability !== "all") {
-          if ((p.disabilityType || "").trim().toLowerCase() !== filterDisability.toLowerCase()) {
-            return false;
-          }
-        }
-
         if (!activeSearch) return true;
+        const creatorName = p.createdBy ? getUserById(p.createdBy)?.name : "";
+        const updaterName = p.updatedBy ? getUserById(p.updatedBy)?.name : "";
         const haystack = [
           p.name,
           p.email,
@@ -190,6 +176,8 @@ export default function PwdPage() {
           p.accessibilityRequirements,
           p.previousCollaborations,
           p.notes,
+          creatorName,
+          updaterName,
           p.serialNo !== null && p.serialNo !== undefined ? String(p.serialNo) : "",
         ]
           .filter(Boolean)
@@ -211,7 +199,7 @@ export default function PwdPage() {
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [pwds, filterDisability, activeSearch, sortBy]);
+  }, [pwds, activeSearch, sortBy, getUserById]);
 
   if (!isAdmin) {
     const roleLabel = currentUser?.role
@@ -342,121 +330,23 @@ export default function PwdPage() {
     setDeletingRecord(null);
   }
 
-  async function handleCsvFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const parsed = parsePwdCsv(text, currentUserId);
-      if (parsed.length === 0) {
-        setImportNotice(
-          "No valid PWD rows found in CSV. Expected headers like Artist Name / Name, Disability, Role, Standard Rates / Pay Scale."
-        );
-        return;
-      }
-
-      const existingNames = new Set(pwds.map((p) => p.name.trim().toLowerCase()));
-      const newRecords = parsed.filter(
-        (rec) => !existingNames.has(rec.name.trim().toLowerCase())
-      );
-
-      if (newRecords.length === 0) {
-        setImportNotice(
-          `Skipped ${parsed.length} row(s) — all matching names already exist in the directory.`
-        );
-        return;
-      }
-
-      await addPwdsBulk(newRecords);
-      const skippedCount = parsed.length - newRecords.length;
-      setImportNotice(
-        `Imported ${newRecords.length} PWD record(s) from ${file.name}${
-          skippedCount > 0 ? ` (${skippedCount} duplicate skipped)` : ""
-        }.`
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to parse CSV file.";
-      setImportNotice(`Import error: ${msg}`);
-    }
-  }
-
-  function handleExportCsv() {
-    const csv = exportPwdsToCsv(filteredPwds);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pwd-directory-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <PageFrame id="pwd-page-frame">
       <PageHeader
         title="PWD Directory"
         description="Registry of Persons with Disabilities (PWD) artists, talents, accessibility needs, and engagement rates."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={handleCsvFileChange}
-              aria-label="Upload PWD CSV file"
-            />
-            <Button
-              id="btn-import-pwd-csv"
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Import CSV</span>
-            </Button>
-            <Button
-              id="btn-export-pwd-csv"
-              variant="outline"
-              size="sm"
-              onClick={handleExportCsv}
-              disabled={filteredPwds.length === 0}
-              className="flex items-center gap-1.5"
-            >
-              <Download className="h-4 w-4" />
-              <span>Export CSV</span>
-            </Button>
-            <Button
-              id="btn-add-pwd"
-              size="sm"
-              onClick={openCreateModal}
-              className="flex items-center gap-1.5"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add PWD</span>
-            </Button>
-          </div>
+          <Button
+            id="btn-add-pwd"
+            size="sm"
+            onClick={openCreateModal}
+            className="flex items-center gap-1.5"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add PWD</span>
+          </Button>
         }
       />
-
-      {importNotice && (
-        <div
-          role="status"
-          className="flex items-center justify-between gap-3 border border-border bg-secondary/50 px-4 py-2.5 text-sm text-foreground"
-        >
-          <span>{importNotice}</span>
-          <button
-            type="button"
-            onClick={() => setImportNotice(null)}
-            className="text-xs font-medium text-muted-foreground hover:text-foreground"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
 
       {/* Summary Metrics */}
       <SheetSummary id="pwd-summary-metrics">
@@ -506,7 +396,7 @@ export default function PwdPage() {
         />
       </SheetSummary>
 
-      {/* Toolbar: Search, Disability Filter, Sort */}
+      {/* Toolbar: Search and Sort */}
       <Toolbar className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex-1 max-w-md">
           <Input
@@ -516,39 +406,20 @@ export default function PwdPage() {
             onChange={(e) => setLocalSearch(e.target.value)}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="whitespace-nowrap text-xs text-muted-foreground">Disability:</span>
-            <Select
-              id="select-filter-disability"
-              value={filterDisability}
-              onChange={(e) => setFilterDisability(e.target.value)}
-              className="w-[170px]"
-            >
-              <option value="all">All Types</option>
-              {disabilityOptions.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-              <option value="__unspecified__">Unspecified</option>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="whitespace-nowrap text-xs text-muted-foreground">Sort:</span>
-            <Select
-              id="select-sort-pwds"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="w-[170px]"
-            >
-              <option value="name_asc">Name (A–Z)</option>
-              <option value="name_desc">Name (Z–A)</option>
-              <option value="serial_asc">S/N (Ascending)</option>
-              <option value="rate_desc">Rate (High–Low)</option>
-              <option value="recent">Recently Added</option>
-            </Select>
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="whitespace-nowrap text-xs text-muted-foreground">Sort:</span>
+          <Select
+            id="select-sort-pwds"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="w-[170px]"
+          >
+            <option value="name_asc">Name (A–Z)</option>
+            <option value="name_desc">Name (Z–A)</option>
+            <option value="serial_asc">S/N (Ascending)</option>
+            <option value="rate_desc">Rate (High–Low)</option>
+            <option value="recent">Recently Added</option>
+          </Select>
         </div>
       </Toolbar>
 
@@ -564,19 +435,21 @@ export default function PwdPage() {
                 <th className="py-3 px-4">Primary Talent / Role</th>
                 <th className="py-3 px-4 text-right">Rate / Pay Scale</th>
                 <th className="py-3 px-4">Contact &amp; Portfolio</th>
+                <th className="py-3 px-4">Created By</th>
+                <th className="py-3 px-4">Updated By</th>
                 <th className="w-32 py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredPwds.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={9} className="py-12 text-center text-muted-foreground">
                     <Accessibility className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
                     <p className="text-sm font-medium">No PWD records found</p>
                     <p className="mt-1 text-xs text-subtle-foreground">
-                      {activeSearch || filterDisability !== "all"
-                        ? "Try adjusting your search query or disability filter."
-                        : 'Click "Add PWD" or "Import CSV" to populate the directory.'}
+                      {activeSearch
+                        ? `No PWD record matches "${activeSearch}".`
+                        : 'Click "Add PWD" to create a new record.'}
                     </p>
                   </td>
                 </tr>
@@ -587,6 +460,8 @@ export default function PwdPage() {
                     record.age !== null && record.age !== undefined ? `Age ${record.age}` : null,
                     genderLabel,
                   ].filter(Boolean);
+                  const creator = getUserById(record.createdBy ?? null);
+                  const updater = getUserById(record.updatedBy ?? null);
 
                   return (
                     <tr
@@ -679,6 +554,22 @@ export default function PwdPage() {
                           )}
                         </div>
                       </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">
+                        <div className="font-medium text-foreground truncate max-w-[140px]">
+                          {creator ? creator.name : "—"}
+                        </div>
+                        <div className="text-[11px] text-subtle-foreground">
+                          {formatDate(record.createdAt)}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">
+                        <div className="font-medium text-foreground truncate max-w-[140px]">
+                          {updater ? updater.name : "—"}
+                        </div>
+                        <div className="text-[11px] text-subtle-foreground">
+                          {formatDate(record.updatedAt)}
+                        </div>
+                      </td>
                       <td className="py-2 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
@@ -727,64 +618,77 @@ export default function PwdPage() {
             <p className="text-sm font-medium">No PWD records found</p>
           </Card>
         ) : (
-          filteredPwds.map((record) => (
-            <Card key={record.id} className="p-4 space-y-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    {record.serialNo !== null && record.serialNo !== undefined && (
-                      <span className="font-mono text-xs text-muted-foreground">
-                        #{record.serialNo}
-                      </span>
-                    )}
-                    <h3 className="truncate text-sm font-semibold text-foreground">
-                      {record.name}
-                    </h3>
+          filteredPwds.map((record) => {
+            const creator = getUserById(record.createdBy ?? null);
+            const updater = getUserById(record.updatedBy ?? null);
+            return (
+              <Card key={record.id} className="p-4 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      {record.serialNo !== null && record.serialNo !== undefined && (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          #{record.serialNo}
+                        </span>
+                      )}
+                      <h3 className="truncate text-sm font-semibold text-foreground">
+                        {record.name}
+                      </h3>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {record.primaryTalent || "No primary talent listed"}
+                    </p>
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {record.primaryTalent || "No primary talent listed"}
-                  </p>
+                  {record.standardRate !== null && record.standardRate !== undefined && (
+                    <span className="shrink-0 text-sm font-semibold tabular text-foreground">
+                      {record.currency || "SGD"} {Number(record.standardRate).toLocaleString()}
+                    </span>
+                  )}
                 </div>
-                {record.standardRate !== null && record.standardRate !== undefined && (
-                  <span className="shrink-0 text-sm font-semibold tabular text-foreground">
-                    {record.currency || "SGD"} {Number(record.standardRate).toLocaleString()}
-                  </span>
-                )}
-              </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {record.disabilityType && <Badge variant="neutral">{record.disabilityType}</Badge>}
-                {record.secondaryRole && <Badge variant="outline">{record.secondaryRole}</Badge>}
-                {record.portfolioLink && (
-                  <a
-                    href={record.portfolioLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                <div className="flex flex-wrap items-center gap-2">
+                  {record.disabilityType && <Badge variant="neutral">{record.disabilityType}</Badge>}
+                  {record.secondaryRole && <Badge variant="outline">{record.secondaryRole}</Badge>}
+                  {record.portfolioLink && (
+                    <a
+                      href={record.portfolioLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      <span>Portfolio</span>
+                    </a>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+                  <div className="truncate">
+                    Created by: <span className="font-medium text-foreground">{creator?.name || "—"}</span>
+                  </div>
+                  <div className="truncate text-right">
+                    Updated by: <span className="font-medium text-foreground">{updater?.name || "—"}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
+                  <Button variant="outline" size="sm" onClick={() => setViewingRecord(record)}>
+                    View
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => openEditModal(record)}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setDeletingRecord(record)}
                   >
-                    <ExternalLink className="h-3 w-3" />
-                    <span>Portfolio</span>
-                  </a>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t border-border pt-2">
-                <Button variant="outline" size="sm" onClick={() => setViewingRecord(record)}>
-                  View
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => openEditModal(record)}>
-                  Edit
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setDeletingRecord(record)}
-                >
-                  Delete
-                </Button>
-              </div>
-            </Card>
-          ))
+                    Delete
+                  </Button>
+                </div>
+              </Card>
+            );
+          })
         )}
       </div>
 
@@ -926,24 +830,46 @@ export default function PwdPage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
-                <span>Updated {formatDate(viewingRecord.updatedAt)}</span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const rec = viewingRecord;
-                      setViewingRecord(null);
-                      openEditModal(rec);
-                    }}
-                  >
-                    Edit Record
-                  </Button>
-                  <Button size="sm" onClick={() => setViewingRecord(null)}>
-                    Close
-                  </Button>
+              <div className="grid grid-cols-1 gap-2.5 border-t border-border pt-3 sm:grid-cols-2">
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-subtle-foreground">
+                    Created By
+                  </span>
+                  <p className="mt-0.5 text-foreground">
+                    {getUserById(viewingRecord.createdBy ?? null)?.name || "—"}
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      ({formatDate(viewingRecord.createdAt)})
+                    </span>
+                  </p>
                 </div>
+                <div>
+                  <span className="block text-xs font-medium uppercase tracking-wider text-subtle-foreground">
+                    Updated By
+                  </span>
+                  <p className="mt-0.5 text-foreground">
+                    {getUserById(viewingRecord.updatedBy ?? null)?.name || "—"}
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      ({formatDate(viewingRecord.updatedAt)})
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const rec = viewingRecord;
+                    setViewingRecord(null);
+                    openEditModal(rec);
+                  }}
+                >
+                  Edit Record
+                </Button>
+                <Button size="sm" onClick={() => setViewingRecord(null)}>
+                  Close
+                </Button>
               </div>
             </div>
           )}

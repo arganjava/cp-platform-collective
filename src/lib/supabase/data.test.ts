@@ -2,16 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   fromProfileRow,
   fromProjectRow,
+  fromPwdRow,
   fromSaleRow,
   fromTaskRow,
   notificationColumns,
   profileColumns,
   projectColumns,
+  pwdColumns,
   saleColumns,
   taskColumns,
 } from "./data";
-import type { ProfileRow, ProjectRow, SaleRow, TaskRow } from "./types";
-import type { Project, Sale, Task, User } from "../types";
+import type { ProfileRow, ProjectRow, PwdRow, SaleRow, TaskRow } from "./types";
+import type { Project, PwdRecord, Sale, Task, User } from "../types";
 
 describe("taskColumns", () => {
   it("maps Task fields to snake_case DB columns", () => {
@@ -335,6 +337,73 @@ describe("row → app type mappers", () => {
 
     expect(profileColumns({ waNumber: null })).toMatchObject({
       wa_number: null,
+    });
+  });
+
+  it("pwdColumns and fromPwdRow map createdBy and updatedBy audit fields", () => {
+    const pwd: PwdRecord = {
+      id: "pwd-1",
+      serialNo: 1,
+      name: "Jackie Chionh",
+      email: "jackie@example.com",
+      mobilePhone: "+65 9123 4567",
+      primaryTalent: "Quilling",
+      secondaryRole: null,
+      disabilityType: "Autism",
+      age: 30,
+      gender: "f",
+      standardRate: 250,
+      currency: "SGD",
+      accessibilityRequirements: null,
+      previousCollaborations: null,
+      portfolioLink: null,
+      notes: null,
+      createdAt: "2026-10-28T00:00:00Z",
+      createdBy: "user-1",
+      updatedAt: "2026-10-29T00:00:00Z",
+      updatedBy: "user-2",
+    };
+
+    expect(pwdColumns(pwd)).toMatchObject({
+      id: "pwd-1",
+      name: "Jackie Chionh",
+      created_by: "user-1",
+      updated_by: "user-2",
+    });
+
+    expect(pwdColumns({ updatedBy: "user-3" })).toEqual({
+      updated_by: "user-3",
+    });
+
+    const row: PwdRow = {
+      id: "pwd-1",
+      serial_no: 1,
+      name: "Jackie Chionh",
+      email: "jackie@example.com",
+      mobile_phone: "+65 9123 4567",
+      primary_talent: "Quilling",
+      secondary_role: null,
+      disability_type: "Autism",
+      age: 30,
+      gender: "f",
+      standard_rate: 250,
+      currency: "SGD",
+      accessibility_requirements: null,
+      previous_collaborations: null,
+      portfolio_link: null,
+      notes: null,
+      created_at: "2026-10-28T00:00:00Z",
+      created_by: "user-1",
+      updated_at: "2026-10-29T00:00:00Z",
+      updated_by: "user-2",
+    };
+
+    expect(fromPwdRow(row)).toMatchObject({
+      id: "pwd-1",
+      name: "Jackie Chionh",
+      createdBy: "user-1",
+      updatedBy: "user-2",
+      standardRate: 250,
     });
   });
 });
