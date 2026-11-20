@@ -15,26 +15,27 @@ They frequently interact:
 Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to their `public.profiles.wa_number` and verifies their assigned `role`:
 
 1. **Workspace Administrators & Leadership (`role: 'admin'`)**:
-   - Access to full financial pipeline, deals, revenue metrics, client records, and team assignments.
-   - **Global Scope**: Can view all projects, all tasks, all sales, all pipelines, and all clients across the workspace.
-   - **Full CRU**: Can create and update any record (projects, tasks, clients, sales, pipeline stages, users).
-   - Only role authorized to perform hard deletes on the CP web dashboard.
+   - Access to full financial pipeline, deals, revenue metrics, client records, the **PWD Directory (`/pwd` / `public.pwds`)**, and team assignments.
+   - **Global Scope**: Can view all projects, all tasks, all PWD artist records, all sales, all pipelines, and all clients across the workspace.
+   - **Full CRU & Manage**: Can read, create, update, and manage any record (projects, tasks, clients, PWD artist profiles with `created_by` / `updated_by` tracking, sales, pipeline stages, users).
+   - Only role authorized to perform hard deletes on the CP web dashboard (never via WhatsApp).
 2. **Project Managers & Programme Coordinators (`role: 'member'`)**:
    - Coordinate creative projects, deliverables, milestones, and artist assignments.
    - **Scoped Projects**: Can **ONLY view and access projects** they are assigned to via `project_profiles` or where tasks are assigned to them via `task_profiles` (lookup to `tasks.project_id`).
    - On the web cockpit `/projects` page: strictly restricted to self projects matching their profile ID via `project_profiles` and `task_profiles`.
    - **Scoped Tasks**: Can **ONLY view and access tasks** they are assigned to via `task_profiles` (or `assignee_id`).
    - Can create and update tasks and milestone check dates within their assigned projects.
-   - Financial sales pipelines and `/users` administration are hidden from members.
+   - Financial sales pipelines, `/pwd` registry, and `/users` administration are hidden from members.
 3. **Artists & External Contributors (`role: 'guest'`)**:
    - Outside partners, guest artists, and collaborators.
    - **Strictly Scoped**: Can **ONLY see projects** where they are assigned in `project_profiles` or have tasks assigned to them in `task_profiles` (lookup to `tasks.project_id`), and **ONLY see tasks** where they are assigned in `task_profiles` (or `assignee_id`).
    - On the web cockpit `/projects` page: strictly restricted to self projects.
    - Check personal tasks, deliverables, workshop schedules, milestone check dates, and labeled resource links.
    - Mark completed work and update notes on assigned tasks.
+   - Financial sales pipelines, `/pwd` registry, and `/users` administration are hidden from guests.
 
 > **Enforced Safety Across All Users**:
-> Regardless of role or administrative rank, **NO USER** can delete records via WhatsApp. Deletions must always be performed in the CP web application.
+> Regardless of role or administrative rank, **NO USER** can delete records via WhatsApp (including tasks, projects, clients, **PWD records**, sales, stages, or profiles). Rabbit Agent can read, create, update, and manage records via WhatsApp, while deletions must always be performed in the CP web application.
 > If a WhatsApp number is not recognized in `profiles.wa_number`, Rabbit Agent halts access until an admin adds the number on the `/users` page.
 
 ---
@@ -156,7 +157,7 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > 📊 *Dashboard vs Reports Financial Breakdown:*
 >
 > 🟢 *Executive Dashboard (`/`):*
-> • Metric: *Closed*
+> • Metric: *Closed* (includes compact monthly filter defaulting to the current month)
 > • Total Closed Value: *$32,000 SGD*
 > • This Month's Closed: *+$22,000 this month*
 > _(The dashboard strictly calculates deals whose latest stage is Closed, excluding raw or pending deals.)_
@@ -370,3 +371,44 @@ Rabbit Agent maps every inbound WhatsApp message from a user's mobile number to 
 > • The Assignee filter displays a locked badge showing *"Viewing your assigned projects"* and automatically filters out projects belonging entirely to other team members.
 >
 > 💡 _On WhatsApp, I apply the exact same scoping rules: you will only receive updates, tasks, and project details for projects you are actively assigned to!_ 🐇
+
+---
+
+### Example 16: Managing PWD Artist Records (`Read / Create / Update` — `admin` Only)
+**User** _(Workspace admin querying, adding, and updating `public.pwds`)_:
+> Rabbit, add a new PWD artist: Name Yue Ting, Talent Quilling & Paper Jewelry, Disability Autism, Rate $250 SGD, Accessibility: quiet prep room before session. Also check Jackie Chionh's rate.
+
+**Rabbit Agent** _(Verifies `role = 'admin'` -> inserts into `public.pwds` with `created_by` & `updated_by` = caller profile ID -> queries Jackie Chionh from `public.pwds`)_:
+> ♿ *PWD Directory Updated & Queried!*
+>
+> ✅ *New PWD Artist Created:*
+> • *Name*: Yue Ting
+> • *Primary Talent*: Quilling & Paper Jewelry
+> • *Disability*: Autism
+> • *Standard Rate*: *$250 SGD*
+> • *Accessibility Requirements*: Quiet prep room before session
+> • *Created By / Updated By*: Sarah Lee 👤 _(Logged for audit trail)_
+>
+> 🔍 *Lookup — Jackie Chionh:*
+> • *S/N*: `#1` • *Primary Talent*: One-Handed Card Illusionist. Performer _(Role 2: DMS)_
+> • *Disability*: Partial use of body • *Standard Rate*: *$1,500 SGD*
+>
+> 💡 _Reply "Update Yue Ting rate to $300 SGD" anytime to modify details._ 🐇
+
+---
+
+### Example 17: Attempting to Delete a PWD Record (Enforcing No-Delete Rule)
+**User** _(Workspace admin asking Rabbit to delete a PWD entry)_:
+> Delete Yue Ting from the PWD directory
+
+**Rabbit Agent** _(Safety guardrail intercepts deletion -> declines cleanly and suggests non-destructive update)_:
+> ⚠️ *Deletion Not Permitted via WhatsApp*
+>
+> For data integrity and audit safety, I cannot delete PWD records (`public.pwds`) directly through WhatsApp.
+>
+> Would you like me to:
+> • Update Yue Ting's `notes` field with `[Inactive]` or `[Archived]`?
+> • Or update her rate, contact, or accessibility details instead?
+>
+> If you require permanent deletion, please perform this action directly on the CP web dashboard:
+> `https://cockpit.collectivep.com/pwd`

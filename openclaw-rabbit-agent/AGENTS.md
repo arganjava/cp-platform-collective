@@ -11,8 +11,8 @@ OpenClaw Gateway / Rabbit Agent 🐇
        │ 1. Sender phone lookup: matches against public.profiles.wa_number
        │ 2. Role verification: checks profiles.role (admin, member, guest)
        │ 3. RBAC Scoping:
-       │    - admin: global view & CRU across all projects/tasks
-       │    - member / guest: scoped strictly to assigned project_profiles & task_profiles
+       │    - admin: global READ, CREATE, UPDATE & MANAGE across all projects/tasks/pwds (NO DELETE)
+       │    - member / guest: scoped strictly to assigned project_profiles & task_profiles (NO DELETE)
        │ 4. Google Workspace Intent Check:
        │    - When user prompts about Google Workspace (Calendar, Sheet, Doc, Drive, etc.):
        │      1. Check users.wa_number (public.profiles.wa_number) to resolve caller profile_id.
@@ -31,6 +31,7 @@ Supabase CRM Database (PostgreSQL / PostgREST) 🗄️
   ├── public.project_profiles       (Project team membership junction)
   ├── public.tasks                  (Action items, milestone check dates & labeled links)
   ├── public.task_profiles          (Task assignees junction)
+  ├── public.pwds                   (PWD artists & talents registry with created_by/updated_by)
   ├── public.sales                  (Revenue deals & pipeline entries)
   ├── public.sale_stages            (Stage progression history & PIC assignment)
   └── public.notifications          (System activity & assignment alerts)
@@ -50,9 +51,9 @@ WhatsApp User 📱 (Clean, scannable mobile response in SGT)
 Rabbit WhatsApp Agent identifies incoming senders using their WhatsApp mobile number mapped to `public.profiles.wa_number`. The agent resolves the user profile and applies strict Role-Based Access Control:
 
 1. **Role `admin` (Executive & Leadership)**:
-   - **Global Visibility**: Can view all projects, tasks, clients, sales deals, stages, and team rosters across the workspace.
-   - **Full CRU (Create, Read, Update)**: Authorized to create and update any project, task, client, sale, or pipeline stage.
-   - **Deletion Policy**: Hard deletion is prohibited over WhatsApp for all users (safety directive); admins must archive records or use the web dashboard.
+   - **Global Visibility**: Can view all projects, tasks, clients, PWD directory records (`public.pwds`), sales deals, stages, and team rosters across the workspace.
+   - **Full CRU & Manage (Create, Read, Update)**: Authorized to read, create, update, and manage any project, task, client, PWD artist/talent record (`pwds`), sale, or pipeline stage (always recording `created_by` and `updated_by` as `:caller_profile_id`).
+   - **Deletion Policy**: Hard deletion is strictly prohibited over WhatsApp for all users and all tables (including `pwds`, `tasks`, `projects`, `clients`, `sales`, `sale_stages`, and `profiles`); admins must archive records, update status/notes, or use the web dashboard when permanent removal is truly required.
 
 2. **Role `member` & `guest` (Team Members, Artists & External Partners)**:
    - **Scoped Projects Visibility**: Can **ONLY see projects** where they are explicitly assigned in `public.project_profiles` OR assigned to tasks within that project via `public.task_profiles` (or `tasks.assignee_id`):
@@ -72,18 +73,18 @@ Rabbit WhatsApp Agent identifies incoming senders using their WhatsApp mobile nu
      where tp.profile_id = :caller_profile_id or t.assignee_id = :caller_profile_id;
      ```
    - **CRU Scoping**: Can create tasks within their assigned projects, and update task status/notes on their assigned tasks. Cannot view or alter projects or tasks outside their assignments.
-   - **Financial/Sales Restriction**: Sales pipeline, deal valuations, and `/users` administration are hidden from member and guest queries.
+   - **Financial/Sales & PWD Registry Restriction**: Sales pipeline, deal valuations, `/pwd` (`public.pwds` personal contacts/rates), and `/users` administration are restricted to `admin` role only and hidden from `member` and `guest` queries.
 
 3. **Unregistered WhatsApp Mobile Numbers**:
    - If an inbound WhatsApp message originates from a phone number not found in `public.profiles.wa_number` (or belonging to a deactivated user where `is_deleted = true`), the agent rejects CRM queries and prompts:
      > *"⚠️ Your WhatsApp number (+65...) is not linked to an active Collective Perspectives profile. Please ask an administrator to add your WA Mobile number on the `/users` page."*
 
-- **Allowed Operations**:
-  - `READ`: Query lists, metrics, revenue summaries, record details, milestone status, and task assignments (respecting role-based scoping above).
-  - `CREATE`: Insert new tasks, projects, clients, sales deals, pipeline stages, and notifications.
-  - `UPDATE`: Modify record fields (status, priority, due dates, check dates, links, assignees, deal amounts, stage progressions, notes).
-- **Prohibited Operations**:
-  - ❌ `DELETE`: Any `DELETE`, `TRUNCATE`, or `DROP` statement is strictly forbidden over WhatsApp. Attempted deletions must be intercepted and rejected with a helpful alternative (e.g., archiving projects, marking tasks as `done`, or progressing deals to `Lost`).
+- **Allowed Operations (Read, Create, Update & Manage)**:
+  - `READ`: Query lists, metrics, revenue summaries, record details, PWD talent/accessibility/rate profiles (admin), milestone status, and task assignments (respecting role-based scoping above).
+  - `CREATE`: Insert new tasks, projects, clients, PWD artist records (`pwds` with `created_by` & `updated_by` — admin), sales deals, pipeline stages, and notifications.
+  - `UPDATE` / `MANAGE`: Modify record fields (task status, priority, due dates, check dates, links, assignees; project details; PWD talent/rate/accessibility/collaboration/notes with `updated_by`; deal amounts, stage progressions, and notes).
+- **Prohibited Operations (NO DELETE)**:
+  - ❌ `DELETE`: Any `DELETE`, `TRUNCATE`, or `DROP` statement across any table (`pwds`, `tasks`, `projects`, `clients`, `sales`, `sale_stages`, `profiles`, etc.) is strictly forbidden over WhatsApp. Attempted deletions must be intercepted and rejected with a helpful alternative (e.g., archiving projects, marking tasks as `done`, adding an inactive note to a PWD record, or progressing deals to `Lost`).
 
 ---
 
@@ -93,12 +94,13 @@ The Collective Perspectives web cockpit is structured into core operational modu
 
 | Route | Cockpit Module | Purpose & Table Mapping |
 | :--- | :--- | :--- |
-| `/` | **Executive Dashboard** | High-level KPIs, active projects, pipeline funnel, closed sales metric (calculates **Closed sales only** where latest stage is `Closed`), upcoming milestones, recent team activity. |
+| `/` | **Executive Dashboard** | High-level KPIs, active projects, pipeline funnel, closed sales metric (calculates **Closed sales only** where latest stage is `Closed`, with a compact **monthly filter** defaulting to current month), upcoming milestones, recent team activity. |
 | `/projects` | **Project Portfolio** | Creative exhibitions, workshops, and commissions. Features top toolbar **Assignee** filter (admin can filter by all assignees or specific user/self; non-admin strictly sees self projects based on `project_profiles` and `task_profiles` lookup to `tasks.project_id`). |
 | `/tasks` | **Task Workspace** | Interactive list and Kanban boards. Features priority levels, due dates, **milestone check dates (🚩)**, and **multiple labeled links (JSONB)**. |
 | `/gantt` | **Interactive Gantt** | Timeline and scheduling engine with milestone flags (`check_date`), dependency awareness, and direct resource links. |
 | `/pipelines` & `/sales` | **Sales Pipeline** | Commercial deals and sponsorship tracker with top filter toolbar. Summary metric dynamically displays **"Pipeline"** (PIPELINE) by default, or **"Closed"** (CLOSED) when Stage Status filter is set to Closed. Tracks progression through `Opportunity` ➔ `Discussion` ➔ `Closed` / `Lost` with PIC and value history in `sale_stages`. |
 | `/clients` | **Client Directory** | Corporate partners, arts councils, and commissioners. Tracks relationship history, contacts, and linked deal **Pipeline** (formerly Total Revenue). |
+| `/pwd` | **PWD Directory** _(Admin Only)_ | Registry of Persons with Disabilities (PWD) artists & talents (`public.pwds`): S/N, name, disability type, age/gender, primary talent & secondary role, standard rate & currency, contacts, portfolio link, accessibility requirements, previous collaborations, notes, search & sort, plus **Created By** & **Updated By** audit columns (no CSV import/export or disability dropdown). |
 | `/users` | **Team Roster** | Member management, avatar colors, contact info, and Role-Based Access Control (`admin`, `member`, `guest`). |
 | `/reports` | **Impact & Finance Reports**| Delivery and financial reports. Financial metric is labeled **"Pipeline"** by default; if Stage Status filter is selected as **"Closed"**, the metric dynamically renames to **"Closed"**. |
 
@@ -106,7 +108,7 @@ The Collective Perspectives web cockpit is structured into core operational modu
 
 ## Detailed Supabase Schema Specification
 
-All UUIDs use standard RFC 4122 v4 strings. Schemas reflect all migrations up to `20260922000000_tasks_add_column_links_jsonb.sql`.
+All UUIDs use standard RFC 4122 v4 strings. Schemas reflect all migrations up to `20261029000000_pwds_created_updated_by.sql`.
 
 ### 1. `public.profiles` (Team Roster & RBAC)
 Stores team members, artists, coordinators, and administrators.
@@ -383,6 +385,44 @@ Because the 5-minute scheduler continuously maintains active access tokens, **Ra
 
 ---
 
+### 10. `public.pwds` (Persons with Disabilities Registry & Audit Tracking)
+Unified registry for Persons with Disabilities (PWD) artists & talents, accessibility requirements, engagement rates, collaborations, and audit ownership (`/pwd`).
+```sql
+create table public.pwds (
+  id                         uuid primary key default gen_random_uuid(),
+  serial_no                  integer,
+  name                       text not null,
+  email                      text,
+  mobile_phone               text,
+  primary_talent             text,
+  secondary_role             text,
+  disability_type            text,
+  age                        integer check (age is null or (age >= 0 and age <= 150)),
+  gender                     text,
+  standard_rate              numeric(12, 2) check (standard_rate is null or standard_rate >= 0),
+  currency                   text not null default 'SGD',
+  accessibility_requirements text,
+  previous_collaborations    text,
+  portfolio_link             text,
+  notes                      text,
+  created_at                 timestamptz not null default now(),
+  created_by                 uuid references public.profiles (id) on delete set null,
+  updated_at                 timestamptz not null default now(),
+  updated_by                 uuid references public.profiles (id) on delete set null
+);
+```
+- **Audit Columns & Trigger (`trg_pwds_audit_fields` / `set_pwds_audit_fields()`)**:
+  - Tracks `created_by` and `updated_by` referencing `public.profiles(id)`.
+  - Since Rabbit Agent connects via server-side Service Role (`auth.uid()` is null), Rabbit **MUST explicitly pass**:
+    - On `CREATE`: `created_by = :caller_profile_id` and `updated_by = :caller_profile_id`.
+    - On `UPDATE`: `updated_by = :caller_profile_id` and `updated_at = now()`.
+- **Access & Safety Rules for Rabbit Agent**:
+  - **Can Read, Create, Update & Manage** by Rabbit Agent for `role = 'admin'` callers.
+  - **Admin-Only Privacy**: Reject `member` and `guest` queries for `public.pwds` to protect artist contact details, disability records, and rate scales (matching `/pwd` web access restriction).
+  - **NO DELETE**: Rabbit Agent **MUST NEVER delete** any `public.pwds` row. If an admin asks to remove a PWD record via WhatsApp, decline deletion and offer to update `notes` (e.g., marking `[Inactive]`) or direct them to `/pwd` on the web dashboard.
+
+---
+
 ## Integration Methods & API Patterns
 
 OpenClaw connects to Supabase via standard **PostgREST HTTP API** or direct **PostgreSQL client**.
@@ -486,8 +526,8 @@ left join public.profiles pic on st.pic_profile_id = pic.id
 order by s.created_at desc;
 ```
 
-### 4b. READ: Closed Sales Only (Executive Dashboard Financial Metric)
-The Dashboard (`/`) calculates confirmed closed revenue **only**—filtering sales whose latest stage (`sale_stages.status`) is `Closed`, rather than summing raw deals. It also calculates this month's closed sales:
+### 4b. READ: Closed Sales Only (Executive Dashboard Financial Metric & Monthly Filter)
+The Dashboard (`/`) calculates confirmed closed revenue **only**—filtering sales whose latest stage (`sale_stages.status`) is `Closed`, rather than summing raw deals. It includes a compact monthly filter defaulting to the **current month** (`YYYY-MM`), with options to select another month or `all` (All Months):
 ```sql
 -- 1. All Closed Sales with latest stage
 select 
@@ -603,6 +643,56 @@ insert into public.sale_stages (sale_id, status, value, pic_profile_id, date)
 values ('<sale_id>', 'Closed', 30000, '<sarah_profile_id>', now());
 ```
 
+### 7. READ / SEARCH: PWD Directory Records (`admin` Only)
+```http
+GET /rest/v1/pwds?select=id,serial_no,name,email,mobile_phone,primary_talent,secondary_role,disability_type,age,gender,standard_rate,currency,accessibility_requirements,previous_collaborations,portfolio_link,notes,created_at,updated_at,creator:created_by(name),updater:updated_by(name)&order=name.asc
+```
+SQL equivalent:
+```sql
+select
+  w.*,
+  c.name as created_by_name,
+  u.name as updated_by_name
+from public.pwds w
+left join public.profiles c on w.created_by = c.id
+left join public.profiles u on w.updated_by = u.id
+where (:search is null or (
+  w.name ilike '%' || :search || '%'
+  or w.primary_talent ilike '%' || :search || '%'
+  or w.disability_type ilike '%' || :search || '%'
+  or w.notes ilike '%' || :search || '%'
+))
+order by w.name asc;
+```
+
+### 8. CREATE: Add New PWD Record (`admin` Only — Sets `created_by` & `updated_by`)
+```http
+POST /rest/v1/pwds
+{
+  "serial_no": 4,
+  "name": "Yue Ting",
+  "primary_talent": "Quilling & Paper Jewelry",
+  "disability_type": "Autism",
+  "standard_rate": 250,
+  "currency": "SGD",
+  "portfolio_link": "https://www.artforgood.sg/featured-artists",
+  "accessibility_requirements": "Quiet prep room before session",
+  "created_by": "<caller_profile_id>",
+  "updated_by": "<caller_profile_id>"
+}
+```
+
+### 9. UPDATE / MANAGE: Update PWD Record (`admin` Only — Sets `updated_by`)
+```http
+PATCH /rest/v1/pwds?id=eq.<pwd_id>
+{
+  "standard_rate": 300,
+  "accessibility_requirements": "Quiet prep room & visual schedule",
+  "updated_by": "<caller_profile_id>"
+}
+```
+> **Reminder**: Never issue `DELETE /rest/v1/pwds` or `DELETE FROM public.pwds`.
+
 ---
 
 ## Entity Resolution Guidelines for Natural Language
@@ -611,12 +701,13 @@ When interacting over WhatsApp:
 - **Clients**: Match against `clients.name`. If no exact match is found, propose auto-creating it.
 - **Projects**: Match against `projects.title`. If multiple matches exist, provide a short numbered selection list.
 - **Tasks**: Search open tasks by title substring within the active project context.
+- **PWD Artists / Talents** (`admin` only): Match against `pwds.name`, `pwds.primary_talent`, `pwds.secondary_role`, `pwds.disability_type`, or `pwds.notes` using case-insensitive partial match (`ILIKE`).
 
 ---
 
 ## Safety Guardrail Implementation in OpenClaw
 
-OpenClaw execution handlers must enforce a strict programmatic block against destructive operations:
+OpenClaw execution handlers must enforce a strict programmatic block against destructive operations across every table (including `pwds`, `tasks`, `projects`, `clients`, `sales`, `sale_stages`, and `profiles`):
 
 ```javascript
 // OpenClaw safety interceptor
