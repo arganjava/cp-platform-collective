@@ -145,7 +145,7 @@ Rabbit Agent has complete operational awareness of all 10 core entities:
           - All Google Workspace operations MUST be performed via direct Google REST APIs authenticated with `profiles_google_tokens.access_token`.
 10. **`public.pwds` (PWD Directory — Persons with Disabilities Registry ♿)**:
     - Unified registry supporting artist/talent profiles (`serial_no`, `name`, `email`, `mobile_phone`, `primary_talent`, `secondary_role`, `disability_type`, `age`, `gender`, `standard_rate`, `currency`, `accessibility_requirements`, `previous_collaborations`, `portfolio_link`, `notes`, `created_at`, `created_by`, `updated_at`, `updated_by`).
-    - Web cockpit `/pwd` (restricted to `admin`) provides search, sort, and **Created By** / **Updated By** audit columns (without CSV import/export or disability dropdown filters).
+    - Web cockpit `/pwd` (restricted to `admin`) provides search, sort, **Created By** / **Updated By** audit columns, **CSV Template** download, **Export CSV**, and **validated Import CSV** (requiring mandatory `Artist Name`).
     - **CRU & Manage Only (NO DELETE)**:
       - Rabbit Agent **can Read, Create, Update, and Manage** PWD artist records for `admin` callers, always setting `created_by` (on insert) and `updated_by` (on insert/update) to the caller's profile ID.
       - Rabbit Agent **MUST NEVER delete** any PWD record via WhatsApp. If requested, politely decline and offer to update notes (e.g., `[Inactive]`) or direct the admin to `/pwd` on the web dashboard.

@@ -1,9 +1,18 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { formatDate, generateId, getInitials } from "@/lib/utils";
+import {
+  exportPwdsToCsv,
+  generatePwdCsvTemplate,
+  PWD_CSV_FIELD_SPECS,
+  PWD_CSV_TEMPLATE_HEADERS,
+  PWD_CSV_TEMPLATE_SAMPLE_ROWS,
+  validateAndParsePwdCsv,
+  type PwdCsvValidationResult,
+} from "@/lib/pwd-csv";
 import type { PwdRecord } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import {
@@ -27,10 +36,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   Accessibility,
+  AlertCircle,
   ArrowLeft,
+  CheckCircle2,
   DollarSign,
+  Download,
   ExternalLink,
   Eye,
+  FileSpreadsheet,
   Mail,
   Pencil,
   Phone,
@@ -38,7 +51,9 @@ import {
   ShieldAlert,
   Sparkles,
   Trash2,
+  Upload,
   Users,
+  X,
 } from "lucide-react";
 
 interface PwdFormState {
@@ -112,6 +127,7 @@ export default function PwdPage() {
   const {
     pwds,
     addPwd,
+    addPwdsBulk,
     updatePwd,
     deletePwd,
     searchQuery,
@@ -134,6 +150,14 @@ export default function PwdPage() {
 
   const [viewingRecord, setViewingRecord] = useState<PwdRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<PwdRecord | null>(null);
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [importValidation, setImportValidation] =
+    useState<PwdCsvValidationResult | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [csvNotice, setCsvNotice] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const disabilityOptions = useMemo(() => {
     const set = new Set<string>();
@@ -330,23 +354,156 @@ export default function PwdPage() {
     setDeletingRecord(null);
   }
 
+  function triggerCsvDownload(csvContent: string, fileName: string) {
+    const blob = new Blob([`\uFEFF${csvContent}`], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleDownloadTemplate() {
+    const templateCsv = generatePwdCsvTemplate();
+    triggerCsvDownload(templateCsv, "pwd-import-template.csv");
+    setCsvNotice("Downloaded CSV import template (pwd-import-template.csv).");
+  }
+
+  function handleExportCsv() {
+    const csv = exportPwdsToCsv(filteredPwds);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    triggerCsvDownload(csv, `pwd-directory-${dateStamp}.csv`);
+    setCsvNotice(`Exported ${filteredPwds.length} PWD record(s) to CSV.`);
+  }
+
+  function openImportModal() {
+    setImportFileName(null);
+    setImportValidation(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setShowImportModal(true);
+  }
+
+  async function handleImportFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFileName(file.name);
+    try {
+      const text = await file.text();
+      const result = validateAndParsePwdCsv(text, currentUserId, file.name);
+      setImportValidation(result);
+    } catch {
+      setImportValidation({
+        valid: false,
+        records: [],
+        errors: [
+          {
+            message: `Could not read "${file.name}". Please ensure it is a valid UTF-8 .csv file.`,
+          },
+        ],
+        warnings: [],
+        detectedFormat: "Unreadable file",
+        totalDataRows: 0,
+      });
+    }
+  }
+
+  async function handleConfirmImportCsv() {
+    if (!importValidation?.valid || importValidation.records.length === 0) return;
+    setIsImporting(true);
+    try {
+      await addPwdsBulk(importValidation.records);
+      setCsvNotice(
+        `Imported ${importValidation.records.length} PWD record(s) from "${importFileName}".`
+      );
+      setShowImportModal(false);
+      setImportFileName(null);
+      setImportValidation(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
   return (
     <PageFrame id="pwd-page-frame">
       <PageHeader
         title="PWD Directory"
         description="Registry of Persons with Disabilities (PWD) artists, talents, accessibility needs, and engagement rates."
         actions={
-          <Button
-            id="btn-add-pwd"
-            size="sm"
-            onClick={openCreateModal}
-            className="flex items-center gap-1.5"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add PWD</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              id="btn-download-pwd-template"
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+              className="flex items-center gap-1.5"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              <span>CSV Template</span>
+            </Button>
+            <Button
+              id="btn-import-pwd-csv"
+              variant="outline"
+              size="sm"
+              onClick={openImportModal}
+              className="flex items-center gap-1.5"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Import CSV</span>
+            </Button>
+            <Button
+              id="btn-export-pwd-csv"
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={filteredPwds.length === 0}
+              className="flex items-center gap-1.5"
+            >
+              <Download className="h-4 w-4" />
+              <span>Export CSV</span>
+            </Button>
+            <Button
+              id="btn-add-pwd"
+              size="sm"
+              onClick={openCreateModal}
+              className="flex items-center gap-1.5"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add PWD</span>
+            </Button>
+          </div>
         }
       />
+
+      {csvNotice && (
+        <div
+          id="banner-pwd-csv-notice"
+          className="flex items-center justify-between gap-3 border border-border bg-secondary/40 px-4 py-2.5 text-sm text-foreground"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+            <span>{csvNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCsvNotice(null)}
+            aria-label="Dismiss notice"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Summary Metrics */}
       <SheetSummary id="pwd-summary-metrics">
@@ -1179,6 +1336,257 @@ export default function PwdPage() {
             >
               Delete Record
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import CSV Dialog with Template & Strict Validation */}
+      <Dialog
+        open={showImportModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowImportModal(false);
+          }
+        }}
+      >
+        <DialogContent
+          id="dialog-import-pwd-csv"
+          className="sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+        >
+          <DialogHeader>
+            <DialogTitle>Import PWD Directory CSV</DialogTitle>
+            <DialogDescription>
+              Upload a comma-separated (.csv) file matching the template below. All imported records are automatically audited with your user profile under Created By and Updated By.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2 text-sm">
+            {/* Mandatory Fields & Format Summary */}
+            <div className="border border-border bg-secondary/30 p-3.5 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                  CSV Template &amp; Mandatory Fields
+                </span>
+                <Button
+                  id="btn-download-pwd-template-modal"
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download CSV Template (.csv)</span>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                <strong className="text-foreground">Mandatory column:</strong>{" "}
+                <code className="bg-secondary px-1 py-0.5 text-foreground">Artist Name</code>{" "}
+                (or <code className="bg-secondary px-1 py-0.5 text-foreground">Name</code> /{" "}
+                <code className="bg-secondary px-1 py-0.5 text-foreground">Full Name</code>) must be present and non-empty on every data row. All other columns are optional and validated for format if filled. Also supports CO3 Artists Database and ELI Grant List CSVs.
+              </p>
+
+              {/* Column Specification Table */}
+              <div className="max-h-48 overflow-auto border border-border bg-background">
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 border-b border-border bg-secondary/60 text-[11px] uppercase tracking-wider text-subtle-foreground">
+                    <tr>
+                      <th className="py-1.5 px-2.5">Column Header</th>
+                      <th className="py-1.5 px-2.5">Requirement</th>
+                      <th className="py-1.5 px-2.5">Accepted Format</th>
+                      <th className="py-1.5 px-2.5">Example Row</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PWD_CSV_FIELD_SPECS.map((spec) => (
+                      <tr key={spec.header} className="border-b border-border/50 last:border-b-0">
+                        <td className="py-1.5 px-2.5 font-medium text-foreground whitespace-nowrap">
+                          {spec.header}
+                        </td>
+                        <td className="py-1.5 px-2.5 whitespace-nowrap">
+                          {spec.required ? (
+                            <Badge variant="accent">Mandatory</Badge>
+                          ) : (
+                            <Badge variant="neutral">Optional</Badge>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-2.5 text-muted-foreground">{spec.format}</td>
+                        <td className="py-1.5 px-2.5 font-mono text-[11px] text-muted-foreground">
+                          {spec.example}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Sample CSV Row Preview */}
+              <div className="space-y-1">
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-subtle-foreground">
+                  Template Sample (Columns &amp; Rows)
+                </span>
+                <div className="overflow-x-auto border border-border bg-background">
+                  <table className="w-full text-left text-[11px]">
+                    <thead>
+                      <tr className="border-b border-border bg-secondary/40 text-subtle-foreground">
+                        {PWD_CSV_TEMPLATE_HEADERS.map((col) => (
+                          <th key={col} className="whitespace-nowrap py-1 px-2 font-medium">
+                            {col}
+                            {col === "Artist Name" ? " *" : ""}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {PWD_CSV_TEMPLATE_SAMPLE_ROWS.map((row, idx) => (
+                        <tr key={idx} className="border-b border-border/40 last:border-b-0">
+                          {PWD_CSV_TEMPLATE_HEADERS.map((col) => (
+                            <td
+                              key={col}
+                              className="whitespace-nowrap py-1 px-2 font-mono text-muted-foreground"
+                            >
+                              {row[col] || "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* File Picker */}
+            <div className="space-y-2">
+              <label
+                htmlFor="input-import-pwd-csv-file"
+                className="block text-xs font-medium uppercase tracking-wider text-subtle-foreground"
+              >
+                Select CSV File to Validate &amp; Import
+              </label>
+              <div className="flex flex-wrap items-center gap-3 border border-dashed border-border p-4 bg-secondary/10">
+                <input
+                  id="input-import-pwd-csv-file"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleImportFileChange}
+                  className="block w-full text-xs text-muted-foreground file:mr-3 file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-secondary cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Validation Results */}
+            {importValidation && !importValidation.valid && (
+              <div
+                id="pwd-csv-validation-errors"
+                className="border border-destructive/50 bg-destructive/10 p-3.5 space-y-2"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>
+                    CSV Validation Failed ({importValidation.errors.length}{" "}
+                    {importValidation.errors.length === 1 ? "issue" : "issues"} found)
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Fix the errors below in your CSV file or download the CSV template and re-upload.
+                </p>
+                <ul className="max-h-40 overflow-y-auto space-y-1 pl-5 list-disc text-xs text-destructive">
+                  {importValidation.errors.map((err, idx) => (
+                    <li key={idx}>{err.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {importValidation && importValidation.valid && (
+              <div
+                id="pwd-csv-validation-success"
+                className="border border-primary/40 bg-primary/5 p-3.5 space-y-2.5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                    <span>
+                      Ready to import {importValidation.records.length} valid PWD{" "}
+                      {importValidation.records.length === 1 ? "record" : "records"}
+                    </span>
+                  </div>
+                  <Badge variant="neutral">{importValidation.detectedFormat}</Badge>
+                </div>
+
+                <div className="max-h-40 overflow-auto border border-border bg-background">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-border bg-secondary/40 text-[11px] uppercase tracking-wider text-subtle-foreground">
+                      <tr>
+                        <th className="py-1.5 px-2.5">S/N</th>
+                        <th className="py-1.5 px-2.5">Artist Name</th>
+                        <th className="py-1.5 px-2.5">Disability</th>
+                        <th className="py-1.5 px-2.5">Primary Talent</th>
+                        <th className="py-1.5 px-2.5 text-right">Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importValidation.records.slice(0, 5).map((rec, idx) => (
+                        <tr key={idx} className="border-b border-border/50 last:border-b-0">
+                          <td className="py-1.5 px-2.5 font-mono text-muted-foreground">
+                            {rec.serialNo ?? "—"}
+                          </td>
+                          <td className="py-1.5 px-2.5 font-medium text-foreground">
+                            {rec.name}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-muted-foreground">
+                            {rec.disabilityType || "—"}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-muted-foreground truncate max-w-[200px]">
+                            {rec.primaryTalent || "—"}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-right tabular text-foreground">
+                            {rec.standardRate !== null && rec.standardRate !== undefined
+                              ? `${rec.currency} ${rec.standardRate.toLocaleString()}`
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {importValidation.records.length > 5 && (
+                    <p className="px-2.5 py-1.5 text-[11px] text-muted-foreground border-t border-border">
+                      Showing first 5 of {importValidation.records.length} validated records.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowImportModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                id="btn-confirm-import-pwd-csv"
+                type="button"
+                disabled={
+                  !importValidation?.valid ||
+                  importValidation.records.length === 0 ||
+                  isImporting
+                }
+                onClick={handleConfirmImportCsv}
+              >
+                {isImporting
+                  ? "Importing..."
+                  : importValidation?.valid
+                    ? `Import ${importValidation.records.length} Record${
+                        importValidation.records.length === 1 ? "" : "s"
+                      }`
+                    : "Import Records"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
